@@ -2332,41 +2332,91 @@ function App(){
               </div>
             </div>)}
 
-          {/* 房間裝飾 - 按位置分類 */}
-          {ROOMITEMS.filter(i=>i.type==="dc"&&owned.indexOf(i.id)>=0).length>0&&(
-            <div style={{...cardS(C.card),padding:12}}>
-              <div style={{fontSize:11,color:C.soft,fontWeight:900,marginBottom:10}}>
-                🏠 房間裝飾（點裝飾放入，再點格子移除）
+          {/* 我的裝飾儲藏間 */}
+          {ROOMITEMS.filter(i=>owned.indexOf(i.id)>=0).length>0&&(
+            <div style={{...cardS(C.card),padding:12,marginBottom:10}}>
+              {/* header */}
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+                <div style={{...bub(C.yellow,999),padding:"4px 12px",border:"none"}}>
+                  <span style={{fontSize:12,fontWeight:900,color:C.brown}}>🏠 我的裝飾</span>
+                </div>
+                <div style={{fontSize:10,color:C.soft,fontWeight:800}}>
+                  點裝飾放入房間，再點移除
+                </div>
               </div>
+
+              {/* 壁紙區 */}
+              {ROOMITEMS.filter(i=>i.type==="wp"&&owned.indexOf(i.id)>=0).length>0&&<>
+                <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:7}}>🖼️ 壁紙</div>
+                <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
+                  {ROOMITEMS.filter(i=>i.type==="wp"&&owned.indexOf(i.id)>=0).map(d=>{
+                    const isEq=equipped.wp===d.id;
+                    return(
+                      <button key={d.id} className="btn"
+                        onClick={()=>setEquipped(e=>({...e,wp:isEq?undefined:d.id}))}
+                        style={{...bub(isEq?C.yellow:C.light),borderRadius:14,
+                          padding:"8px 12px",textAlign:"center",border:"none",
+                          outline:isEq?"3px solid "+C.butter:"none",minWidth:64}}>
+                        <div style={{fontSize:22}}>{d.emoji}</div>
+                        <div style={{fontSize:9,fontWeight:900,color:C.brown}}>{d.label}</div>
+                        {isEq
+                          ?<div style={{fontSize:8,color:"#2a8a2a",fontWeight:900}}>✓ 使用中</div>
+                          :<div style={{fontSize:8,color:C.soft,fontWeight:800}}>點擊使用</div>}
+                      </button>);})}
+                </div>
+              </>}
+
+              {/* 位置裝飾區 - 按slot分組 */}
               {ROOM_SLOTS.map(slot=>{
                 const slotItems=ROOMITEMS.filter(r=>r.type==="dc"&&r.slot===slot.id&&owned.indexOf(r.id)>=0);
                 if(slotItems.length===0)return null;
                 const placed=ROOMITEMS.find(r=>r.id===equipped[slot.id]);
                 return(
-                  <div key={slot.id} style={{marginBottom:10}}>
-                    <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:5,
-                      display:"flex",alignItems:"center",gap:6}}>
-                      <span>{slot.label}</span>
-                      {placed&&<span style={{...bub(C.yellow,999),padding:"1px 8px",fontSize:9,
-                        fontWeight:900,color:C.brown,border:"none"}}>
-                        {placed.emoji} 已放置
-                      </span>}
+                  <div key={slot.id} style={{marginBottom:12}}>
+                    <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
+                      <div style={{fontSize:10,color:C.soft,fontWeight:900}}>📍{slot.label}</div>
+                      {placed
+                        ?<span style={{...bub(C.green,999),padding:"1px 8px",fontSize:9,
+                          fontWeight:900,color:"#1a6a1a",border:"none"}}>
+                          {placed.emoji} 已放置
+                        </span>
+                        :<span style={{...bub(C.light,999),padding:"1px 8px",fontSize:9,
+                          fontWeight:800,color:C.soft,border:"none"}}>空位
+                        </span>}
                     </div>
                     <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
                       {slotItems.map(d=>{
                         const isPlaced=equipped[slot.id]===d.id;
                         return(
                           <button key={d.id} className="btn"
-                            onClick={()=>setEquipped(e=>({...e,[slot.id]:isPlaced?undefined:d.id}))}
+                            onClick={()=>{
+                              setEquipped(e=>({...e,[slot.id]:isPlaced?undefined:d.id}));
+                              if(!isPlaced)toast2(d.emoji+" "+d.label+"放進房間了！","#88cc88");
+                            }}
                             style={{...bub(isPlaced?C.yellow:C.light),borderRadius:14,
-                              padding:"8px 10px",textAlign:"center",border:"none",
-                              outline:isPlaced?"3px solid "+C.butter:"none"}}>
-                            <div style={{fontSize:22}}>{d.emoji}</div>
-                            <div style={{fontSize:9,fontWeight:900,color:C.brown}}>{d.label}</div>
-                            {isPlaced&&<div style={{fontSize:8,color:C.soft,fontWeight:900}}>放置中</div>}
+                              padding:"9px 11px",textAlign:"center",border:"none",
+                              outline:isPlaced?"3px solid "+C.butter:"none",minWidth:60}}>
+                            <div style={{fontSize:24}}>{d.emoji}</div>
+                            <div style={{fontSize:9,fontWeight:900,color:C.brown,marginTop:2}}>{d.label}</div>
+                            {isPlaced
+                              ?<div style={{fontSize:8,color:"#2a8a2a",fontWeight:900}}>✓ 放置中</div>
+                              :<div style={{fontSize:8,color:C.soft,fontWeight:800}}>點擊放入</div>}
                           </button>);})}
                     </div>
                   </div>);})}
+            </div>)}
+
+          {/* 還沒有任何裝飾 */}
+          {ROOMITEMS.filter(i=>owned.indexOf(i.id)>=0).length===0&&(
+            <div style={{...cardS(C.light),padding:"18px 14px",textAlign:"center",marginBottom:10}}>
+              <div style={{fontSize:32,marginBottom:8}}>🏠</div>
+              <div style={{fontSize:13,fontWeight:900,color:C.brown,marginBottom:4}}>還沒有裝飾</div>
+              <div style={{fontSize:11,color:C.soft,fontWeight:800,marginBottom:12}}>去商店買裝飾來佈置房間吧！</div>
+              <button className="btn" onClick={()=>setModal("shop")}
+                style={{...bub(C.orange),borderRadius:999,padding:"9px 22px",
+                  fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>
+                去商店 🛍️
+              </button>
             </div>)}
         </div>
       )}
