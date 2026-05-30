@@ -116,15 +116,46 @@ const OUTFITS=[
   {id:"a3",slot:"acc",emoji:"⭐",label:"星星貼",price:60},
 ];
 
+// 房間位置定義
+const ROOM_SLOTS=[
+  {id:"tl",label:"左上牆",pos:"top-left"},
+  {id:"tr",label:"右上牆",pos:"top-right"},
+  {id:"ml",label:"左地板",pos:"mid-left"},
+  {id:"mr",label:"右地板",pos:"mid-right"},
+  {id:"bl",label:"左角落",pos:"bot-left"},
+  {id:"br",label:"右角落",pos:"bot-right"},
+];
+
 const ROOMITEMS=[
+  // 壁紙
   {id:"w1",type:"wp",emoji:"🌸",label:"粉花壁紙",price:150,bg:"linear-gradient(135deg,#ffe0f0,#ffc8e0)"},
   {id:"w2",type:"wp",emoji:"⭐",label:"星空壁紙",price:200,bg:"linear-gradient(135deg,#1a1a4e,#2d2d7a)"},
   {id:"w3",type:"wp",emoji:"🌿",label:"森林壁紙",price:150,bg:"linear-gradient(135deg,#c8f0c8,#90d890)"},
-  {id:"d1",type:"dc",emoji:"🛋️",label:"粉沙發",price:150},
-  {id:"d2",type:"dc",emoji:"🌿",label:"植物",price:60},
-  {id:"d3",type:"dc",emoji:"📚",label:"書架",price:120},
-  {id:"d4",type:"dc",emoji:"⭐",label:"星星燈",price:100},
-  {id:"d5",type:"dc",emoji:"🏆",label:"獎盃",price:200},
+  {id:"w4",type:"wp",emoji:"🍭",label:"糖果壁紙",price:180,bg:"linear-gradient(135deg,#ffd6f0,#c8f0ff)"},
+  // 左上牆
+  {id:"d1",type:"dc",slot:"tl",emoji:"⭐",label:"星星燈",price:100},
+  {id:"d2",type:"dc",slot:"tl",emoji:"🖼️",label:"掛畫",price:80},
+  {id:"d3",type:"dc",slot:"tl",emoji:"🕐",label:"時鐘",price:90},
+  // 右上牆
+  {id:"d4",type:"dc",slot:"tr",emoji:"🌿",label:"植物",price:60},
+  {id:"d5",type:"dc",slot:"tr",emoji:"🪟",label:"窗簾",price:120},
+  {id:"d6",type:"dc",slot:"tr",emoji:"🎐",label:"風鈴",price:70},
+  // 左地板
+  {id:"d7",type:"dc",slot:"ml",emoji:"🛋️",label:"粉沙發",price:150},
+  {id:"d8",type:"dc",slot:"ml",emoji:"📚",label:"書架",price:120},
+  {id:"d9",type:"dc",slot:"ml",emoji:"🪑",label:"小椅子",price:80},
+  // 右地板
+  {id:"d10",type:"dc",slot:"mr",emoji:"🌵",label:"仙人掌",price:60},
+  {id:"d11",type:"dc",slot:"mr",emoji:"🎠",label:"旋轉木馬",price:200},
+  {id:"d12",type:"dc",slot:"mr",emoji:"🪴",label:"大盆栽",price:90},
+  // 左角落
+  {id:"d13",type:"dc",slot:"bl",emoji:"🏆",label:"獎盃",price:200},
+  {id:"d14",type:"dc",slot:"bl",emoji:"🎸",label:"吉他",price:160},
+  {id:"d15",type:"dc",slot:"bl",emoji:"🎨",label:"畫板架",price:130},
+  // 右角落
+  {id:"d16",type:"dc",slot:"br",emoji:"🧸",label:"泰迪熊",price:80},
+  {id:"d17",type:"dc",slot:"br",emoji:"🎮",label:"遊戲機",price:180},
+  {id:"d18",type:"dc",slot:"br",emoji:"🪆",label:"俄羅斯娃娃",price:100},
 ];
 
 const TOYS=[
@@ -1031,6 +1062,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
   const [hNewPts,setHNewPts]=useState(10);
   const [hNewIcon,setHNewIcon]=useState("⭐");
   const day=new Date().getDay();
+  const today=new Date().toLocaleDateString("zh-TW");
 
   if(!authed)return(
     <NumPad title="家長登入" subtitle="輸入你設定的數字密碼"
@@ -1600,12 +1632,19 @@ function App(){
           {(shopTab==="food"?FOODS:shopTab==="toy"?TOYS:shopTab==="outfit"?OUTFITS:ROOMITEMS).map(item=>{
             const isOwn=owned.indexOf(item.id)>=0;
             const isEq=equipped[item.slot||item.type]===item.id;
+            const slotInfo=ROOM_SLOTS.find(s=>s.id===item.slot);
             const qty=backpack[item.id]||0,can=points>=item.price;
             return(
               <div key={item.id} style={{...cardS(isEq?C.yellow:isOwn?C.light:C.card),
                 padding:"13px 10px",textAlign:"center"}}>
                 <div style={{fontSize:32,marginBottom:5}}>{item.emoji}</div>
-                <div style={{fontWeight:900,fontSize:12,color:C.brown,marginBottom:5}}>{item.label}</div>
+                <div style={{fontWeight:900,fontSize:12,color:C.brown,marginBottom:3}}>{item.label}</div>
+                {/* 房間裝飾顯示位置 */}
+                {shopTab==="room"&&item.type==="dc"&&slotInfo&&
+                  <div style={{...bub(C.peach,999),padding:"2px 8px",fontSize:9,fontWeight:900,
+                    color:C.brown,display:"inline-block",marginBottom:5,border:"none"}}>
+                    📍{slotInfo.label}
+                  </div>}
                 {shopTab==="toy"&&<div style={{fontSize:10,color:"#9060d0",fontWeight:900,marginBottom:5}}>心情+{item.joy}</div>}
                 {shopTab==="food"?<>
                   {qty>0&&<div style={{fontSize:10,color:C.soft,fontWeight:800,marginBottom:4}}>背包 x{qty}</div>}
@@ -1622,13 +1661,17 @@ function App(){
                   <button className="btn" onClick={()=>equip(item)}
                     style={{...bub(isEq?C.orange:C.light),borderRadius:999,padding:"5px 14px",
                       fontSize:11,fontWeight:900,color:isEq?"#fff":C.soft,border:"none"}}>
-                    {isEq?"✓ 使用中":"裝備"}</button>
+                    {isEq?"✓ 放置中":"放進房間"}</button>
                 :
                   <button className="btn" onClick={()=>buy(item)}
                     style={{...bub(can?C.orange:C.light),borderRadius:999,padding:"5px 14px",
                       fontSize:11,fontWeight:900,color:can?"#fff":C.soft,opacity:can?1:.6,border:"none"}}>{item.price}⭐</button>}
               </div>);})}
         </div>
+        {shopTab==="room"&&<div style={{fontSize:10,color:C.soft,fontWeight:800,
+          textAlign:"center",marginTop:10}}>
+          買了後去房間頁面點裝飾放進去，點已放置的可以移除 🏠
+        </div>}
         <button className="btn" onClick={()=>setModal(null)}
           style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,
             fontSize:13,fontWeight:900,color:C.soft,marginTop:14,border:"none"}}>關閉</button>
@@ -2168,53 +2211,95 @@ function App(){
             {poops.length>0&&<span style={{fontSize:isTablet?22:18}}>💩×{poops.length}</span>}
           </div>
 
-          {/* room scene */}
+          {/* room scene - position based */}
           <div style={{...cardS((wp&&wp.bg)||"linear-gradient(135deg,#FFFDE8,#FFF0C0)"),
-            padding:14,marginBottom:10,textAlign:"center",position:"relative"}}>
-            <div style={{fontSize:11,color:C.soft,fontWeight:800,marginBottom:6}}>
+            padding:14,marginBottom:10,position:"relative",minHeight:isTablet?320:260}}>
+            <div style={{fontSize:11,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:8}}>
               {profile.petName}的小房間 ✨
             </div>
-            {poops.map((p,i)=>(
-              <span key={p.key} style={{position:"absolute",bottom:12,left:(12+i*20)+"%",
-                fontSize:isTablet?26:22,cursor:"pointer",animation:"bIn .4s"}}
-                onClick={()=>{setPoops(ps=>ps.filter(x=>x.key!==p.key));
-                  setPetMood(m=>Math.min(100,m+10));Audio.clean();toast2("清乾淨了！🧹 +心情","#88cc88");}}>💩</span>))}
-            <div style={{position:"relative",display:"inline-block",cursor:"pointer"}} onClick={patPet}>
-              {speech&&<div style={{...bub(C.card),position:"absolute",top:-52,left:"50%",
-                transform:"translateX(-50%)",borderRadius:16,padding:"7px 13px",
-                fontSize:12,fontWeight:900,color:C.brown,whiteSpace:"nowrap",
-                animation:"bIn .3s",zIndex:10,border:"none",
-                boxShadow:"0 4px 12px rgba(0,0,0,.12)"}}>
-                {speech}
-                <div style={{position:"absolute",bottom:-7,left:"50%",transform:"translateX(-50%)",
-                  width:0,height:0,borderLeft:"7px solid transparent",
-                  borderRight:"7px solid transparent",borderTop:"7px solid #fff"}}/>
-              </div>}
-              <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
-                hunger={hunger} mood={mood} eating={toyPlaying!==null} size={isTablet?.75:.62}/>
-            </div>
-            {toyPlaying&&<div style={{fontSize:28,animation:"float .5s infinite"}}>
-              {(TOYS.find(t=>t.id===toyPlaying)||{}).emoji}
-            </div>}
-            <div style={{fontSize:10,color:C.soft,fontWeight:800,marginTop:4}}>點擊摸摸牠 💛</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:5,marginTop:10}}>
-              {Array.from({length:16}).map((_,i)=>{
-                const placed=(equipped.decos||[])[i];
-                const item=ROOMITEMS.find(r=>r.id===placed);
-                return(
-                  <div key={i} style={{aspectRatio:"1",background:"rgba(255,255,255,.4)",
-                    borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",
-                    fontSize:isTablet?22:18,cursor:item?"pointer":"default",
-                    border:"1.5px dashed rgba(200,150,80,.25)"}}
-                    onClick={()=>{if(!item)return;
-                      const arr=[...((equipped.decos)||Array(16).fill(null))];
-                      arr[i]=null;setEquipped(e=>({...e,decos:arr}));}}>
-                    {item?item.emoji:""}
-                  </div>);})}
+
+            {/* 房間佈局 - 3欄 */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:8,alignItems:"center"}}>
+
+              {/* 左欄 */}
+              <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-end"}}>
+                {["tl","ml","bl"].map(slotId=>{
+                  const item=ROOMITEMS.find(r=>r.id===equipped[slotId]);
+                  const slotInfo=ROOM_SLOTS.find(s=>s.id===slotId);
+                  return(
+                    <div key={slotId} style={{
+                      width:isTablet?64:50,height:isTablet?64:50,
+                      background:"rgba(255,255,255,.35)",borderRadius:16,
+                      display:"flex",flexDirection:"column",alignItems:"center",
+                      justifyContent:"center",border:"2px dashed rgba(200,150,80,.3)",
+                      cursor:item?"pointer":"default",
+                      boxShadow:item?"0 3px 0 rgba(0,0,0,.08)":"none",
+                      transition:"all .2s"}}
+                      onClick={()=>{if(item)setEquipped(e=>({...e,[slotId]:undefined}));}}>
+                      {item
+                        ?<>
+                          <span style={{fontSize:isTablet?28:22}}>{item.emoji}</span>
+                          <span style={{fontSize:7,color:C.brown,fontWeight:900,marginTop:1}}>{item.label}</span>
+                        </>
+                        :<span style={{fontSize:10,color:"rgba(150,100,50,.4)",fontWeight:800}}>{slotInfo.label}</span>}
+                    </div>);})}
+              </div>
+
+              {/* 中間 - 寵物 */}
+              <div style={{textAlign:"center"}}>
+                {poops.map((p,i)=>(
+                  <span key={p.key} style={{fontSize:isTablet?22:18,cursor:"pointer",
+                    display:"inline-block",margin:"0 2px"}}
+                    onClick={()=>{setPoops(ps=>ps.filter(x=>x.key!==p.key));
+                      setPetMood(m=>Math.min(100,m+10));Audio.clean();
+                      toast2("清乾淨了！🧹 +心情","#88cc88");}}>💩</span>))}
+                <div style={{position:"relative",display:"inline-block",cursor:"pointer"}} onClick={patPet}>
+                  {speech&&<div style={{...bub(C.card),position:"absolute",top:-52,left:"50%",
+                    transform:"translateX(-50%)",borderRadius:16,padding:"7px 13px",
+                    fontSize:11,fontWeight:900,color:C.brown,whiteSpace:"nowrap",
+                    animation:"bIn .3s",zIndex:10,border:"none",
+                    boxShadow:"0 4px 12px rgba(0,0,0,.12)"}}>
+                    {speech}
+                    <div style={{position:"absolute",bottom:-7,left:"50%",transform:"translateX(-50%)",
+                      width:0,height:0,borderLeft:"7px solid transparent",
+                      borderRight:"7px solid transparent",borderTop:"7px solid #fff"}}/>
+                  </div>}
+                  <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
+                    hunger={hunger} mood={mood} eating={toyPlaying!==null} size={isTablet?.72:.58}/>
+                </div>
+                {toyPlaying&&<div style={{fontSize:24,animation:"float .5s infinite"}}>
+                  {(TOYS.find(t=>t.id===toyPlaying)||{}).emoji}
+                </div>}
+                <div style={{fontSize:9,color:C.soft,fontWeight:800,marginTop:2}}>點擊摸摸牠 💛</div>
+              </div>
+
+              {/* 右欄 */}
+              <div style={{display:"flex",flexDirection:"column",gap:8,alignItems:"flex-start"}}>
+                {["tr","mr","br"].map(slotId=>{
+                  const item=ROOMITEMS.find(r=>r.id===equipped[slotId]);
+                  const slotInfo=ROOM_SLOTS.find(s=>s.id===slotId);
+                  return(
+                    <div key={slotId} style={{
+                      width:isTablet?64:50,height:isTablet?64:50,
+                      background:"rgba(255,255,255,.35)",borderRadius:16,
+                      display:"flex",flexDirection:"column",alignItems:"center",
+                      justifyContent:"center",border:"2px dashed rgba(200,150,80,.3)",
+                      cursor:item?"pointer":"default",
+                      boxShadow:item?"0 3px 0 rgba(0,0,0,.08)":"none",
+                      transition:"all .2s"}}
+                      onClick={()=>{if(item)setEquipped(e=>({...e,[slotId]:undefined}));}}>
+                      {item
+                        ?<>
+                          <span style={{fontSize:isTablet?28:22}}>{item.emoji}</span>
+                          <span style={{fontSize:7,color:C.brown,fontWeight:900,marginTop:1}}>{item.label}</span>
+                        </>
+                        :<span style={{fontSize:10,color:"rgba(150,100,50,.4)",fontWeight:800}}>{slotInfo.label}</span>}
+                    </div>);})}
+              </div>
             </div>
           </div>
 
-          {/* toys */}
+          {/* 玩具互動 */}
           {TOYS.filter(t=>owned.indexOf(t.id)>=0).length>0&&(
             <div style={{...cardS(C.card),padding:12,marginBottom:10}}>
               <div style={{fontSize:11,color:C.soft,fontWeight:900,marginBottom:8}}>玩具互動 🎮</div>
@@ -2228,7 +2313,7 @@ function App(){
               </div>
             </div>)}
 
-          {/* outfit display */}
+          {/* 換裝配件 */}
           {OUTFITS.filter(o=>owned.indexOf(o.id)>=0).length>0&&(
             <div style={{...cardS(C.card),padding:12,marginBottom:10}}>
               <div style={{fontSize:11,color:C.soft,fontWeight:900,marginBottom:8}}>👗 換裝配件</div>
@@ -2247,21 +2332,41 @@ function App(){
               </div>
             </div>)}
 
-          {/* room decos */}
+          {/* 房間裝飾 - 按位置分類 */}
           {ROOMITEMS.filter(i=>i.type==="dc"&&owned.indexOf(i.id)>=0).length>0&&(
             <div style={{...cardS(C.card),padding:12}}>
-              <div style={{fontSize:11,color:C.soft,fontWeight:900,marginBottom:8}}>點格子放入裝飾（再點移除）</div>
-              <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
-                {ROOMITEMS.filter(i=>i.type==="dc"&&owned.indexOf(i.id)>=0).map(d=>(
-                  <button key={d.id} className="btn"
-                    onClick={()=>{const arr=[...((equipped.decos)||Array(16).fill(null))];
-                      const fi=arr.findIndex(x=>!x);
-                      if(fi!==-1){arr[fi]=d.id;setEquipped(e=>({...e,decos:arr}));}}}
-                    style={{...bub(C.light),borderRadius:12,padding:"7px 10px",textAlign:"center",border:"none"}}>
-                    <div style={{fontSize:20}}>{d.emoji}</div>
-                    <div style={{fontSize:9,fontWeight:900,color:C.brown}}>{d.label}</div>
-                  </button>))}
+              <div style={{fontSize:11,color:C.soft,fontWeight:900,marginBottom:10}}>
+                🏠 房間裝飾（點裝飾放入，再點格子移除）
               </div>
+              {ROOM_SLOTS.map(slot=>{
+                const slotItems=ROOMITEMS.filter(r=>r.type==="dc"&&r.slot===slot.id&&owned.indexOf(r.id)>=0);
+                if(slotItems.length===0)return null;
+                const placed=ROOMITEMS.find(r=>r.id===equipped[slot.id]);
+                return(
+                  <div key={slot.id} style={{marginBottom:10}}>
+                    <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:5,
+                      display:"flex",alignItems:"center",gap:6}}>
+                      <span>{slot.label}</span>
+                      {placed&&<span style={{...bub(C.yellow,999),padding:"1px 8px",fontSize:9,
+                        fontWeight:900,color:C.brown,border:"none"}}>
+                        {placed.emoji} 已放置
+                      </span>}
+                    </div>
+                    <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
+                      {slotItems.map(d=>{
+                        const isPlaced=equipped[slot.id]===d.id;
+                        return(
+                          <button key={d.id} className="btn"
+                            onClick={()=>setEquipped(e=>({...e,[slot.id]:isPlaced?undefined:d.id}))}
+                            style={{...bub(isPlaced?C.yellow:C.light),borderRadius:14,
+                              padding:"8px 10px",textAlign:"center",border:"none",
+                              outline:isPlaced?"3px solid "+C.butter:"none"}}>
+                            <div style={{fontSize:22}}>{d.emoji}</div>
+                            <div style={{fontSize:9,fontWeight:900,color:C.brown}}>{d.label}</div>
+                            {isPlaced&&<div style={{fontSize:8,color:C.soft,fontWeight:900}}>放置中</div>}
+                          </button>);})}
+                    </div>
+                  </div>);})}
             </div>)}
         </div>
       )}
