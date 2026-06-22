@@ -1,12 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<link rel="icon" href="house-logo.png?v=2">
-<link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
-<meta name="apple-mobile-web-app-title" content="寵物習慣王國">
-<meta name="application-name" content="寵物習慣王國">
 <meta charset="UTF-8"/>
-<link rel="icon" type="image/png" href="house-logo.png">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
@@ -19,6 +14,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
+:root{--theme-main:#F5A623;--theme-mid:#FFD97D;--theme-soft:#FFE566;--theme-border:rgba(255,215,140,.22);--theme-dark:#4A3000;}
 html,body{height:100%;overscroll-behavior:none;}
 body{
   background-color:#FFFBF0;
@@ -44,9 +40,13 @@ body{
 @keyframes ponyBlink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.08)}}
 @keyframes ponyEar{0%,82%,100%{transform:rotate(0)}88%{transform:rotate(-9deg)}93%{transform:rotate(7deg)}}
 @keyframes ponyTail{0%,100%{transform:rotate(-7deg)}50%{transform:rotate(9deg)}}
+@keyframes ponyBreathe{0%,100%{transform:scaleY(1) translateY(0)}50%{transform:scaleY(.975) translateY(2px)}}
+@keyframes ponyDash{0%,100%{transform:translateY(0) rotate(0)}30%{transform:translateY(-5px) rotate(-2deg)}65%{transform:translateY(1px) rotate(2deg)}}
 .pony-eye{transform-box:fill-box;transform-origin:center;animation:ponyBlink 4.2s infinite;}
 .pony-ear{transform-box:fill-box;transform-origin:bottom center;animation:ponyEar 5s infinite;}
 .pony-tail{transform-box:fill-box;transform-origin:right center;animation:ponyTail 1.8s ease-in-out infinite;}
+.pony-breathe{transform-box:fill-box;transform-origin:center bottom;animation:ponyBreathe 2.8s ease-in-out infinite;}
+.pony-dash{transform-box:fill-box;transform-origin:center bottom;animation:ponyDash .45s ease-in-out infinite;}
 @keyframes cuteBlink{0%,44%,48%,100%{transform:scaleY(1)}46%{transform:scaleY(.08)}}
 @keyframes cuteWiggle{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(7deg)}}
 @keyframes petSleep{0%,100%{transform:translateY(7px) rotate(-3deg) scaleY(.92)}50%{transform:translateY(9px) rotate(-3deg) scaleY(.88)}}
@@ -76,9 +76,9 @@ const {useState,useEffect,useRef,useCallback,useMemo}=React;
 
 /* ═══════════════ DESIGN TOKENS ═══════════════ */
 const C={
-  bg:"#FFFBF0", card:"#FFFFFF", yellow:"#FFE566",
-  butter:"#FFD97D", orange:"#F5A623", peach:"#FFE0B0",
-  brown:"#4A3000", soft:"#9A7040", light:"#FFF8E0",
+  bg:"#FFFBF0", card:"#FFFFFF", yellow:"var(--theme-soft,#FFE566)",
+  butter:"var(--theme-mid,#FFD97D)", orange:"var(--theme-main,#F5A623)", peach:"#FFE0B0",
+  brown:"var(--theme-dark,#4A3000)", soft:"#9A7040", light:"#FFF8E0",
   green:"#DFFFCC", pink:"#FFE0EC", blue:"#E0F4FF",
   red:"#FFD0D0",
 };
@@ -89,7 +89,7 @@ const bub=(bg,r)=>({background:bg||C.card,borderRadius:r||999,
 
 const cardS=(bg)=>({background:bg||C.card,borderRadius:24,
   boxShadow:"0 6px 0 rgba(190,120,40,.09),0 2px 18px rgba(0,0,0,.04)",
-  border:"2px solid rgba(255,215,140,.22)"});
+  border:"2px solid var(--theme-border,rgba(255,215,140,.22))"});
 
 const DEFAULT_TASKS=[
   {id:1,icon:"🏫",label:"7:40前到校",pts:20},
@@ -116,7 +116,7 @@ const LEVELS=[
 ];
 
 const PETS=[
-  {id:"horse",label:"小黃馬",emoji:"🐴",desc:"活潑可愛，最愛奔跑！",c:C.yellow,b:C.butter},
+  {id:"horse",label:"小黃馬",emoji:"🐴",desc:"活潑可愛，最愛奔跑！",c:"#FFE566",b:"#FFD97D"},
   {id:"cat",label:"貓咪",emoji:"🐱",desc:"慵懶優雅，愛撒嬌～",c:"#FFD97D",b:"#E8A020"},
   {id:"chick",label:"小黃雞",emoji:"🐣",desc:"嗶嗶嗶！活力滿滿！",c:"#FFE033",b:"#D4A000"},
   {id:"fox",label:"小狐狸",emoji:"🦊",desc:"聰明機靈，最愛探險！",c:"#FF9F3F",b:"#D06000"},
@@ -145,12 +145,25 @@ const OUTFITS=[
 
 /* 小主人服飾：共用同一套身體骨架，不限制男生女生穿著 */
 const KID_ITEMS=[
-  {id:"kt1",slot:"kidTop",emoji:"👕",label:"天空條紋衣",price:60,color:"#72C7F2",accent:"#FFFFFF"},
-  {id:"kt2",slot:"kidTop",emoji:"🌸",label:"櫻花上衣",price:80,color:"#FF9FC5",accent:"#FFF0F6"},
-  {id:"kt3",slot:"kidTop",emoji:"🦖",label:"恐龍上衣",price:100,color:"#78C98A",accent:"#FFF3A0"},
-  {id:"kt4",slot:"kidTop",emoji:"🌟",label:"星星斗篷",price:150,color:"#8C78D8",accent:"#FFE566"},
-  {id:"kh1",slot:"kidHat",emoji:"🧢",label:"探險帽",price:90},
-  {id:"kh2",slot:"kidHat",emoji:"🐰",label:"兔耳帽",price:120},
+  {id:"kt1",slot:"kidTop",emoji:"👕",label:"天空條紋衣",price:60,color:"#72C7F2",accent:"#FFFFFF",theme:"日常"},
+  {id:"kt2",slot:"kidTop",emoji:"🌸",label:"櫻花上衣",price:80,color:"#FF9FC5",accent:"#FFF0F6",theme:"日常"},
+  {id:"kt3",slot:"kidTop",emoji:"🦖",label:"恐龍上衣",price:100,color:"#78C98A",accent:"#FFF3A0",theme:"日常"},
+  {id:"kt4",slot:"kidTop",emoji:"🌟",label:"星星斗篷",price:150,color:"#8C78D8",accent:"#FFE566",theme:"日常"},
+  {id:"kt5",slot:"kidTop",emoji:"🎓",label:"學院背心襯衫",price:140,color:"#303B59",accent:"#F7F2E8",theme:"學院風"},
+  {id:"kt6",slot:"kidTop",emoji:"🩵",label:"公園藍襯衫",price:100,color:"#76B9DF",accent:"#F5FCFF",theme:"公園風"},
+  {id:"kt7",slot:"kidTop",emoji:"👗",label:"雛菊公園洋裝",price:150,color:"#F4B8C8",accent:"#FFF5D6",theme:"公園風",dress:true},
+  {id:"kt8",slot:"kidTop",emoji:"🌙",label:"藍月亮睡衣",price:100,color:"#89AEE5",accent:"#FFF2A6",theme:"睡衣風",pajama:true},
+  {id:"kt9",slot:"kidTop",emoji:"💗",label:"粉紅星星睡衣",price:100,color:"#F1AFC4",accent:"#FFF4C8",theme:"睡衣風",pajama:true},
+  {id:"kb1",slot:"kidBottom",emoji:"👖",label:"學院格紋長褲",price:120,color:"#D8C8AE",accent:"#8F806C",theme:"學院風",pants:true,plaid:true},
+  {id:"kb2",slot:"kidBottom",emoji:"👗",label:"學院格紋短裙",price:120,color:"#D8C8AE",accent:"#8F806C",theme:"學院風",skirt:true,plaid:true},
+  {id:"kb3",slot:"kidBottom",emoji:"🌙",label:"藍月亮睡褲",price:90,color:"#89AEE5",accent:"#FFF2A6",theme:"睡衣風",pants:true,pajama:true},
+  {id:"kb4",slot:"kidBottom",emoji:"💗",label:"粉紅星星睡褲",price:90,color:"#F1AFC4",accent:"#FFF4C8",theme:"睡衣風",pants:true,pajama:true},
+  {id:"ks1",slot:"kidShoes",emoji:"👞",label:"學院小皮鞋",price:90,color:"#5C4437",accent:"#F4E8D7",theme:"學院風"},
+  {id:"ks2",slot:"kidShoes",emoji:"👟",label:"公園白球鞋",price:80,color:"#FFFDF7",accent:"#91B8D4",theme:"公園風"},
+  {id:"ks3",slot:"kidShoes",emoji:"🥿",label:"軟綿睡衣拖鞋",price:70,color:"#F5C5D2",accent:"#FFF2F5",theme:"睡衣風"},
+  {id:"kh1",slot:"kidHat",emoji:"🧢",label:"探險帽",price:90,theme:"公園風"},
+  {id:"kh2",slot:"kidHat",emoji:"🐰",label:"兔耳帽",price:120,theme:"睡衣風"},
+  {id:"kh4",slot:"kidHat",emoji:"👒",label:"小小草帽",price:100,theme:"公園風"},
   {id:"kh3",slot:"kidHat",emoji:"👑",label:"小皇冠",price:180},
   {id:"ka1",slot:"kidAcc",emoji:"🎒",label:"紅色背包",price:90},
   {id:"ka2",slot:"kidAcc",emoji:"👓",label:"圓圓眼鏡",price:70},
@@ -237,6 +250,33 @@ const FURNITURE_ACTIONS={
   d12:{action:"water",text:"盆栽長高高！🪴",x:62},
 };
 const PET_ACTION_EMOJI={sleep:"💤",yawn:"🥱",window:"🪟",sofa:"🛋️",read:"📖",paint:"🎨",guitar:"🎸",water:"💧",hug:"💞"};
+
+/* ═══════════════ V1.2 THEME COLOR SYSTEM ═══════════════ */
+const THEME_COLORS=[
+  {id:"sage",name:"鼠尾草綠",main:"#87A878",mid:"#BFD3B6",soft:"#E4F0DE",border:"#A9C39E",dark:"#46613F"},
+  {id:"sky",name:"天空藍",main:"#72AEDD",mid:"#A9D2EE",soft:"#E1F2FC",border:"#9AC7E7",dark:"#365F7D"},
+  {id:"sakura",name:"櫻花粉",main:"#E79BB3",mid:"#F2BDD0",soft:"#FCE7EF",border:"#EAB2C5",dark:"#7D4960"},
+  {id:"butter",name:"奶油黃",main:"#E8B844",mid:"#F4D77C",soft:"#FFF1BA",border:"#E8CF79",dark:"#70571F"},
+  {id:"lavender",name:"薰衣草紫",main:"#A38AC8",mid:"#C7B7E2",soft:"#EEE8FA",border:"#BBA8D8",dark:"#594873"},
+  {id:"peach",name:"蜜桃杏",main:"#E9A17D",mid:"#F4C3A8",soft:"#FDE9DC",border:"#EAB69B",dark:"#79513D"},
+];
+const getTheme=(id)=>THEME_COLORS.find(t=>t.id===id)||THEME_COLORS[3];
+const themeVars=(id)=>{const t=getTheme(id);return {
+  "--theme-main":t.main,"--theme-mid":t.mid,"--theme-soft":t.soft,"--theme-border":t.border,"--theme-dark":t.dark
+};};
+
+/* ═══════════════ V1.2 FAMILY DATA HELPERS ═══════════════ */
+const FAMILY_KEY="petHabitFamily_v1";
+const isPetHabitSaveKey=(key)=>key==="habitKingdom"||key==="lastLogin_hk"||key==="lastStreak_hk"||
+  key==="musicOn_hk"||key==="weather_hk"||key==="parkPetPan_hk"||key==="parkKidPan_hk"||key===FAMILY_KEY||
+  key.startsWith("habitKingdom_player_")||key.startsWith("lastLogin_hk_")||key.startsWith("lastStreak_hk_")||
+  key.startsWith("musicOn_hk_")||key.startsWith("weather_hk_")||key.startsWith("parkPetPan_hk_")||key.startsWith("parkKidPan_hk_");
+const getPetHabitSaveKeys=()=>Object.keys(localStorage).filter(isPetHabitSaveKey);
+const readFamily=()=>{try{const f=JSON.parse(localStorage.getItem(FAMILY_KEY)||"null");return f&&Array.isArray(f.players)&&f.players.length>0&&f.players.length<=3?f:null;}catch(e){return null;}};
+const saveFamily=(family)=>localStorage.setItem(FAMILY_KEY,JSON.stringify(family));
+const readPlayerSave=(storageKey)=>{try{return JSON.parse(localStorage.getItem(storageKey)||"{}");}catch(e){return {};}};
+const makePlayerId=()=>"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const familyDay=(createdAt)=>Math.max(1,Math.floor((Date.now()-new Date(createdAt||Date.now()).getTime())/86400000)+1);
 
 /* ═══════════════ SVG ANIMALS ═══════════════ */
 function HorseLegacy({mood,level,hat,acc,hunger,running,eating,size}){
@@ -653,6 +693,86 @@ function Capy({mood,level,hat,acc,hunger,running,eating,size}){
     </div>);
 }
 
+/* 精緻趴姿小黃馬：首頁角色樣板 */
+function HorsePremium({mood,level,hat,acc,hunger,running,eating,size}){
+  mood=mood==null?4:mood;level=level||1;size=size||1;
+  const lv=LEVELS[Math.min(level-1,4)],s=size*lv.sz;
+  const hI=OUTFITS.find(i=>i.id===hat),aI=OUTFITS.find(i=>i.id===acc);
+  const happy=mood>=4,sick=mood<=1,lv5=level>=5;
+  const D="#8B551C",E="#392416",K="#F39BAE",M="#E89A2E";
+  return <div style={{display:"inline-block",position:"relative",filter:sick?"grayscale(38%) saturate(.8)":"none"}}>
+    {lv5&&[0,1,2,3,4].map(i=><span key={i} style={{position:"absolute",left:(9+i*19)+"%",top:(-5+i%2*13)+"%",fontSize:11+i%2*3,animation:"spkl "+(1.2+i*.25)+"s infinite",zIndex:5}}>✨</span>)}
+    <svg width={180*s} height={150*s} viewBox="0 0 180 150" style={{overflow:"visible"}}>
+      <defs>
+        <linearGradient id="ponyGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#FFF09A"/><stop offset=".58" stopColor="#FFD85A"/><stop offset="1" stopColor="#F2B936"/></linearGradient>
+        <linearGradient id="ponyCream" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#FFFDF1"/><stop offset="1" stopColor="#FFEAA5"/></linearGradient>
+        <linearGradient id="ponyMane" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#F6B84A"/><stop offset="1" stopColor="#D98223"/></linearGradient>
+        <radialGradient id="ponyEye"><stop offset="0" stopColor="#76502B"/><stop offset=".55" stopColor="#442A18"/><stop offset="1" stopColor="#24150D"/></radialGradient>
+      </defs>
+      <ellipse cx="91" cy="138" rx="66" ry="8" fill="rgba(85,52,20,.13)"/>
+
+      {/* tail behind the body */}
+      <g className="pony-tail">
+        <path d="M36 91 Q12 80 12 104 Q12 124 32 129 Q22 116 34 112 Q46 108 50 96Z" fill="url(#ponyMane)" stroke={D} strokeWidth="2.8" strokeLinejoin="round"/>
+        <path d="M29 94 Q17 93 18 107 Q20 115 29 119 Q25 109 39 106" fill="none" stroke="#FFF4C4" strokeWidth="5" strokeLinecap="round" opacity=".7"/>
+      </g>
+
+      <g className={running?"pony-dash":"pony-breathe"}>
+        {/* low, cuddly body */}
+        <path d="M39 91 Q48 72 75 70 Q107 66 130 82 Q143 93 138 112 Q134 130 108 133 L60 132 Q37 127 33 111 Q30 100 39 91Z" fill="url(#ponyGold)" stroke={D} strokeWidth="3" strokeLinejoin="round"/>
+        <ellipse cx="78" cy="112" rx="34" ry="18" fill="url(#ponyCream)" opacity=".78"/>
+        <ellipse cx="65" cy="83" rx="20" ry="7" fill="#FFFBE4" opacity=".48" transform="rotate(-10 65 83)"/>
+        <path d="M57 104 C50 96 40 105 57 119 C74 105 64 96 57 104Z" fill="#FFF7CE" opacity=".9"/>
+
+        {/* folded back hooves */}
+        <path d="M45 116 Q35 123 39 135 Q48 141 60 135 L62 121Z" fill="#FFD55A" stroke={D} strokeWidth="2.6"/>
+        <path d="M117 118 Q132 120 135 132 Q126 141 111 135 L108 121Z" fill="#FFD55A" stroke={D} strokeWidth="2.6"/>
+        <path d="M39 132 Q49 137 59 132" fill="none" stroke={M} strokeWidth="5" strokeLinecap="round"/>
+        <path d="M114 133 Q124 138 134 130" fill="none" stroke={M} strokeWidth="5" strokeLinecap="round"/>
+
+        {/* oversized head */}
+        <ellipse cx="121" cy="67" rx="45" ry="40" fill="url(#ponyGold)" stroke={D} strokeWidth="3.2"/>
+        <ellipse cx="136" cy="82" rx="31" ry="22" fill="url(#ponyCream)" stroke={D} strokeWidth="2.4"/>
+        <ellipse cx="139" cy="75" rx="17" ry="8" fill="#fff" opacity=".28"/>
+
+        {/* soft ears */}
+        <g className="pony-ear"><path d="M89 40 Q73 12 99 23 L108 43Z" fill="url(#ponyGold)" stroke={D} strokeWidth="2.8"/><path d="M93 36 Q84 21 99 28 L103 39Z" fill={K}/></g>
+        <g className="pony-ear" style={{animationDelay:".45s"}}><path d="M140 31 Q151 8 158 35 L145 48Z" fill="url(#ponyGold)" stroke={D} strokeWidth="2.8"/><path d="M146 33 Q151 19 153 35 L147 41Z" fill={K}/></g>
+
+        {/* layered mane */}
+        <path d="M85 42 Q87 20 103 27 Q108 11 121 27 Q132 16 138 34 Q153 32 148 48 Q157 54 143 62 Q135 51 124 47 Q111 55 99 47Z" fill="url(#ponyMane)" stroke={D} strokeWidth="2.8" strokeLinejoin="round"/>
+        <path d="M94 38 Q103 23 111 34 Q119 22 127 36 Q136 30 141 42" fill="none" stroke="#FFD97A" strokeWidth="4" strokeLinecap="round" opacity=".65"/>
+        <path d="M88 76 Q72 80 81 92 Q68 98 82 108 Q98 101 103 83Z" fill="url(#ponyMane)" stroke={D} strokeWidth="2.5"/>
+
+        {/* glossy eyes */}
+        {sick?<g fill="none" stroke={E} strokeWidth="3" strokeLinecap="round"><path d="M91 64 Q99 58 107 64"/><path d="M119 61 Q127 56 135 62"/></g>
+          :<g className="pony-eye">
+            <ellipse cx="100" cy="62" rx="9" ry="12" fill="url(#ponyEye)"/><ellipse cx="129" cy="60" rx="9" ry="12" fill="url(#ponyEye)"/>
+            <circle cx="97" cy="57" r="3.8" fill="#fff"/><circle cx="126" cy="55" r="3.8" fill="#fff"/>
+            <circle cx="104" cy="66" r="1.8" fill="#FFD982"/><circle cx="133" cy="64" r="1.8" fill="#FFD982"/>
+            {happy&&<><circle cx="94" cy="52" r="1.3" fill="#fff"/><circle cx="123" cy="50" r="1.3" fill="#fff"/></>}
+          </g>}
+        <path d="M91 47 Q100 42 108 48" fill="none" stroke={E} strokeWidth="2.2" strokeLinecap="round" opacity=".75"/>
+        <path d="M120 45 Q129 40 137 47" fill="none" stroke={E} strokeWidth="2.2" strokeLinecap="round" opacity=".75"/>
+
+        {/* blush and muzzle details */}
+        <ellipse cx="88" cy="76" rx="10" ry="6" fill={K} opacity=".48"/><ellipse cx="132" cy="77" rx="10" ry="6" fill={K} opacity=".45"/>
+        <path d="M83 76 l3 -4 M89 78 l3 -4" stroke="#E77F96" strokeWidth="1.6" strokeLinecap="round" opacity=".75"/>
+        <ellipse cx="148" cy="82" rx="2.6" ry="3" fill={D}/>
+        {eating?<path d="M132 89 Q140 99 148 89" fill="#A95B43" stroke={E} strokeWidth="2.4" style={{animation:"mnch .3s infinite alternate"}}/>
+          :happy?<path d="M130 88 Q140 98 150 88" fill="none" stroke={E} strokeWidth="2.8" strokeLinecap="round"/>
+          :sick?<path d="M132 94 Q140 86 148 94" fill="none" stroke={E} strokeWidth="2.6" strokeLinecap="round"/>
+          :<path d="M134 90 Q140 93 146 89" fill="none" stroke={E} strokeWidth="2.5" strokeLinecap="round"/>}
+      </g>
+
+      {hunger<30&&!eating&&<text x="70" y="55" fontSize="16" style={{animation:"float 1.5s infinite"}}>💧</text>}
+      {eating&&<text x="160" y="51" fontSize="21" style={{animation:"hUp .7s forwards"}}>💛</text>}
+      {hI&&<text x="119" y="27" fontSize="27" textAnchor="middle">{hI.emoji}</text>}
+      {aI&&<text x="91" y="108" fontSize="21" textAnchor="middle">{aI.emoji}</text>}
+    </svg>
+  </div>;
+}
+
 /* 其餘夥伴共用的新版角色語言：幼態比例、柔和高光、粗描邊與動態表情 */
 function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
   mood=mood==null?4:mood;level=level||1;size=size||1;
@@ -671,6 +791,10 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
   return <div style={{display:"inline-block",position:"relative",animation:running?"none":"float 3s ease-in-out infinite",filter:sick?"grayscale(45%)":"none"}}>
     {lv5&&[0,1,2,3].map(i=><span key={i} style={{position:"absolute",left:(15+i*22)+"%",top:(-4+i*9)+"%",fontSize:11,animation:"spkl "+(1.3+i*.25)+"s infinite",zIndex:2}}>✨</span>)}
     <svg width={160*s} height={150*s} viewBox="0 0 160 150" style={{overflow:"visible"}}>
+      <defs>
+        <linearGradient id={"petBody-"+kind} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor={L}/><stop offset=".46" stopColor={B}/><stop offset="1" stopColor={D}/></linearGradient>
+        <radialGradient id={"petEye-"+kind} cx="34%" cy="25%" r="72%"><stop offset="0" stopColor="#6D4B32"/><stop offset=".48" stopColor={E}/><stop offset="1" stopColor="#160F0B"/></radialGradient>
+      </defs>
       <ellipse cx="80" cy="143" rx="45" ry="6" fill="rgba(65,42,20,.10)"/>
 
       {/* tails and wings */}
@@ -680,8 +804,9 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
       {kind==="chick"&&<><path d="M48 100 Q24 91 38 76 Q51 79 59 93Z" fill={L} stroke={D} strokeWidth="2.4"/><path d="M111 98 Q134 87 124 75 Q111 78 101 92Z" fill={L} stroke={D} strokeWidth="2.4"/></>}
 
       {/* body and feet */}
-      <ellipse cx="80" cy="106" rx={kind==="frog"?39:kind==="chick"?38:44} ry={kind==="frog"?28:31} fill={B} stroke={D} strokeWidth="2.7"/>
+      <ellipse cx="80" cy="106" rx={kind==="frog"?39:kind==="chick"?38:44} ry={kind==="frog"?28:31} fill={"url(#petBody-"+kind+")"} stroke={D} strokeWidth="2.7"/>
       <ellipse cx="78" cy="113" rx="27" ry="17" fill={L} opacity=".72"/>
+      <ellipse cx="66" cy="91" rx="17" ry="7" fill="#fff" opacity=".18" transform="rotate(-18 66 91)"/>
       {kind==="frog"?<><ellipse cx="47" cy="134" rx="18" ry="8" fill={B} stroke={D} strokeWidth="2.2"/><ellipse cx="113" cy="134" rx="18" ry="8" fill={B} stroke={D} strokeWidth="2.2"/></>
         :kind==="chick"?<><path d="M65 131 V139 M57 139 H71" stroke={D} strokeWidth="4" strokeLinecap="round"/><path d="M96 131 V139 M88 139 H102" stroke={D} strokeWidth="4" strokeLinecap="round"/></>
         :[62,99].map((x,i)=><g key={i} style={{transformOrigin:x+"px 123px",animation:running?(i?"legR .28s infinite alternate":"legR .28s .14s infinite alternate-reverse"):"none"}}><rect x={x-8} y="121" width="16" height="19" rx="8" fill={B} stroke={D} strokeWidth="2"/><ellipse cx={x} cy="139" rx="9" ry="4" fill={D}/></g>)}
@@ -693,7 +818,7 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
       {kind==="frog"&&<><circle cx="78" cy="34" r="17" fill={B} stroke={D} strokeWidth="2.5"/><circle cx="124" cy="34" r="17" fill={B} stroke={D} strokeWidth="2.5"/></>}
       {kind==="chick"&&<path d="M83 28 Q91 10 99 29 Q108 12 112 34" fill={B} stroke={D} strokeWidth="2.5" strokeLinecap="round"/>}
 
-      <ellipse cx="102" cy="59" rx={kind==="frog"?38:kind==="chick"?35:38} ry={kind==="capy"?31:34} fill={B} stroke={D} strokeWidth="2.8"/>
+      <ellipse cx="102" cy="59" rx={kind==="frog"?38:kind==="chick"?35:38} ry={kind==="capy"?31:34} fill={"url(#petBody-"+kind+")"} stroke={D} strokeWidth="2.8"/>
       <ellipse cx="91" cy="45" rx="16" ry="8" fill={W} opacity=".34" transform="rotate(-15 91 45)"/>
       {kind==="fox"&&<path d="M72 66 Q84 42 102 49 Q119 40 135 65 Q124 88 102 92 Q81 87 72 66Z" fill={L} opacity=".95"/>}
       {kind==="cat"&&<><path d="M75 54 Q85 43 94 53" fill="none" stroke={D} strokeWidth="3"/><path d="M91 35 Q98 48 105 35" fill="none" stroke={D} strokeWidth="3"/></>}
@@ -702,9 +827,13 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
 
       {/* eyes */}
       {sick?<g stroke="#C84E52" strokeWidth="2.8" strokeLinecap="round"><path d={"M82 "+(faceY-4)+" l10 8 M92 "+(faceY-4)+" l-10 8"}/><path d={"M111 "+(faceY-4)+" l10 8 M121 "+(faceY-4)+" l-10 8"}/></g>
-        :happy?<g fill="none" stroke={E} strokeWidth="3.2" strokeLinecap="round"><path d={"M80 "+(faceY+2)+" Q87 "+(faceY-6)+" 94 "+(faceY+2)}/><path d={"M108 "+(faceY+2)+" Q115 "+(faceY-6)+" 122 "+(faceY+2)}/></g>
-        :<g className="cute-eye"><ellipse cx="88" cy={faceY} rx="5.5" ry="7.5" fill={E}/><ellipse cx="115" cy={faceY} rx="5.5" ry="7.5" fill={E}/><circle cx="90" cy={faceY-3} r="2" fill="#fff"/><circle cx="117" cy={faceY-3} r="2" fill="#fff"/></g>}
+        :<g className="cute-eye"><ellipse cx="88" cy={faceY} rx="7" ry="9.4" fill={"url(#petEye-"+kind+")"}/><ellipse cx="115" cy={faceY} rx="7" ry="9.4" fill={"url(#petEye-"+kind+")"}/>
+          <circle cx="85.5" cy={faceY-3.5} r="2.8" fill="#fff"/><circle cx="112.5" cy={faceY-3.5} r="2.8" fill="#fff"/>
+          <circle cx="90.5" cy={faceY+3} r="1.5" fill="#FFD982"/><circle cx="117.5" cy={faceY+3} r="1.5" fill="#FFD982"/>
+          {happy&&<><circle cx="82" cy={faceY-7} r="1.1" fill="#fff"/><circle cx="109" cy={faceY-7} r="1.1" fill="#fff"/></>}
+        </g>}
       <ellipse cx="78" cy={faceY+12} rx="7" ry="4" fill={K} opacity=".58"/><ellipse cx="123" cy={faceY+12} rx="7" ry="4" fill={K} opacity=".58"/>
+      <path d={"M73 "+(faceY+12)+" l3 -3 M79 "+(faceY+14)+" l3 -3 M118 "+(faceY+12)+" l3 -3 M124 "+(faceY+14)+" l3 -3"} stroke="#DF7891" strokeWidth="1.2" strokeLinecap="round" opacity=".7"/>
 
       {/* noses, beak and mouths */}
       {kind==="chick"?<path d="M96 66 L111 71 L96 77Z" fill="#F29A38" stroke={D} strokeWidth="1.8"/>
@@ -718,6 +847,10 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
 
       {kind==="fox"&&<path d="M76 84 Q62 91 66 107" fill="none" stroke={W} strokeWidth="8" strokeLinecap="round" opacity=".8"/>}
       {kind==="capy"&&<path d="M59 104 C54 97 45 104 59 116 C73 104 64 97 59 104Z" fill={L}/>} 
+      {kind==="cat"&&<g stroke={D} strokeWidth="1.4" strokeLinecap="round" opacity=".75"><path d="M76 70L61 66 M77 74L59 75 M126 69L141 65 M126 74L143 76"/></g>}
+      {kind==="frog"&&<><circle cx="95" cy="66" r="1.4" fill={D}/><circle cx="109" cy="66" r="1.4" fill={D}/></>}
+      {kind==="chick"&&<><circle cx="75" cy="74" r="1.3" fill="#F5A36A"/><circle cx="80" cy="76" r="1" fill="#F5A36A"/></>}
+      {kind==="capy"&&<path d="M91 29 Q96 21 101 29 Q106 21 111 30" fill="none" stroke={D} strokeWidth="2.2" strokeLinecap="round"/>}
       {hunger<30&&!eating&&<text x="62" y="52" fontSize="15" style={{animation:"float 1.5s infinite"}}>💧</text>}
       {eating&&<text x="141" y="44" fontSize="20" style={{animation:"hUp .6s forwards"}}>💛</text>}
       {hI&&<text x="102" y="29" fontSize="24" textAnchor="middle">{hI.emoji}</text>}
@@ -733,51 +866,131 @@ function PetView(props){
   if(t==="fox") return <CutePet kind="fox" {...props}/>;
   if(t==="frog") return <CutePet kind="frog" {...props}/>;
   if(t==="capy") return <CutePet kind="capy" {...props}/>;
-  return <Horse {...props}/>;
+  return <HorsePremium {...props}/>;
 }
 
 /* ═══════════════ LITTLE OWNER ═══════════════ */
-function KidView({gender,skin,top,hat,acc,size}){
+function KidView({gender,skin,top,bottom,shoes,hat,acc,size}){
   const s=size||1;
   const skinColor=skin||"#F2C7A5";
   const shirt=KID_ITEMS.find(i=>i.id===top);
-  const shirtColor=shirt?shirt.color:(gender==="boy"?"#70BDEA":"#FF9FBE");
-  const shirtAccent=shirt?shirt.accent:"#FFF7D6";
+  const bottomItem=KID_ITEMS.find(i=>i.id===bottom);
+  const shoeItem=KID_ITEMS.find(i=>i.id===shoes);
+  const shirtColor=shirt?shirt.color:"#FFFDF8";
+  const shirtAccent=shirt?shirt.accent:"#DDD5C9";
+  const bottomColor=bottomItem?bottomItem.color:"#F7F4EC";
+  const bottomAccent=bottomItem?bottomItem.accent:"#DDD5C8";
+  const shoeColor=shoeItem?shoeItem.color:"#FFFDF7";
+  const shoeAccent=shoeItem?shoeItem.accent:"#D9CEC1";
+  const wearPants=!bottomItem||bottomItem.pants;
+  const O="#73503F",H="#5B3825",HI="#8A5B43";
   return(
     <div style={{width:100*s,height:150*s,display:"inline-block"}}>
       <svg width={100*s} height={150*s} viewBox="0 0 100 150" style={{overflow:"visible"}}>
-        {/* 背包在身體後方 */}
-        {acc==="ka1"&&<path d="M25 82 Q10 86 14 116 L30 118 L34 88Z" fill="#E75C55" stroke="#9E3936" strokeWidth="2"/>}
-        {/* 腿與鞋 */}
-        <rect x="34" y="112" width="13" height="25" rx="6" fill={skinColor}/>
-        <rect x="54" y="112" width="13" height="25" rx="6" fill={skinColor}/>
-        <ellipse cx="39" cy="138" rx="11" ry="6" fill="#6A4A35"/>
-        <ellipse cx="62" cy="138" rx="11" ry="6" fill="#6A4A35"/>
-        {/* 身體與手 */}
-        <path d="M28 77 Q50 66 72 77 L69 116 Q50 126 31 116Z" fill={shirtColor} stroke="rgba(90,50,20,.18)" strokeWidth="2"/>
-        <circle cx="27" cy="95" r="8" fill={skinColor}/><circle cx="73" cy="95" r="8" fill={skinColor}/>
-        {top==="kt1"&&<><path d="M31 88H69" stroke="#fff" strokeWidth="5"/><path d="M30 101H70" stroke="#fff" strokeWidth="5"/></>}
+        <ellipse cx="50" cy="145" rx="31" ry="4.5" fill="#54351F" opacity=".1"/>
+
+        {/* 女生長髮後層與背包 */}
+        {gender!=="boy"&&<path d="M20 44 Q16 15 49 11 Q84 14 81 48 L79 108 Q72 120 64 111 L61 67 H39 L36 111 Q27 121 20 108Z" fill={H} stroke={O} strokeWidth="2"/>}
+        {acc==="ka1"&&<path d="M28 82 Q12 84 14 116 L31 118 L36 87Z" fill="#E75C55" stroke="#9E3936" strokeWidth="2.2"/>}
+
+        {/* 圓潤下身模板 */}
+        <rect x="31" y="106" width="18" height="31" rx="7" fill={wearPants?bottomColor:skinColor} stroke={wearPants?bottomAccent:O} strokeWidth="1.5"/>
+        <rect x="51" y="106" width="18" height="31" rx="7" fill={wearPants?bottomColor:skinColor} stroke={wearPants?bottomAccent:O} strokeWidth="1.5"/>
+        {wearPants&&<path d="M50 108V132" stroke={bottomAccent} strokeWidth="1.2" opacity=".48"/>}
+        {bottomItem&&bottomItem.plaid&&<><path d="M31 117H69 M31 127H69" stroke="#FFF8E8" strokeWidth="1.25" opacity=".62"/><path d="M40 107V136 M60 107V136" stroke={bottomAccent} strokeWidth="1" opacity=".48"/></>}
+        {bottomItem&&bottomItem.skirt&&<><path d="M30 104 Q50 99 70 104 L75 126 Q50 133 25 126Z" fill={bottomColor} stroke={bottomAccent} strokeWidth="1.8"/>
+          <path d="M36 104L34 127 M44 102L44 130 M56 102L56 130 M64 104L67 127" stroke={bottomAccent} strokeWidth="1.05" opacity=".45"/>
+          {bottomItem.plaid&&<path d="M28 113H72 M26 121H74" stroke="#FFF8E8" strokeWidth="1.35" opacity=".7"/>}</>}
+
+        {/* 襪子與大鞋 */}
+        <rect x="31" y="127" width="18" height="10" rx="4" fill="#FFF9F1"/><rect x="51" y="127" width="18" height="10" rx="4" fill="#FFF9F1"/>
+        <ellipse cx="38.5" cy="138" rx="16" ry="8.5" fill={shoeColor} stroke={O} strokeWidth="1.8"/>
+        <ellipse cx="61.5" cy="138" rx="16" ry="8.5" fill={shoeColor} stroke={O} strokeWidth="1.8"/>
+        <path d="M23 138H52 M48 138H77" stroke={shoeAccent} strokeWidth="1.5" opacity=".72"/>
+        {shoes==="ks1"?<path d="M29 134H47 M53 134H71" stroke="#A88469" strokeWidth="2.4"/>:
+          shoes==="ks3"?<><ellipse cx="38" cy="135" rx="7" ry="3" fill="#FFF2F5"/><ellipse cx="62" cy="135" rx="7" ry="3" fill="#FFF2F5"/></>:
+          <><path d="M31 132L45 138 M55 132L69 138" stroke={shoeAccent} strokeWidth="1.2" opacity=".62"/><path d="M34 136H45 M55 136H66" stroke={shoeAccent} strokeWidth="1"/></>}
+
+        {/* 有厚度的共用手臂與肩膀 */}
+        <path d="M35 81 Q26 85 27 101" fill="none" stroke={O} strokeWidth="14" strokeLinecap="round"/>
+        <path d="M65 81 Q74 85 73 101" fill="none" stroke={O} strokeWidth="14" strokeLinecap="round"/>
+        <path d="M35 81 Q27 86 28 100" fill="none" stroke={skinColor} strokeWidth="10.5" strokeLinecap="round"/>
+        <path d="M65 81 Q73 86 72 100" fill="none" stroke={skinColor} strokeWidth="10.5" strokeLinecap="round"/>
+        <circle cx="28" cy="103" r="6.3" fill={skinColor} stroke={O} strokeWidth="1.4"/><circle cx="72" cy="103" r="6.3" fill={skinColor} stroke={O} strokeWidth="1.4"/>
+
+        {/* 上衣與短袖 */}
+        <path d="M33 78 Q50 69 67 78 Q70 87 66 108 Q50 114 34 108 Q30 87 33 78Z" fill={shirtColor} stroke={O} strokeWidth="1.8"/>
+        <path d="M34 80 Q29 81 27 89" fill="none" stroke={O} strokeWidth="11" strokeLinecap="round"/>
+        <path d="M66 80 Q71 81 73 89" fill="none" stroke={O} strokeWidth="11" strokeLinecap="round"/>
+        <path d="M34 80 Q29 82 28 89" fill="none" stroke={shirtColor} strokeWidth="7.5" strokeLinecap="round"/>
+        <path d="M66 80 Q71 82 72 89" fill="none" stroke={shirtColor} strokeWidth="7.5" strokeLinecap="round"/>
+        <path d="M38 77 Q50 85 62 77" fill="none" stroke={shirtAccent} strokeWidth="2"/>
+        <path d="M36 105 Q50 110 64 105" fill="none" stroke={shirtAccent} strokeWidth="1.1" opacity=".58"/>
+        {top==="kt1"&&<><path d="M34 87H66" stroke="#fff" strokeWidth="3.8"/><path d="M34 98H66" stroke="#fff" strokeWidth="3.8"/></>}
         {top==="kt2"&&<text x="50" y="102" fontSize="21" textAnchor="middle">🌸</text>}
         {top==="kt3"&&<text x="50" y="102" fontSize="22" textAnchor="middle">🦖</text>}
-        {top==="kt4"&&<><path d="M26 78 Q50 64 74 78 L81 119 Q50 130 19 119Z" fill="#8C78D8" opacity=".95"/><text x="50" y="105" fontSize="22" textAnchor="middle">⭐</text></>}
-        {!top&&<path d="M38 95 Q50 105 62 95" fill="none" stroke={shirtAccent} strokeWidth="5" strokeLinecap="round"/>}
-        {/* 頭 */}
-        <ellipse cx="50" cy="49" rx="31" ry="32" fill={skinColor} stroke="rgba(90,50,20,.14)" strokeWidth="2"/>
-        {/* 共用骨架，男女只以髮型輪廓表現 */}
+        {top==="kt4"&&<><path d="M27 78 Q50 68 73 78 L78 118 Q50 127 22 118Z" fill="#8C78D8" stroke="#604BA6" strokeWidth="1.8"/><text x="50" y="104" fontSize="21" textAnchor="middle">⭐</text></>}
+        {top==="kt5"&&<><path d="M36 78 L42 74 H58 L64 78 L63 107 Q50 112 37 107Z" fill="#303B59"/>
+          <path d="M40 76 L50 87 L60 76" fill="#F7F2E8"/><path d="M47 84 H53 L54 100 L50 104 L46 100Z" fill="#B33C45"/>
+          <path d="M38 91H62 M38 103H62" stroke="#F0D39A" strokeWidth="1.2" opacity=".72"/></>}
+        {top==="kt6"&&<><path d="M40 77 L50 86 L60 77" fill="#F5FCFF"/><path d="M50 85V107" stroke="#EAF7FF" strokeWidth="1.6"/>
+          {[91,98,105].map(y=><circle key={y} cx="53" cy={y} r="1.25" fill="#4D7F9E"/>)}</>}
+        {top==="kt7"&&<><path d="M33 78 Q50 70 67 78 L74 127 Q50 134 26 127Z" fill="#F4B8C8" stroke="#B8738D" strokeWidth="1.8"/>
+          <path d="M40 76 Q50 87 60 76" fill="#FFF5D6"/><path d="M29 110H71" stroke="#FFF5D6" strokeWidth="1.8"/>
+          <text x="50" y="110" fontSize="14" textAnchor="middle">🌼</text></>}
+        {(top==="kt8"||top==="kt9")&&<><path d="M39 77 L50 87 L61 77" fill={shirtAccent}/><path d="M50 86V107" stroke={shirtAccent} strokeWidth="1.6"/>
+          {[91,98,105].map(y=><circle key={y} cx="53" cy={y} r="1.25" fill="#fff"/>)}<text x="40" y="101" fontSize="11">{top==="kt8"?"🌙":"⭐"}</text></>}
+
+        {/* 圓潤臉與耳朵 */}
+        <circle cx="20" cy="50" r="7" fill={skinColor} stroke={O} strokeWidth="1.4"/><circle cx="80" cy="50" r="7" fill={skinColor} stroke={O} strokeWidth="1.4"/>
+        <path d="M50 14 C70 14 81 27 81 48 C81 69 69 80 50 81 C31 80 19 69 19 48 C19 27 30 14 50 14Z" fill={skinColor} stroke={O} strokeWidth="1.8"/>
+        <ellipse cx="39" cy="31" rx="13" ry="7" fill="#fff" opacity=".16" transform="rotate(-18 39 31)"/>
+
+        {/* 男女共用臉，只有髮型不同 */}
         {gender==="boy"
-          ?<path d="M20 46 Q18 17 47 15 Q75 13 81 41 Q73 32 65 29 Q58 38 48 28 Q37 38 20 46Z" fill="#5B3825"/>
-          :<><path d="M19 48 Q16 16 49 13 Q82 15 81 52 Q78 74 69 80 L65 48 Q76 38 66 27 Q55 37 44 27 Q35 39 22 45 L29 80 Q19 70 19 48Z" fill="#5B3825"/><circle cx="23" cy="74" r="8" fill="#5B3825"/><circle cx="75" cy="74" r="8" fill="#5B3825"/></>}
-        <g className="kid-eye"><ellipse cx="39" cy="50" rx="3" ry="5" fill="#3C281D"/><ellipse cx="61" cy="50" rx="3" ry="5" fill="#3C281D"/></g>
-        <circle cx="32" cy="61" r="5" fill="#F28DA8" opacity=".45"/><circle cx="68" cy="61" r="5" fill="#F28DA8" opacity=".45"/>
-        <path d="M43 62 Q50 69 57 62" fill="none" stroke="#9B4F4F" strokeWidth="2.5" strokeLinecap="round"/>
+          ?<><path d="M19 45 Q17 17 47 12 Q75 12 82 40 Q73 33 67 29 Q61 37 52 28 Q44 38 35 29 Q29 39 19 45Z" fill={H} stroke={O} strokeWidth="1.8"/>
+            <path d="M28 27 Q45 16 65 24" fill="none" stroke={HI} strokeWidth="3" strokeLinecap="round" opacity=".65"/></>
+          :<><path d="M19 46 Q18 17 49 11 Q82 14 81 49 Q72 39 66 29 Q59 38 50 28 Q42 39 33 29 Q28 40 19 46Z" fill={H} stroke={O} strokeWidth="1.8"/>
+            <path d="M29 27 Q46 16 66 25" fill="none" stroke={HI} strokeWidth="3" strokeLinecap="round" opacity=".62"/>
+            <path d="M23 47 Q20 69 27 89 M77 47 Q81 69 73 89" fill="none" stroke={HI} strokeWidth="2.4" strokeLinecap="round" opacity=".55"/></>}
+        <path d="M34 39 Q39 36 44 39 M56 39 Q61 36 66 39" fill="none" stroke="#855E4B" strokeWidth="1.25" strokeLinecap="round" opacity=".62"/>
+        <g className="kid-eye"><circle cx="39" cy="51" r="7.2" fill="#493026"/><circle cx="61" cy="51" r="7.2" fill="#493026"/>
+          <circle cx="36.8" cy="48.2" r="2.25" fill="#fff"/><circle cx="58.8" cy="48.2" r="2.25" fill="#fff"/>
+          <circle cx="41.5" cy="54" r="1.15" fill="#DDA46C"/><circle cx="63.5" cy="54" r="1.15" fill="#DDA46C"/></g>
+        <circle cx="50" cy="60" r="1.15" fill="#B97968" opacity=".6"/>
+        <ellipse cx="29" cy="64" rx="7" ry="4" fill="#F28DA8" opacity=".25"/><ellipse cx="71" cy="64" rx="7" ry="4" fill="#F28DA8" opacity=".25"/>
+        <path d="M44 65 Q50 71 56 65" fill="none" stroke="#765046" strokeWidth="2.1" strokeLinecap="round"/>
+
         {/* 配件與帽子 */}
-        {acc==="ka2"&&<><circle cx="39" cy="50" r="9" fill="none" stroke="#6A4A35" strokeWidth="2.5"/><circle cx="61" cy="50" r="9" fill="none" stroke="#6A4A35" strokeWidth="2.5"/><path d="M48 50H52" stroke="#6A4A35" strokeWidth="2.5"/></>}
+        {acc==="ka2"&&<><circle cx="39" cy="51" r="10" fill="none" stroke="#6A4A35" strokeWidth="2.1"/><circle cx="61" cy="51" r="10" fill="none" stroke="#6A4A35" strokeWidth="2.1"/><path d="M49 51H51" stroke="#6A4A35" strokeWidth="2.1"/></>}
         {acc==="ka3"&&<text x="65" y="91" fontSize="14">🍀</text>}
-        {hat==="kh1"&&<><path d="M21 33 Q28 8 62 13 Q76 16 78 34Z" fill="#55A6DF"/><path d="M53 33 Q80 30 87 39 Q67 42 51 37Z" fill="#3786C0"/></>}
-        {hat==="kh2"&&<><ellipse cx="36" cy="8" rx="8" ry="22" fill="#FFF4F6" stroke="#E8B9C4" strokeWidth="2"/><ellipse cx="65" cy="8" rx="8" ry="22" fill="#FFF4F6" stroke="#E8B9C4" strokeWidth="2"/><path d="M22 31 Q50 10 78 31Z" fill="#FFF4F6"/></>}
-        {hat==="kh3"&&<text x="50" y="24" fontSize="32" textAnchor="middle">👑</text>}
+        {hat==="kh1"&&<><path d="M20 34 Q27 7 61 11 Q77 15 79 35Z" fill="#55A6DF" stroke="#376E99" strokeWidth="1.7"/><path d="M53 34 Q81 30 88 39 Q68 43 51 38Z" fill="#3786C0" stroke="#376E99" strokeWidth="1.5"/></>}
+        {hat==="kh2"&&<><ellipse cx="36" cy="5" rx="8.5" ry="23" fill="#FFF4F6" stroke="#E8B9C4" strokeWidth="1.8"/><ellipse cx="65" cy="5" rx="8.5" ry="23" fill="#FFF4F6" stroke="#E8B9C4" strokeWidth="1.8"/><path d="M20 32 Q50 8 80 32Z" fill="#FFF4F6" stroke="#E8B9C4" strokeWidth="1.5"/></>}
+        {hat==="kh4"&&<><ellipse cx="50" cy="31" rx="39" ry="9" fill="#E8C778" stroke="#A67C3C" strokeWidth="1.8"/><path d="M26 30 Q28 5 50 5 Q72 6 74 30Z" fill="#F1D58B" stroke="#A67C3C" strokeWidth="1.8"/><path d="M28 23H72" stroke="#E98A72" strokeWidth="4.5"/></>}
+        {hat==="kh3"&&<text x="50" y="22" fontSize="33" textAnchor="middle">👑</text>}
       </svg>
     </div>);
+}
+
+/* 精緻小主人預覽：先用於入口首頁，衣櫃完成後會改由透明圖層組合 */
+const OWNER_PREVIEWS={
+  boy:"assets/characters/owner-boy.png",
+  girl:"assets/characters/owner-girl.png"
+};
+function OwnerPreview({gender,size,style}){
+  const g=gender==="boy"?"boy":"girl";
+  const w=190*(size||1);
+  return <img src={OWNER_PREVIEWS[g]} alt={g==="boy"?"男生小主人":"女生小主人"}
+    draggable="false" style={{width:w,height:w,objectFit:"contain",display:"block",
+      userSelect:"none",WebkitUserDrag:"none",filter:"drop-shadow(0 8px 7px rgba(106,74,53,.13))",...style}}/>;
+}
+function ActiveKid({gender,skin,top,bottom,shoes,hat,acc,size}){
+  const s=size||1;
+  const usePreview=!top&&!bottom&&!shoes&&!hat&&!acc&&(!skin||skin==="#F2C7A5"||skin==="#F6D2B8");
+  if(!usePreview)return <KidView gender={gender} skin={skin} top={top} bottom={bottom} shoes={shoes} hat={hat} acc={acc} size={s}/>;
+  return <div style={{width:100*s,height:150*s,display:"inline-flex",alignItems:"flex-end",justifyContent:"center"}}>
+    <OwnerPreview gender={gender} size={.79*s} style={{flexShrink:0,marginBottom:-3*s}}/>
+  </div>;
 }
 
 /* ═══════════════ AUDIO SYSTEM ═══════════════ */
@@ -1030,10 +1243,10 @@ function Toast({msg,color}){
 }
 
 /* ═══════════════ ONBOARDING ═══════════════ */
-function Onboarding({onDone}){
+function Onboarding({onDone,initialKidName}){
   const [step,setStep]=useState(0);
   const [petType,setPet]=useState("horse");
-  const [kidName,setKid]=useState("");
+  const [kidName,setKid]=useState(initialKidName||"");
   const [gender,setGender]=useState("girl");
   const [skin,setSkin]=useState("#F2C7A5");
   const [petName,setPName]=useState("");
@@ -1103,12 +1316,33 @@ function Onboarding({onDone}){
         </div>}
 
         {step===0&&<>
-          <div style={{textAlign:"center",marginBottom:16}}>
-            <div style={{fontSize:48,marginBottom:8}}>🐾</div>
-            <div style={{fontSize:22,fontWeight:900,color:C.brown,marginBottom:6}}>寵物習慣王國</div>
-            <div style={{fontSize:12,color:C.soft,fontWeight:800,lineHeight:1.8}}>
-              用養寵物的方式<br/>讓孩子愛上每天的好習慣 🌟
+          <div style={{textAlign:"center",marginBottom:12}}>
+            <div style={{display:"inline-flex",alignItems:"center",gap:6,...bub(C.yellow,999),
+              border:"none",padding:"6px 12px",fontSize:11,fontWeight:900,color:C.brown,marginBottom:7}}>
+              <span>🌱</span><span>每天一點點，一起變厲害</span>
             </div>
+            <div style={{fontSize:25,fontWeight:900,color:C.brown,marginBottom:4,letterSpacing:".02em"}}>寵物習慣王國</div>
+            <div style={{fontSize:12,color:C.soft,fontWeight:800,lineHeight:1.7}}>
+              選一位小主人，和小黃馬展開新生活！
+            </div>
+          </div>
+
+          <div style={{position:"relative",height:224,margin:"0 -8px 12px",overflow:"hidden",
+            borderRadius:28,background:"linear-gradient(180deg,#DDF5FF 0%,#FFF7D6 56%,#CDEFA8 57%,#A8DA83 100%)",
+            border:"3px solid #fff",boxShadow:"0 7px 0 rgba(106,74,53,.10),0 0 0 2px rgba(232,190,122,.18)"}}>
+            <div style={{position:"absolute",width:54,height:54,borderRadius:"50%",background:"#FFF1A8",top:15,right:23,
+              boxShadow:"0 0 24px rgba(255,216,91,.65)"}}/>
+            <div style={{position:"absolute",top:23,left:18,fontSize:28,opacity:.82}}>☁️</div>
+            <div style={{position:"absolute",right:10,bottom:35,fontSize:31}}>🌳</div>
+            <div style={{position:"absolute",left:8,bottom:26,fontSize:24}}>🌼</div>
+            <OwnerPreview gender="girl" size={.86} style={{position:"absolute",left:-8,bottom:-3,zIndex:2,animation:"float 3.5s ease-in-out infinite"}}/>
+            <OwnerPreview gender="boy" size={.86} style={{position:"absolute",right:-9,bottom:-3,zIndex:2,animation:"float 3.5s .5s ease-in-out infinite"}}/>
+            <div style={{position:"absolute",left:"50%",bottom:1,transform:"translateX(-50%)",zIndex:3,
+              width:152,height:112,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+              <PetView petType="horse" level={2} mood={5} hunger={90} size={.54}/>
+            </div>
+            <div style={{position:"absolute",left:"50%",bottom:3,transform:"translateX(-50%)",width:150,height:16,
+              borderRadius:"50%",background:"rgba(73,115,51,.15)",filter:"blur(2px)"}}/>
           </div>
           <div style={{...cardS(C.light),marginBottom:14,overflow:"hidden"}}>
             <button className="btn" onClick={()=>setGuideOpen(g=>!g)}
@@ -1136,7 +1370,7 @@ function Onboarding({onDone}){
           <button className="btn" onClick={next} style={{
             ...bub(C.orange),width:"100%",padding:"15px 0",borderRadius:999,
             fontSize:16,fontWeight:900,color:"#fff",boxShadow:"0 6px 0 rgba(180,80,0,.2)"}}>
-            🌟 開始設定！
+            🌟 開始我的冒險
           </button>
         </>}
 
@@ -1300,7 +1534,7 @@ function Onboarding({onDone}){
     </div>);
 }
 /* ═══════════════ PARENT PANEL ═══════════════ */
-function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,musicOn,setMusicOn,onClose}){
+function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,musicOn,setMusicOn,storageKey,playerId,onClose}){
   const [authed,setAuthed]=useState(false);
   const [ptab,setPtab]=useState("tasks");
   const [nTask,setNTask]=useState(""),nPts=useRef(20);
@@ -1312,8 +1546,40 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
   const [hNewLabel,setHNewLabel]=useState("");
   const [hNewPts,setHNewPts]=useState(10);
   const [hNewIcon,setHNewIcon]=useState("⭐");
+  const [habitErr,setHabitErr]=useState("");
+  const [backupMsg,setBackupMsg]=useState("");
+  const backupInputRef=useRef(null);
   const day=new Date().getDay();
   const today=new Date().toLocaleDateString("zh-TW");
+  const isWeekend=day===0||day===6;
+  const SAVE_KEYS=getPetHabitSaveKeys();
+
+  const exportBackup=()=>{
+    try{
+      const saved={};
+      SAVE_KEYS.forEach(key=>{const value=localStorage.getItem(key);if(value!==null)saved[key]=value;});
+      const payload={app:"Pet Habit Kingdom",version:1,exportedAt:new Date().toISOString(),localStorage:saved};
+      const blob=new Blob([JSON.stringify(payload,null,2)],{type:"application/json"});
+      const url=URL.createObjectURL(blob),a=document.createElement("a");
+      a.href=url;a.download="pet-habit-backup-"+new Date().toISOString().slice(0,10)+".json";
+      document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      setBackupMsg("✅ 備份檔已匯出，請妥善保存");
+    }catch(e){setBackupMsg("❌ 匯出失敗，請再試一次");}
+  };
+  const importBackup=async(e)=>{
+    const file=e.target.files&&e.target.files[0];
+    e.target.value="";
+    if(!file)return;
+    try{
+      const payload=JSON.parse(await file.text());
+      const saved=payload&&payload.localStorage;
+      if(!saved||typeof saved!=="object"||!Object.keys(saved).some(isPetHabitSaveKey))throw new Error("invalid backup");
+      if(!window.confirm("匯入會覆蓋目前資料，是否確認？"))return;
+      getPetHabitSaveKeys().forEach(key=>localStorage.removeItem(key));
+      Object.keys(saved).filter(isPetHabitSaveKey).forEach(key=>{if(typeof saved[key]==="string")localStorage.setItem(key,saved[key]);});
+      window.location.reload();
+    }catch(err){setBackupMsg("❌ 無法匯入：這不是有效的 Pet Habit 備份檔");}
+  };
 
   if(!authed)return(
     <NumPad title="家長登入" subtitle="輸入你設定的數字密碼"
@@ -1360,12 +1626,45 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                   style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>核准</button>
                 :<span style={{fontSize:11,color:"#c0a080",fontWeight:800}}>等待</span>}
             </div>);})}
+        {isWeekend&&<>
+          <div style={{display:"flex",alignItems:"center",gap:8,margin:"16px 0 9px",padding:"9px 12px",
+            ...bub("linear-gradient(135deg,#FFF3C0,#FFE566)",16),border:"none"}}>
+            <span style={{fontSize:22}}>🎉</span>
+            <div><div style={{fontSize:12,fontWeight:900,color:C.brown}}>假日習慣核准</div>
+              <div style={{fontSize:9,fontWeight:800,color:C.soft}}>與孩子頁的週末任務同步</div></div>
+          </div>
+          {[...WEEKEND_TASKS,...bonusTasks.filter(t=>t.isWeekend&&!t.ok)].map(h=>{
+            const kidKey="wkid-"+today+"-"+h.id;
+            const okKey="wkok-"+today+"-"+h.id;
+            const kidDone=!!checked[kidKey];
+            const approved=!!checked[okKey];
+            return <div key={h.id} style={{display:"flex",alignItems:"center",gap:10,
+              ...bub(approved?C.yellow:kidDone?C.green:"#FFF9E8",18),padding:"12px 14px",marginBottom:8,border:"none"}}>
+              <span style={{fontSize:22}}>{h.icon}</span>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:800,fontSize:13,color:C.brown}}>{h.label}</div>
+                <div style={{fontSize:10,fontWeight:800,marginTop:2,color:approved?"#2a8a2a":kidDone?"#1a6a1a":"#c0a080"}}>
+                  {approved?"✅ 已核准":kidDone?"✓ 小孩已完成，等待核准":"⏳ 還沒完成"}
+                </div>
+              </div>
+              <span style={{...bub(C.peach),borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:900,color:C.brown}}>+{h.pts}⭐</span>
+              {approved?<span style={{fontSize:18}}>✅</span>:kidDone
+                ?<button className="btn" onClick={()=>{
+                    setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);
+                    if(h.isWeekend)setBonusTasks(ts=>ts.map(t=>t.id===h.id?{...t,ok:true}:t));
+                    Audio.weekend();
+                  }} style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>核准</button>
+                :<span style={{fontSize:11,color:"#c0a080",fontWeight:800}}>等待</span>}
+            </div>;
+          })}
+        </>}
       </>}
 
       {ptab==="habits"&&<>
           <div style={{fontSize:11,color:C.soft,fontWeight:800,marginBottom:10}}>
-            可以新增、修改、刪除習慣任務 ✏️
+            可以新增、修改、刪除習慣任務 ✏️　目前 {tasks.reduce((a,t)=>a+t.pts,0)}/100 分
           </div>
+          {habitErr&&<div style={{...bub("#FFE5E5",14),padding:"9px 12px",fontSize:11,fontWeight:900,color:"#C23B3B",marginBottom:9,border:"none"}}>⚠️ {habitErr}</div>}
           {tasks.map(t=>(
             <div key={t.id} style={{marginBottom:8}}>
               {hEditIdx===t.id
@@ -1386,11 +1685,13 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                         fontWeight:900,color:C.brown,border:"none",textAlign:"center"}}/>
                     <button className="btn" onClick={()=>{
                       if(!hEditLabel.trim())return;
+                      const total=tasks.filter(x=>x.id!==t.id).reduce((a,x)=>a+x.pts,0)+hEditPts;
+                      if(total>100){setHabitErr("修改後每日總分會超過 100 分，請降低分數");return;}
                       setTasks(ts=>ts.map(x=>x.id===t.id?{...x,label:hEditLabel,pts:hEditPts,icon:hEditIcon}:x));
-                      setHEditIdx(null);
+                      setHEditIdx(null);setHabitErr("");
                     }} style={{...bub(C.orange),borderRadius:999,padding:"5px 14px",
                       fontSize:11,fontWeight:900,color:"#fff",border:"none",marginLeft:"auto"}}>儲存</button>
-                    <button className="btn" onClick={()=>setHEditIdx(null)}
+                    <button className="btn" onClick={()=>{setHEditIdx(null);setHabitErr("");}}
                       style={{...bub(C.light),borderRadius:999,padding:"5px 10px",
                         fontSize:11,fontWeight:900,color:C.soft,border:"none"}}>取消</button>
                   </div>
@@ -1402,9 +1703,9 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                   <span style={{...bub(C.peach,999),padding:"2px 8px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>
                     {t.pts}分
                   </span>
-                  <button className="btn" onClick={()=>{setHEditIdx(t.id);setHEditLabel(t.label);setHEditPts(t.pts);setHEditIcon(t.icon);}}
+                  <button className="btn" onClick={()=>{setHEditIdx(t.id);setHEditLabel(t.label);setHEditPts(t.pts);setHEditIcon(t.icon);setHabitErr("");}}
                     style={{...bub(C.butter,10),padding:"4px 9px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>✏️</button>
-                  <button className="btn" onClick={()=>setTasks(ts=>ts.filter(x=>x.id!==t.id))}
+                  <button className="btn" onClick={()=>{setTasks(ts=>ts.filter(x=>x.id!==t.id));setHabitErr("");}}
                     style={{...bub("#FFD0D0",10),padding:"4px 9px",fontSize:11,fontWeight:900,color:"#c03030",border:"none"}}>✕</button>
                 </div>}
             </div>
@@ -1427,8 +1728,9 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                   fontWeight:900,color:C.brown,border:"none",textAlign:"center"}}/>
               <button className="btn" onClick={()=>{
                 if(!hNewLabel.trim())return;
+                if(tasks.reduce((a,t)=>a+t.pts,0)+hNewPts>100){setHabitErr("新增後每日總分會超過 100 分，請降低分數或先刪除其他習慣");return;}
                 setTasks(ts=>[...ts,{id:Date.now(),icon:hNewIcon,label:hNewLabel.trim(),pts:hNewPts}]);
-                setHNewLabel("");setHNewPts(10);setHNewIcon("⭐");
+                setHNewLabel("");setHNewPts(10);setHNewIcon("⭐");setHabitErr("");
               }} style={{...bub(C.orange),borderRadius:999,padding:"5px 16px",
                 fontSize:11,fontWeight:900,color:"#fff",border:"none",marginLeft:"auto"}}>新增</button>
             </div>
@@ -1541,6 +1843,21 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
       </>}
 
       {ptab==="reset"&&<>
+        <div style={{...bub("#EEF8FF",20),padding:"16px 14px",marginBottom:14,border:"none"}}>
+          <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:7}}>
+            <span style={{fontSize:28}}>💾</span>
+            <div><div style={{fontSize:15,fontWeight:900,color:C.brown}}>存檔備份</div>
+              <div style={{fontSize:10,color:C.soft,fontWeight:800}}>換裝置或更新前，建議先匯出 JSON</div></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <button className="btn" onClick={exportBackup}
+              style={{...bub(C.yellow),padding:"11px 4px",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>⬇️ 匯出備份 JSON</button>
+            <button className="btn" onClick={()=>backupInputRef.current&&backupInputRef.current.click()}
+              style={{...bub(C.light),padding:"11px 4px",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>⬆️ 匯入備份 JSON</button>
+          </div>
+          <input ref={backupInputRef} type="file" accept=".json,application/json" onChange={importBackup} style={{display:"none"}}/>
+          {backupMsg&&<div style={{fontSize:10,fontWeight:900,color:backupMsg.startsWith("✅")?"#2A7A3B":"#C23B3B",textAlign:"center",marginTop:9}}>{backupMsg}</div>}
+        </div>
         <div style={{...bub("#fff5f5",20),padding:"18px 14px",marginBottom:14,textAlign:"center",border:"none",background:"#fff5f5"}}>
           <div style={{fontSize:34,marginBottom:8}}>⚠️</div>
           <div style={{fontSize:15,fontWeight:900,color:"#cc3333",marginBottom:6}}>格式化 / 重新開始</div>
@@ -1556,7 +1873,11 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
           :<>
             <div style={{background:"#fff0f0",borderRadius:16,padding:"12px",marginBottom:10,
               textAlign:"center",fontSize:12,fontWeight:900,color:"#cc3333"}}>確定嗎？所有資料都會消失！😢</div>
-            <button className="btn" onClick={()=>{localStorage.removeItem("habitKingdom");window.location.reload();}}
+            <button className="btn" onClick={()=>{
+              localStorage.removeItem(storageKey||"habitKingdom");
+              if(playerId)["lastLogin_hk","lastStreak_hk","musicOn_hk","weather_hk","parkPetPan_hk","parkKidPan_hk"].forEach(k=>localStorage.removeItem(k+"_"+playerId));
+              window.location.reload();
+            }}
               style={{...bub("#FF6060"),width:"100%",padding:"13px 0",borderRadius:999,
                 fontSize:14,fontWeight:900,color:"#fff",marginBottom:8,border:"none"}}>確定！清除所有資料</button>
             <button className="btn" onClick={()=>setRst(false)}
@@ -1578,8 +1899,210 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
     </Overlay>);
 }
 
+/* ═══════════════ LITTLE OWNER CLOSET PAGE ═══════════════ */
+function ClosetPage({profile,points,isTablet,closetTab,setClosetTab,equipped,setEquipped,owned,equip,openShop}){
+  const tabs=[
+    {k:"kidTop",icon:"👕",label:"上衣",base:"基本白上衣"},
+    {k:"kidBottom",icon:"👖",label:"褲子",base:"基本白長褲"},
+    {k:"kidShoes",icon:"👟",label:"鞋襪",base:"白襪球鞋"},
+    {k:"kidHat",icon:"💇",label:"髮型帽子",base:"原本髮型"},
+    {k:"kidAcc",icon:"✨",label:"配件",base:"不戴配件"}
+  ];
+  const active=tabs.find(t=>t.k===closetTab)||tabs[0];
+  const items=KID_ITEMS.filter(i=>i.slot===closetTab&&owned.indexOf(i.id)>=0);
+  const dressed=equipped.kidTop||equipped.kidBottom||equipped.kidShoes||equipped.kidHat||equipped.kidAcc;
+  return <div style={{padding:isTablet?"18px 22px 24px":"14px 14px 20px",maxWidth:isTablet?720:480,margin:"0 auto"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+      <div><div style={{fontSize:isTablet?23:20,fontWeight:900,color:C.brown}}>🪞 {profile.kidName}的衣櫃</div>
+        <div style={{fontSize:10,color:C.soft,fontWeight:800,marginTop:2}}>每天都能換一個喜歡的造型</div></div>
+      <div style={{...bub(C.yellow,999),padding:"7px 12px",fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>⭐ {points}</div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:isTablet?"minmax(270px,.9fr) minmax(340px,1.1fr)":"1fr",gap:14}}>
+      <div style={{...cardS("linear-gradient(180deg,#DDF4FF 0%,#FFF7DE 63%,#E6C89D 64%,#D9B785 100%)"),
+        height:isTablet?390:315,position:"relative",display:"flex",alignItems:"flex-end",justifyContent:"center",overflow:"hidden",paddingBottom:7}}>
+        <div style={{position:"absolute",top:15,left:16,fontSize:28}}>🪟</div><div style={{position:"absolute",top:18,right:16,fontSize:24}}>🌿</div>
+        <div style={{position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",...bub("rgba(255,255,255,.8)",999),
+          border:"none",padding:"5px 12px",fontSize:10,fontWeight:900,color:C.brown,whiteSpace:"nowrap"}}>{dressed?"✨ 今日穿搭":"🌱 基本造型"}</div>
+        <div style={{position:"absolute",bottom:22,left:"14%",width:"72%",height:17,borderRadius:"50%",background:"rgba(91,61,34,.13)",filter:"blur(2px)"}}/>
+        <div style={{animation:"float 3.2s ease-in-out infinite",position:"relative",zIndex:2}}>
+          <ActiveKid gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={equipped.kidTop}
+            bottom={equipped.kidBottom} shoes={equipped.kidShoes} hat={equipped.kidHat} acc={equipped.kidAcc} size={isTablet?1.98:1.72}/>
+        </div>
+      </div>
+      <div style={{...cardS(C.card),padding:isTablet?15:12,minWidth:0}}>
+        <div style={{display:"flex",gap:6,...bub(C.light,18),padding:5,border:"none",marginBottom:11,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+          {tabs.map(t=><button key={t.k} className="btn" onClick={()=>setClosetTab(t.k)} style={{background:closetTab===t.k?C.yellow:"transparent",
+            border:"none",borderRadius:14,padding:"8px 6px",minWidth:68,flex:"1 0 68px",color:C.brown,fontSize:10,fontWeight:900,
+            boxShadow:closetTab===t.k?"0 3px 0 rgba(140,90,25,.11)":"none"}}><div style={{fontSize:20}}>{t.icon}</div>{t.label}</button>)}
+        </div>
+        <div style={{fontSize:11,fontWeight:900,color:C.soft,margin:"0 2px 8px"}}>{active.icon} 選擇{active.label}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,maxHeight:isTablet?250:205,overflowY:"auto",padding:"3px 4px 8px 3px"}}>
+          <button className="btn" onClick={()=>setEquipped(e=>({...e,[closetTab]:undefined}))} style={{...bub(!equipped[closetTab]?C.yellow:C.light,15),
+            padding:"10px 5px",minHeight:86,color:C.brown,border:"none",outline:!equipped[closetTab]?"3px solid "+C.butter:"none",position:"relative"}}>
+            {!equipped[closetTab]&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}<div style={{fontSize:26}}>{active.icon}</div>
+            <div style={{fontSize:9,fontWeight:900}}>{active.base}</div><div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>已擁有</div>
+          </button>
+          {items.map(item=>{const isEq=equipped[closetTab]===item.id;return <button key={item.id} className="btn" onClick={()=>equip(item)}
+            style={{...bub(isEq?C.yellow:C.light,15),padding:"10px 5px",minHeight:86,color:C.brown,border:"none",outline:isEq?"3px solid "+C.butter:"none",position:"relative"}}>
+            {isEq&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}<div style={{fontSize:28}}>{item.emoji}</div>
+            <div style={{fontSize:9,fontWeight:900}}>{item.label}</div><div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>{isEq?"穿著中":"點一下試穿"}</div>
+          </button>;})}
+          {items.length===0&&<button className="btn" onClick={openShop} style={{...bub("#FFF3E1",15),padding:"10px 5px",minHeight:86,color:C.soft,
+            border:"2px dashed #E9C890",fontSize:9,fontWeight:900}}><div style={{fontSize:26}}>🛍️</div>去商店收藏</button>}
+        </div>
+        <button className="btn" onClick={openShop} style={{...bub(C.orange),width:"100%",padding:"12px 0",borderRadius:999,
+          fontSize:12,fontWeight:900,color:"#fff",border:"none",marginTop:13}}>逛逛服飾商店 🛍️</button>
+      </div>
+    </div>
+  </div>;
+}
+
+/* ═══════════════ V1.2 FAMILY ENTRY & PLAYER SWITCHING ═══════════════ */
+function FamilySetup({legacy,defaultName,addMode,onDone,onCancel}){
+  const legacyProfile=legacy&&legacy.profile||{};
+  const [familyName,setFamilyName]=useState("我的家庭");
+  const [playerName,setPlayerName]=useState(defaultName||legacyProfile.kidName||"");
+  const [themeId,setThemeId]=useState("butter");
+  const [err,setErr]=useState("");
+  return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:18,
+    background:"linear-gradient(160deg,#FFF9EA,#F8F1FF,#EAF7EF)",...themeVars(themeId)}}>
+    <div style={{...cardS(C.card),width:"100%",maxWidth:470,padding:"25px 20px"}}>
+      <div style={{textAlign:"center",marginBottom:18}}><div style={{fontSize:42}}>🏠</div>
+        <div style={{fontSize:22,fontWeight:900,color:"var(--theme-dark)"}}>{legacy?"歡迎全家一起成長":addMode?"新增小主人":"建立你的家庭"}</div>
+        <div style={{fontSize:11,fontWeight:800,color:C.soft,marginTop:5}}>{legacy?"原本的任務、星星、寵物與衣櫃都會保留":addMode?"每位小主人都有自己的任務、寵物與房間":"先建立第一位小主人，之後最多可新增至 3 位"}</div>
+      </div>
+      {!addMode&&<div style={{...bub(C.light,17),padding:"10px 13px",marginBottom:9,border:"none"}}>
+        <div style={{fontSize:10,fontWeight:900,color:C.soft,marginBottom:3}}>家庭名稱</div>
+        <input value={familyName} onChange={e=>setFamilyName(e.target.value)} maxLength={18} placeholder="我的家庭"
+          style={{width:"100%",fontSize:15,fontWeight:900,color:C.brown}}/>
+      </div>}
+      <div style={{...bub(C.light,17),padding:"10px 13px",marginBottom:13,border:"none"}}>
+        <div style={{fontSize:10,fontWeight:900,color:C.soft,marginBottom:3}}>小主人名字</div>
+        <input value={playerName} onChange={e=>setPlayerName(e.target.value)} maxLength={12} placeholder="輸入名字"
+          style={{width:"100%",fontSize:15,fontWeight:900,color:C.brown}}/>
+      </div>
+      <div style={{fontSize:11,fontWeight:900,color:C.soft,marginBottom:8}}>選擇主題色</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
+        {THEME_COLORS.map(t=><button key={t.id} className="btn" onClick={()=>setThemeId(t.id)} style={{...bub(t.soft,15),padding:"10px 5px",
+          color:t.dark,fontSize:10,fontWeight:900,border:"none",outline:themeId===t.id?"3px solid "+t.main:"none"}}>
+          <span style={{display:"inline-block",width:17,height:17,borderRadius:999,background:t.main,verticalAlign:"middle",marginRight:4}}/>{t.name}
+        </button>)}
+      </div>
+      {err&&<div style={{fontSize:11,fontWeight:900,color:"#C24444",textAlign:"center",marginBottom:9}}>⚠️ {err}</div>}
+      <button className="btn" onClick={()=>{
+        if(!playerName.trim()){setErr("請輸入小主人名字");return;}
+        onDone({familyName:familyName.trim()||"我的家庭",playerName:playerName.trim(),themeId});
+      }} style={{...bub(C.orange),width:"100%",padding:"13px 0",borderRadius:999,color:"#fff",fontSize:14,fontWeight:900,border:"none"}}>
+        {legacy?"保留資料並繼續":addMode?"新增小主人":"建立小主人"}
+      </button>
+      {onCancel&&<button className="btn" onClick={onCancel} style={{width:"100%",padding:"10px 0",marginTop:7,background:"transparent",color:C.soft,fontSize:11}}>取消</button>}
+    </div>
+  </div>;
+}
+
+function FamilyHome({family,onEnter,onAdd,onEditName}){
+  const themeId=family.players[0]&&family.players[0].themeId||"butter";
+  return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,
+    background:"linear-gradient(180deg,#F7FBF6,#FFF9EC)",...themeVars(themeId)}}>
+    <div style={{...cardS(C.card),width:"100%",maxWidth:520,padding:"30px 22px",textAlign:"center"}}>
+      <div style={{fontSize:42,marginBottom:5}}>🌿</div>
+      <div style={{fontSize:24,fontWeight:900,color:"var(--theme-dark)",marginBottom:6}}>🏠 {family.familyName||"我的家庭"}</div>
+      <button className="btn" onClick={onEditName} style={{background:"transparent",fontSize:10,color:C.soft,marginBottom:14}}>✏️ 修改家庭名稱</button>
+      <div style={{...bub(C.green,999),display:"inline-block",padding:"7px 15px",fontSize:12,fontWeight:900,color:C.brown,border:"none",marginBottom:18}}>
+        🌱 一起成長的第 {familyDay(family.familyCreatedAt)} 天
+      </div>
+      <div style={{fontSize:15,lineHeight:1.8,fontWeight:900,color:C.soft,marginBottom:22}}>每天 5~10 分鐘，<br/>陪習慣慢慢長大 🌱</div>
+      <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:18}}>
+        {family.players.map(p=>{const t=getTheme(p.themeId);return <div key={p.id} title={p.name} style={{width:42,height:42,borderRadius:999,
+          background:t.soft,border:"3px solid "+t.main,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🌟</div>;})}
+      </div>
+      <button className="btn" onClick={onEnter} style={{...bub(C.orange),width:"100%",padding:"15px 0",borderRadius:999,color:"#fff",fontSize:15,fontWeight:900,border:"none"}}>進入我的王國</button>
+      {family.players.length<3&&<button className="btn" onClick={onAdd} style={{...bub(C.light),width:"100%",padding:"11px 0",borderRadius:999,
+        color:C.soft,fontSize:11,fontWeight:900,border:"none",marginTop:9}}>＋ 新增小主人（{family.players.length}/3）</button>}
+    </div>
+  </div>;
+}
+
+function PlayerSelect({family,onSelect,onBack,onAdd}){
+  const today=new Date().toLocaleDateString("zh-TW");
+  return <div style={{minHeight:"100vh",padding:"28px 16px",background:"linear-gradient(180deg,#FFF9EA,#F4F8FF)"}}>
+    <div style={{maxWidth:720,margin:"0 auto"}}>
+      <div style={{textAlign:"center",fontSize:23,fontWeight:900,color:C.brown,marginBottom:5}}>選擇今天的小主人</div>
+      <div style={{textAlign:"center",fontSize:11,fontWeight:800,color:C.soft,marginBottom:18}}>{family.familyName}</div>
+      <div style={{display:"grid",gridTemplateColumns:family.players.length>1?"repeat(auto-fit,minmax(210px,1fr))":"1fr",gap:12}}>
+        {family.players.map(p=>{
+          const save=readPlayerSave(p.storageKey),profile=save.profile||{},eq=save.equipped||{},tasks=save.tasks||DEFAULT_TASKS,checked=save.checked||{};
+          const done=tasks.filter(h=>!!checked["ok-"+today+"-"+h.id]).length,t=getTheme(p.themeId);
+          return <button key={p.id} className="btn" onClick={()=>onSelect(p)} style={{...cardS(t.soft),padding:"15px 12px",textAlign:"center",
+            color:t.dark,border:"3px solid "+t.border,...themeVars(p.themeId)}}>
+            <div style={{height:150,display:"flex",alignItems:"flex-end",justifyContent:"center",overflow:"hidden"}}>
+              <KidView gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={eq.kidTop} bottom={eq.kidBottom}
+                shoes={eq.kidShoes} hat={eq.kidHat} acc={eq.kidAcc} size={.95}/>
+            </div>
+            <div style={{fontSize:17,fontWeight:900,marginTop:3}}>{p.name||profile.kidName||"小主人"}</div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,margin:"8px 0"}}>
+              <PetView petType={profile.petType||"horse"} level={1} mood={4} hunger={80} size={.28}/>
+              <div style={{textAlign:"left",fontSize:10,fontWeight:900,color:C.soft}}>{profile.petName||"等待選擇寵物"}<br/><span style={{color:t.dark}}>{t.name}</span></div>
+            </div>
+            <div style={{...bub("rgba(255,255,255,.7)",999),padding:"5px 9px",fontSize:10,fontWeight:900,border:"none"}}>
+              今日任務 {done}/{tasks.length}
+            </div>
+          </button>;
+        })}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:family.players.length<3?"1fr 1fr":"1fr",gap:8,marginTop:15}}>
+        <button className="btn" onClick={onBack} style={{...bub(C.light),padding:"12px 0",borderRadius:999,color:C.soft,fontSize:12,border:"none"}}>← 家庭首頁</button>
+        {family.players.length<3&&<button className="btn" onClick={onAdd} style={{...bub(C.yellow),padding:"12px 0",borderRadius:999,color:C.brown,fontSize:12,border:"none"}}>＋ 新增小主人</button>}
+      </div>
+    </div>
+  </div>;
+}
+
+function FamilyRoot(){
+  const initialFamily=readFamily();
+  const legacySave=readPlayerSave("habitKingdom"),hasLegacy=!initialFamily&&!!legacySave.profile;
+  const [family,setFamily]=useState(initialFamily);
+  const [view,setView]=useState(initialFamily?"home":hasLegacy?"migrate":"setup");
+  const [activeId,setActiveId]=useState(null);
+
+  const commitFamily=(next)=>{setFamily(next);saveFamily(next);};
+  const createFirst=({familyName,playerName,themeId})=>{
+    const id=makePlayerId(),storageKey="habitKingdom_player_"+id,now=new Date().toISOString();
+    if(hasLegacy){
+      const copied={...legacySave,profile:{...legacySave.profile,kidName:playerName}};
+      localStorage.setItem(storageKey,JSON.stringify(copied));
+      ["lastLogin_hk","lastStreak_hk","musicOn_hk","weather_hk","parkPetPan_hk","parkKidPan_hk"].forEach(k=>{
+        const value=localStorage.getItem(k);if(value!==null)localStorage.setItem(k+"_"+id,value);
+      });
+    }
+    const next={version:1,familyName,familyCreatedAt:now,activePlayerId:id,players:[{id,name:playerName,themeId,storageKey,createdAt:now}]};
+    commitFamily(next);setActiveId(id);setView("game");
+  };
+  const addPlayer=({playerName,themeId})=>{
+    if(!family||family.players.length>=3)return;
+    const id=makePlayerId(),now=new Date().toISOString(),player={id,name:playerName,themeId,storageKey:"habitKingdom_player_"+id,createdAt:now};
+    const next={...family,activePlayerId:id,players:[...family.players,player]};commitFamily(next);setActiveId(id);setView("game");
+  };
+  const selectPlayer=(p)=>{const next={...family,activePlayerId:p.id};commitFamily(next);setActiveId(p.id);setView("game");};
+  const updatePlayerName=(id,name)=>{if(!name||!family)return;const next={...family,players:family.players.map(p=>p.id===id?{...p,name}:p)};commitFamily(next);};
+  const editFamilyName=()=>{const name=window.prompt("家庭名稱",family.familyName||"我的家庭");if(name&&name.trim())commitFamily({...family,familyName:name.trim()});};
+
+  if(view==="migrate")return <FamilySetup legacy={legacySave} onDone={createFirst}/>;
+  if(view==="setup")return <FamilySetup onDone={createFirst}/>;
+  if(view==="add")return <FamilySetup addMode defaultName="" onDone={({playerName,themeId})=>addPlayer({playerName,themeId})} onCancel={()=>setView(family.players.length>1?"select":"home")}/>;
+  if(view==="home")return <FamilyHome family={family} onEnter={()=>family.players.length===1?selectPlayer(family.players[0]):setView("select")}
+    onAdd={()=>setView("add")} onEditName={editFamilyName}/>;
+  if(view==="select")return <PlayerSelect family={family} onSelect={selectPlayer} onBack={()=>setView("home")} onAdd={()=>setView("add")}/>;
+  const active=family.players.find(p=>p.id===activeId)||family.players.find(p=>p.id===family.activePlayerId)||family.players[0];
+  return <App key={active.id} storageKey={active.storageKey} playerId={active.id} playerName={active.name} themeId={active.themeId}
+    onProfileChange={name=>updatePlayerName(active.id,name)} onSwitch={()=>setView(family.players.length>1?"select":"home")}/>;
+}
+
 /* ═══════════════ MAIN APP ═══════════════ */
-function App(){
+function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
+  const saveKey=storageKey||"habitKingdom";
+  const playerStorageKey=(base)=>playerId?base+"_"+playerId:base;
+  // SVG 小主人外觀沿用既有欄位：profile.gender / profile.skin 與 owned / equipped；不另建人物資料格式。
   const [profile,setProfile]=useState(null);
   const [points,setPoints]=useState(0);
   const [tasks,setTasks]=useState(DEFAULT_TASKS);
@@ -1596,11 +2119,13 @@ function App(){
   const [petMood,setPetMood]=useState(80);
   const [poops,setPoops]=useState([]);
   const [neglect,setNeglect]=useState({level:0,sleeping:false,roomMess:false,dirty:false,cost:0,needsBath:false,welcomePending:false});
-  const [musicOn,setMusicOn]=useState(true);
-  const [weather,setWeather]=useState("sunny");
+  const [musicOn,setMusicOn]=useState(()=>localStorage.getItem(playerStorageKey("musicOn_hk"))!=="false");
+  const [weather,setWeather]=useState(()=>{
+    const saved=localStorage.getItem(playerStorageKey("weather_hk"));return ["sunny","cloudy","rainbow"].indexOf(saved)>=0?saved:"sunny";
+  });
   const [bathing,setBathing]=useState(false);
-  const [parkPetPan,setParkPetPan]=useState(0);
-  const [parkKidPan,setParkKidPan]=useState(0);
+  const [parkPetPan,setParkPetPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkPetPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
+  const [parkKidPan,setParkKidPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkKidPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
   const [roomEdit,setRoomEdit]=useState(false);
   const [flowers,setFlowers]=useState([
     {id:1,x:18,y:78,emoji:"🌸",visible:true},
@@ -1613,6 +2138,8 @@ function App(){
   const [tab,setTab]=useState("home");
   const [modal,setModal]=useState(null);
   const [shopTab,setShopTab]=useState("food");
+  const [kidShopTheme,setKidShopTheme]=useState("全部");
+  const [closetTab,setClosetTab]=useState("kidTop");
   const [toast,setToast]=useState({msg:"",color:C.butter});
   const [speech,setSpeech]=useState("");
   const [toyPlaying,setToyPlaying]=useState(null);
@@ -1644,7 +2171,7 @@ function App(){
 
   // persist
   useEffect(()=>{
-    try{const s=JSON.parse(localStorage.getItem("habitKingdom")||"{}");
+    try{const s=JSON.parse(localStorage.getItem(saveKey)||"{}");
       if(s.profile)setProfile(s.profile);if(s.points!=null)setPoints(s.points);
       if(s.tasks)setTasks(s.tasks);else setTasks(DEFAULT_TASKS);
       if(s.checked)setChecked(s.checked);if(s.owned)setOwned(s.owned);
@@ -1655,13 +2182,24 @@ function App(){
       if(s.petMood!=null)setPetMood(s.petMood);if(s.poops)setPoops(s.poops);
       if(s.neglect)setNeglect(s.neglect);
     }catch(e){}
-  },[]);
+  },[saveKey]);
 
   useEffect(()=>{
     if(!profile)return;
-    localStorage.setItem("habitKingdom",JSON.stringify({
+    localStorage.setItem(saveKey,JSON.stringify({
       profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect}));
-  },[profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect]);
+  },[saveKey,profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect]);
+
+  // UI 偏好獨立保存，避免改動既有 habitKingdom 存檔格式。
+  useEffect(()=>{
+    const id=setTimeout(()=>{
+      localStorage.setItem(playerStorageKey("musicOn_hk"),String(musicOn));
+      localStorage.setItem(playerStorageKey("weather_hk"),weather);
+      localStorage.setItem(playerStorageKey("parkPetPan_hk"),String(parkPetPan));
+      localStorage.setItem(playerStorageKey("parkKidPan_hk"),String(parkKidPan));
+    },200);
+    return()=>clearTimeout(id);
+  },[musicOn,weather,parkPetPan,parkKidPan]);
 
   // 音樂啟動 - 第一次點擊頁面時啟動
   useEffect(()=>{
@@ -1681,7 +2219,8 @@ function App(){
   useEffect(()=>{
     if(!profile)return;
     const today=new Date().toLocaleDateString("zh-TW");
-    const last=localStorage.getItem("lastLogin_hk");
+    const lastLoginKey=playerStorageKey("lastLogin_hk");
+    const last=localStorage.getItem(lastLoginKey);
     if(last!==today){
       if(last){
         const prev=new Date(last),now=new Date();prev.setHours(0,0,0,0);now.setHours(0,0,0,0);
@@ -1690,7 +2229,7 @@ function App(){
         else if(gap>=5)setNeglect({level:5,sleeping:true,roomMess:true,dirty:true,cost:10,needsBath:true,welcomePending:false});
         else if(gap>=3)setNeglect({level:3,sleeping:true,roomMess:true,dirty:false,cost:0,needsBath:false,welcomePending:false});
       }
-      localStorage.setItem("lastLogin_hk",today);
+      localStorage.setItem(lastLoginKey,today);
       setPoints(p=>p+5);
       setTimeout(()=>{toast2("每日登入！+5⭐ 可以買蘋果囉🍎","#88cc88");Audio.login();},900);
     }
@@ -1731,13 +2270,14 @@ function App(){
     const today=new Date().toLocaleDateString("zh-TW");
     const allDone=tasks.every(h=>!!checked["ok-"+today+"-"+h.id]);
     if(!allDone)return;
-    const lastS=localStorage.getItem("lastStreak_hk");
+    const lastStreakKey=playerStorageKey("lastStreak_hk");
+    const lastS=localStorage.getItem(lastStreakKey);
     if(lastS===today)return;
     const yest=new Date();yest.setDate(yest.getDate()-1);
     const yStr=yest.toLocaleDateString("zh-TW");
     const ns=lastS===yStr?streak+1:1;
     setStreak(ns);
-    localStorage.setItem("lastStreak_hk",today);
+    localStorage.setItem(lastStreakKey,today);
     if(ns===3){toast2("連續3天全部完成！🔥 成就解鎖！","#FF9F3F");unlockAch("a8");}
     if(ns===7){setPoints(p=>p+100);toast2("連續7天！🎉 獎勵+100⭐","#FFD700");unlockAch("a9");}
     if(ns===5){toast2("連續5天！⭐ 超厲害！","#FF9F3F");}
@@ -1808,7 +2348,13 @@ function App(){
     return()=>{clearTimeout(first);clearInterval(timer);};
   },[profile,tab,roomEdit,equipped,neglect.sleeping,startPetAction]);
 
-  if(!profile)return <Onboarding onDone={p=>{setProfile(p);if(p.tasks)setTasks(p.tasks);}}/>;
+  const saveSnapshot=()=>localStorage.setItem(saveKey,JSON.stringify({
+    profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect
+  }));
+
+  if(!profile)return <div style={themeVars(themeId)}><Onboarding initialKidName={playerName} onDone={p=>{
+    setProfile(p);if(p.tasks)setTasks(p.tasks);if(onProfileChange)onProfileChange(p.kidName);
+  }}/></div>;
 
   // computed
   const day=new Date().getDay();
@@ -1833,7 +2379,7 @@ function App(){
     {k:"tasks",icon:"✅",l:"任務"},
     {k:"park",icon:"🌳",l:"公園"},
     {k:"room",icon:"🏡",l:"房間"},
-    {k:"calendar",icon:"📔",l:"日記"},
+    {k:"closet",icon:"👕",l:"衣櫃"},
   ];
 
   const buy=(item)=>{
@@ -1846,7 +2392,15 @@ function App(){
   const equip=(item)=>{
     if(owned.indexOf(item.id)<0)return;
     const slot=item.slot||item.type;
-    setEquipped(e=>({...e,[slot]:e[slot]===item.id?undefined:item.id}));
+    setEquipped(e=>{
+      const next={...e,[slot]:e[slot]===item.id?undefined:item.id};
+      if(item.dress&&next[slot])next.kidBottom=undefined;
+      if(slot==="kidBottom"&&next[slot]){
+        const currentTop=KID_ITEMS.find(i=>i.id===e.kidTop);
+        if(currentTop&&currentTop.dress)next.kidTop=undefined;
+      }
+      return next;
+    });
   };
   const patPet=()=>{
     if(neglect.sleeping){
@@ -1915,7 +2469,7 @@ function App(){
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Nunito',sans-serif",
-      paddingBottom:isTablet?84:70}}>
+      paddingBottom:isTablet?84:70,...themeVars(themeId)}}>
       <Toast msg={toast.msg} color={toast.color}/>
 
       {/* ACHIEVEMENT POPUP */}
@@ -1986,6 +2540,7 @@ function App(){
         bonusTasks={bonusTasks} setBonusTasks={setBonusTasks}
         tasks={tasks} setTasks={setTasks}
         musicOn={musicOn} setMusicOn={setMusicOn}
+        storageKey={saveKey} playerId={playerId}
         onClose={()=>setModal(null)}/>}
 
       {/* SHOP MODAL */}
@@ -1998,8 +2553,14 @@ function App(){
                 background:shopTab===k?C.yellow:"transparent",
                 boxShadow:shopTab===k?"0 3px 0 rgba(0,0,0,.08)":"none",border:"none"}}>{l}</button>))}
         </div>
+        {shopTab==="kid"&&<div style={{display:"flex",gap:6,overflowX:"auto",padding:"1px 1px 9px",marginTop:-5}}>
+          {["全部","日常","學院風","公園風","睡衣風"].map(t=><button key={t} className="btn" onClick={()=>setKidShopTheme(t)}
+            style={{...bub(kidShopTheme===t?C.yellow:C.light,999),padding:"6px 12px",minWidth:"max-content",fontSize:10,fontWeight:900,
+              color:C.brown,border:"none",outline:kidShopTheme===t?"2px solid "+C.butter:"none"}}>{t}</button>)}
+        </div>}
         <div style={{display:"grid",gridTemplateColumns:isTablet?"repeat(3,1fr)":"1fr 1fr",gap:10}}>
-          {(shopTab==="food"?FOODS:shopTab==="toy"?TOYS:shopTab==="outfit"?OUTFITS:shopTab==="kid"?KID_ITEMS:ROOMITEMS).map(item=>{
+          {(shopTab==="food"?FOODS:shopTab==="toy"?TOYS:shopTab==="outfit"?OUTFITS:shopTab==="kid"?KID_ITEMS:ROOMITEMS)
+            .filter(item=>shopTab!=="kid"||kidShopTheme==="全部"||item.theme===kidShopTheme).map(item=>{
             const isOwn=owned.indexOf(item.id)>=0;
             const isEq=equipped[item.slot||item.type]===item.id;
             const slotInfo=ROOM_SLOTS.find(s=>s.id===item.slot);
@@ -2009,6 +2570,8 @@ function App(){
                 padding:"13px 10px",textAlign:"center"}}>
                 <div style={{fontSize:32,marginBottom:5}}>{item.emoji}</div>
                 <div style={{fontWeight:900,fontSize:12,color:C.brown,marginBottom:3}}>{item.label}</div>
+                {shopTab==="kid"&&item.theme&&<div style={{...bub(item.theme==="學院風"?"#EEE3D2":item.theme==="公園風"?"#DDF3D4":item.theme==="睡衣風"?"#E6E2FF":C.light,999),
+                  padding:"2px 8px",fontSize:9,fontWeight:900,color:C.soft,display:"inline-block",marginBottom:5,border:"none"}}>{item.theme}</div>}
                 {/* 房間裝飾顯示位置 */}
                 {shopTab==="room"&&item.type==="dc"&&slotInfo&&
                   <div style={{...bub(C.peach,999),padding:"2px 8px",fontSize:9,fontWeight:900,
@@ -2082,37 +2645,91 @@ function App(){
       </Overlay>}
 
       {/* LITTLE OWNER CLOSET */}
-      {modal==="closet"&&<Overlay onClose={()=>setModal(null)}>
-        <div style={{fontSize:19,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:4}}>👕 {profile.kidName}的衣櫃</div>
-        <div style={{fontSize:11,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:8}}>點衣服就能穿上，再點一次換回基本造型</div>
-        <div style={{...cardS("linear-gradient(180deg,#DFF4FF,#FFF7DE)"),height:205,
-          display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12,overflow:"hidden"}}>
-          <div style={{animation:"float 3s ease-in-out infinite"}}>
-            <KidView gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"}
-              top={equipped.kidTop} hat={equipped.kidHat} acc={equipped.kidAcc} size={1.18}/>
-          </div>
-        </div>
-        {[["kidTop","👕 上衣"],["kidHat","🧢 帽子"],["kidAcc","✨ 配件"]].map(([slot,label])=>{
-          const items=KID_ITEMS.filter(i=>i.slot===slot&&owned.indexOf(i.id)>=0);
-          return <div key={slot} style={{marginBottom:12}}>
-            <div style={{fontSize:11,fontWeight:900,color:C.soft,marginBottom:7}}>{label}</div>
-            {items.length===0
-              ?<div style={{...bub(C.light,14),padding:"9px 12px",fontSize:10,color:C.soft,fontWeight:800,border:"none"}}>還沒有收藏，去商店看看吧！</div>
-              :<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>{items.map(item=>{
-                const isEq=equipped[slot]===item.id;
-                return <button key={item.id} className="btn" onClick={()=>equip(item)}
-                  style={{...bub(isEq?C.yellow:C.light,14),padding:"8px 10px",minWidth:70,
-                    color:C.brown,border:"none",outline:isEq?"3px solid "+C.butter:"none"}}>
-                  <div style={{fontSize:24}}>{item.emoji}</div>
-                  <div style={{fontSize:9,fontWeight:900}}>{item.label}</div>
-                </button>;})}</div>}
-          </div>;})}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          <button className="btn" onClick={()=>setModal("shop")}
-            style={{...bub(C.orange),padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>去買新衣 🛍️</button>
-          <button className="btn" onClick={()=>setModal(null)}
-            style={{...bub(C.light),padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.soft,border:"none"}}>完成</button>
-        </div>
+      {modal==="closet"&&<Overlay onClose={()=>setModal(null)} wide={isTablet}>
+        {(()=>{
+          const closetTabs=[
+            {k:"kidTop",icon:"👕",label:"上衣",base:"基本白上衣"},
+            {k:"kidBottom",icon:"👖",label:"褲子",base:"基本白長褲"},
+            {k:"kidShoes",icon:"👟",label:"鞋襪",base:"白襪球鞋"},
+            {k:"kidHat",icon:"💇",label:"髮型帽子",base:"原本髮型"},
+            {k:"kidAcc",icon:"✨",label:"配件",base:"不戴配件"}
+          ];
+          const active=closetTabs.find(t=>t.k===closetTab)||closetTabs[0];
+          const items=KID_ITEMS.filter(i=>i.slot===closetTab&&owned.indexOf(i.id)>=0);
+          return <>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+              <div>
+                <div style={{fontSize:20,fontWeight:900,color:C.brown}}>🪞 {profile.kidName}的衣櫃</div>
+                <div style={{fontSize:10,color:C.soft,fontWeight:800,marginTop:2}}>挑一套今天最喜歡的造型</div>
+              </div>
+              <div style={{...bub(C.yellow,999),padding:"6px 11px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>⭐ {points}</div>
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:isTablet?"minmax(250px,.9fr) minmax(310px,1.1fr)":"1fr",gap:14,marginTop:13}}>
+              <div style={{...cardS("linear-gradient(180deg,#DDF4FF 0%,#FFF7DE 63%,#E6C89D 64%,#D9B785 100%)"),
+                height:isTablet?360:285,position:"relative",display:"flex",alignItems:"flex-end",justifyContent:"center",overflow:"hidden",paddingBottom:5}}>
+                <div style={{position:"absolute",top:14,left:15,fontSize:25}}>🪟</div>
+                <div style={{position:"absolute",top:17,right:15,fontSize:22}}>🌿</div>
+                <div style={{position:"absolute",bottom:21,left:"14%",width:"72%",height:16,borderRadius:"50%",background:"rgba(91,61,34,.13)",filter:"blur(2px)"}}/>
+                <div style={{position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",...bub("rgba(255,255,255,.78)",999),
+                  border:"none",padding:"5px 11px",fontSize:10,fontWeight:900,color:C.brown,whiteSpace:"nowrap"}}>
+                  {equipped.kidTop||equipped.kidBottom||equipped.kidShoes||equipped.kidHat||equipped.kidAcc?"✨ 今日穿搭":"🌱 基本造型"}
+                </div>
+                <div style={{animation:"float 3.2s ease-in-out infinite",position:"relative",zIndex:2}}>
+                  <ActiveKid gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"}
+                    top={equipped.kidTop} bottom={equipped.kidBottom} shoes={equipped.kidShoes}
+                    hat={equipped.kidHat} acc={equipped.kidAcc} size={isTablet?1.82:1.55}/>
+                </div>
+              </div>
+
+              <div style={{display:"flex",flexDirection:"column",minWidth:0}}>
+                <div style={{display:"flex",gap:6,...bub(C.light,18),padding:5,border:"none",marginBottom:10,
+                  overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+                  {closetTabs.map(t=><button key={t.k} className="btn" onClick={()=>setClosetTab(t.k)}
+                    style={{background:closetTab===t.k?C.yellow:"transparent",border:"none",borderRadius:14,padding:"8px 6px",minWidth:68,flex:"1 0 68px",
+                      color:C.brown,fontSize:10,fontWeight:900,boxShadow:closetTab===t.k?"0 3px 0 rgba(140,90,25,.11)":"none"}}>
+                    <div style={{fontSize:19,marginBottom:2}}>{t.icon}</div>{t.label}
+                  </button>)}
+                </div>
+
+                <div style={{fontSize:11,fontWeight:900,color:C.soft,margin:"0 2px 8px"}}>{active.icon} 選擇{active.label}</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,alignContent:"start",
+                  maxHeight:isTablet?226:190,overflowY:"auto",padding:"3px 4px 7px 3px",WebkitOverflowScrolling:"touch"}}>
+                  <button className="btn" onClick={()=>setEquipped(e=>({...e,[closetTab]:undefined}))}
+                    style={{...bub(!equipped[closetTab]?C.yellow:C.light,15),padding:"10px 5px",minHeight:82,color:C.brown,border:"none",
+                      outline:!equipped[closetTab]?"3px solid "+C.butter:"none",position:"relative"}}>
+                    {!equipped[closetTab]&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}
+                    <div style={{fontSize:25}}>{active.icon}</div>
+                    <div style={{fontSize:9,fontWeight:900,lineHeight:1.25}}>{active.base}</div>
+                    <div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>已擁有</div>
+                  </button>
+                  {items.map(item=>{
+                    const isEq=equipped[closetTab]===item.id;
+                    return <button key={item.id} className="btn" onClick={()=>equip(item)}
+                      style={{...bub(isEq?C.yellow:C.light,15),padding:"10px 5px",minHeight:82,color:C.brown,border:"none",
+                        outline:isEq?"3px solid "+C.butter:"none",position:"relative"}}>
+                      {isEq&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}
+                      <div style={{fontSize:27}}>{item.emoji}</div>
+                      <div style={{fontSize:9,fontWeight:900,lineHeight:1.25}}>{item.label}</div>
+                      <div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>{isEq?"穿著中":"點一下試穿"}</div>
+                    </button>;
+                  })}
+                  {items.length===0&&<button className="btn" onClick={()=>setModal("shop")}
+                    style={{...bub("#FFF3E1",15),padding:"10px 5px",minHeight:82,color:C.soft,border:"2px dashed #E9C890",fontSize:9,fontWeight:900}}>
+                    <div style={{fontSize:25,marginBottom:3}}>🛍️</div>去商店收藏
+                  </button>}
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:"auto",paddingTop:14}}>
+                  <button className="btn" onClick={()=>setModal("shop")}
+                    style={{...bub(C.orange),padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>買新衣 🛍️</button>
+                  <button className="btn" onClick={()=>setModal(null)}
+                    style={{...bub(C.green),padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>完成穿搭 ✓</button>
+                </div>
+              </div>
+            </div>
+          </>;
+        })()}
       </Overlay>}
 
       {/* MOOD CALENDAR */}
@@ -2249,17 +2866,20 @@ function App(){
             {new Date().toLocaleDateString("zh-TW",{month:"long",day:"numeric",weekday:"long"})}
           </div>
         </div>
-        <div style={{display:"flex",gap:7,alignItems:"center"}}>
-          <div style={{...bub(C.yellow),borderRadius:999,padding:isTablet?"10px 20px":"8px 16px",
+        <div style={{display:"flex",gap:isTablet?7:4,alignItems:"center"}}>
+          <div style={{...bub(C.yellow),borderRadius:999,padding:isTablet?"10px 20px":"8px 10px",
             fontSize:isTablet?22:18,fontWeight:900,color:C.brown,
             boxShadow:"0 5px 0 rgba(180,120,0,.18)"}}>
             ⭐ {points}
           </div>
-          <button className="btn" onClick={()=>setModal("closet")} aria-label="我的衣櫃"
+          {onSwitch&&<button className="btn" onClick={()=>{saveSnapshot();onSwitch();}} aria-label="切換小主人"
+            style={{...bub("#fff"),borderRadius:999,width:isTablet?44:32,height:isTablet?44:32,
+              display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:isTablet?20:17}}>👥</button>}
+          <button className="btn" onClick={()=>setModal("calendar")} aria-label="心情日記"
             style={{...bub("#fff"),borderRadius:999,width:isTablet?44:36,height:isTablet?44:36,
-              display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0}}>
-            <KidView gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"}
-              top={equipped.kidTop} hat={equipped.kidHat} acc={equipped.kidAcc} size={.25}/>
+              display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,
+              fontSize:isTablet?21:18}}>
+            📔
           </button>
           <button className="btn" onClick={()=>setModal("pack")}
             style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>🎒</button>
@@ -2269,6 +2889,11 @@ function App(){
             style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>🔐</button>
         </div>
       </div>
+
+      {/* ══════════ CLOSET ══════════ */}
+      {tab==="closet"&&<ClosetPage profile={profile} points={points} isTablet={isTablet}
+        closetTab={closetTab} setClosetTab={setClosetTab} equipped={equipped} setEquipped={setEquipped}
+        owned={owned} equip={equip} openShop={()=>{setShopTab("kid");setModal("shop");}}/>}
 
       {/* ══════════ HOME ══════════ */}
       {tab==="home"&&(
@@ -2283,10 +2908,6 @@ function App(){
               padding:"10px 4px 0",borderRadius:22,background:"linear-gradient(180deg,#DFF4FF80,#FFF1B880)"}}>
               <span style={{position:"absolute",top:6,left:8,fontSize:12,animation:"spkl 2s infinite"}}>✨</span>
               <span style={{position:"absolute",top:18,right:5,fontSize:10,animation:"spkl 2.6s infinite"}}>💛</span>
-              <div style={{animation:"float 3.4s ease-in-out infinite",marginRight:-8,zIndex:1}}>
-                <KidView gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"}
-                  top={equipped.kidTop} hat={equipped.kidHat} acc={equipped.kidAcc} size={isTablet?.62:.48}/>
-              </div>
               <button className="btn" onClick={patPet} aria-label={"摸摸"+profile.petName}
                 style={{animation:"float 3s ease-in-out infinite",display:"inline-block",background:"transparent",
                   border:"none",position:"relative",padding:0,boxShadow:"none"}}>
@@ -2294,7 +2915,7 @@ function App(){
                   borderRadius:14,padding:"5px 9px",fontSize:9,fontWeight:900,color:C.brown,
                   whiteSpace:"nowrap",zIndex:5,border:"none"}}>{speech}</div>}
                 <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
-                  hunger={hunger} mood={mood} size={isTablet?.88:.68}/>
+                  hunger={hunger} mood={mood} size={isTablet?1.02:.79}/>
                 {neglect.dirty&&<><span style={{position:"absolute",left:22,top:48,fontSize:10,zIndex:6,opacity:.7}}>🟤</span><span style={{position:"absolute",right:18,top:68,fontSize:8,zIndex:6,opacity:.65}}>🟤</span></>}
                 {neglect.sleeping&&<span style={{position:"absolute",right:-4,top:4,fontSize:19,zIndex:6}}>💤</span>}
               </button>
@@ -2433,11 +3054,12 @@ function App(){
             </div>
             <div style={{background:"rgba(0,0,0,.07)",borderRadius:99,height:isTablet?16:13,overflow:"hidden",marginBottom:6}}>
               <div style={{
-                width:(tasks.filter(h=>!!checked["ok-"+today+"-"+h.id]).reduce((a,h)=>a+h.pts,0))+"px",
-                maxWidth:"100%",height:"100%",borderRadius:99,
+                width:(tasks.reduce((a,h)=>a+h.pts,0)>0
+                  ?tasks.filter(h=>!!checked["ok-"+today+"-"+h.id]).reduce((a,h)=>a+h.pts,0)/tasks.reduce((a,h)=>a+h.pts,0)*100
+                  :0)+"%",
+                height:"100%",borderRadius:99,
                 background:"linear-gradient(90deg,"+C.butter+","+C.orange+")",transition:"width .6s",
-                // use percentage properly
-              }} style2={{width:(tasks.filter(h=>!!checked["ok-"+today+"-"+h.id]).reduce((a,h)=>a+h.pts,0)/tasks.reduce((a,h)=>a+h.pts,0)*100)+"%"}}/>
+              }}/>
             </div>
             <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,textAlign:"center"}}>
               完成後等爸媽核准，星星存入罐子！⭐
@@ -2629,8 +3251,9 @@ function App(){
               onPointerMove={e=>{if(!parkKidDragRef.current)return;const next=parkKidDragRef.current.pan+(e.clientX-parkKidDragRef.current.x);setParkKidPan(Math.max(-120,Math.min(120,next)));}}
               onPointerUp={()=>{parkKidDragRef.current=null;}}
               onPointerCancel={()=>{parkKidDragRef.current=null;}}>
-              <KidView gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={equipped.kidTop} hat={equipped.kidHat}
-                acc={equipped.kidAcc} size={isTablet?.72:.57}/>
+              <ActiveKid gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={equipped.kidTop}
+                bottom={equipped.kidBottom} shoes={equipped.kidShoes} hat={equipped.kidHat}
+                acc={equipped.kidAcc} size={isTablet?1.04:.90}/>
               {ballVisible&&<span style={{position:"absolute",top:43,right:-12,fontSize:18}}>✨</span>}
             </div>
             <div style={{position:"absolute",top:10,left:12}}>
@@ -2768,7 +3391,8 @@ function App(){
             <button className="btn" aria-label="和寵物抱抱" onClick={()=>{startPetAction("hug","最喜歡和你抱抱了！🤗",46,3800);setPetMood(m=>Math.min(100,m+6));Audio.pat();}}
               style={{position:"absolute",left:petAction==="hug"?(isTablet?190:98):(isTablet?150:74),bottom:34,zIndex:9,
                 animation:"float 3.5s ease-in-out infinite",transition:"left .7s ease",background:"transparent",border:"none",boxShadow:"none",padding:0}}>
-              <KidView gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={equipped.kidTop} hat={equipped.kidHat} acc={equipped.kidAcc} size={isTablet?.67:.52}/>
+              <ActiveKid gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={equipped.kidTop}
+                bottom={equipped.kidBottom} shoes={equipped.kidShoes} hat={equipped.kidHat} acc={equipped.kidAcc} size={isTablet?1:.86}/>
               {petAction==="hug"&&<span style={{position:"absolute",top:22,right:-13,fontSize:18,animation:"spkl .8s infinite"}}>💛</span>}
             </button>
             <button className="btn" onClick={patPet} aria-label={"摸摸"+profile.petName} style={{position:"absolute",left:petRoomX+"%",bottom:31,
@@ -3140,11 +3764,11 @@ function App(){
         paddingBottom:"env(safe-area-inset-bottom,8px)",gap:4,
         height:isTablet?84:70,alignItems:"center"}}>
         {NAVS.map(n=>(
-          <button key={n.k} className="btn" onClick={()=>n.k==="calendar"?setModal("calendar"):setTab(n.k)}
+          <button key={n.k} className="btn" onClick={()=>setTab(n.k)}
             style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",
               justifyContent:"center",gap:2,
               padding:isTablet?"10px 0":"7px 0",
-              ...bub((tab===n.k||(n.k==="calendar"&&modal==="calendar"))?C.yellow:"transparent"),
+              ...bub(tab===n.k?C.yellow:"transparent"),
               borderRadius:(tab===n.k||(n.k==="calendar"&&modal==="calendar"))?999:0,
               boxShadow:(tab===n.k||(n.k==="calendar"&&modal==="calendar"))?"0 4px 0 rgba(0,0,0,.08)":"none",
               border:"none",color:C.brown,
@@ -3159,7 +3783,7 @@ function App(){
 }
 
 const root=ReactDOM.createRoot(document.getElementById("root"));
-root.render(React.createElement(App));
+root.render(React.createElement(FamilyRoot));
 </script>
 </body>
 </html>
