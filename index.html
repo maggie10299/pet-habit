@@ -149,9 +149,14 @@ const KID_ITEMS=[
   {id:"kt2",slot:"kidTop",emoji:"🌸",label:"櫻花上衣",price:80,color:"#FF9FC5",accent:"#FFF0F6",theme:"日常"},
   {id:"kt3",slot:"kidTop",emoji:"🦖",label:"恐龍上衣",price:100,color:"#78C98A",accent:"#FFF3A0",theme:"日常"},
   {id:"kt4",slot:"kidTop",emoji:"🌟",label:"星星斗篷",price:150,color:"#8C78D8",accent:"#FFE566",theme:"日常"},
-  {id:"kt5",slot:"kidTop",emoji:"🎓",label:"學院背心襯衫",price:140,color:"#303B59",accent:"#F7F2E8",theme:"學院風"},
+  {id:"kt5",slot:"kidTop",emoji:"🎓",label:"深藍學院背心",price:140,color:"#303B59",accent:"#F7F2E8",theme:"學院風"},
+  {id:"kt10",slot:"kidTop",emoji:"🤍",label:"白色學院襯衫",price:110,color:"#FFFDF7",accent:"#D8B88A",theme:"學院風"},
+  {id:"kt11",slot:"kidTop",emoji:"🧶",label:"奶茶針織背心",price:150,color:"#D8B98B",accent:"#FFF8EA",theme:"學院風"},
   {id:"kt6",slot:"kidTop",emoji:"🩵",label:"公園藍襯衫",price:100,color:"#76B9DF",accent:"#F5FCFF",theme:"公園風"},
-  {id:"kt7",slot:"kidTop",emoji:"👗",label:"雛菊公園洋裝",price:150,color:"#F4B8C8",accent:"#FFF5D6",theme:"公園風",dress:true},
+  {id:"kt12",slot:"kidTop",emoji:"🤍",label:"白色娃娃領上衣",price:120,color:"#FFFDF7",accent:"#F1D9A9",theme:"公園風"},
+  {id:"kt7",slot:"kidTop",emoji:"🌼",label:"雛菊公園洋裝",price:150,color:"#F7C9D5",accent:"#FFF5D6",theme:"公園風",dress:true},
+  {id:"kt13",slot:"kidTop",emoji:"🍓",label:"小草莓公園洋裝",price:160,color:"#F2A9B8",accent:"#FFF7E8",theme:"公園風",dress:true},
+  {id:"kt14",slot:"kidTop",emoji:"🌼",label:"奶油黃吊帶褲",price:150,color:"#F2CD74",accent:"#FFF8D7",theme:"公園風",overall:true},
   {id:"kt8",slot:"kidTop",emoji:"🌙",label:"藍月亮睡衣",price:100,color:"#89AEE5",accent:"#FFF2A6",theme:"睡衣風",pajama:true},
   {id:"kt9",slot:"kidTop",emoji:"💗",label:"粉紅星星睡衣",price:100,color:"#F1AFC4",accent:"#FFF4C8",theme:"睡衣風",pajama:true},
   {id:"kb1",slot:"kidBottom",emoji:"👖",label:"學院格紋長褲",price:120,color:"#D8C8AE",accent:"#8F806C",theme:"學院風",pants:true,plaid:true},
@@ -161,10 +166,10 @@ const KID_ITEMS=[
   {id:"ks1",slot:"kidShoes",emoji:"👞",label:"學院小皮鞋",price:90,color:"#5C4437",accent:"#F4E8D7",theme:"學院風"},
   {id:"ks2",slot:"kidShoes",emoji:"👟",label:"公園白球鞋",price:80,color:"#FFFDF7",accent:"#91B8D4",theme:"公園風"},
   {id:"ks3",slot:"kidShoes",emoji:"🥿",label:"軟綿睡衣拖鞋",price:70,color:"#F5C5D2",accent:"#FFF2F5",theme:"睡衣風"},
-  {id:"kh1",slot:"kidHat",emoji:"🧢",label:"探險帽",price:90,theme:"公園風"},
-  {id:"kh2",slot:"kidHat",emoji:"🐰",label:"兔耳帽",price:120,theme:"睡衣風"},
-  {id:"kh4",slot:"kidHat",emoji:"👒",label:"小小草帽",price:100,theme:"公園風"},
-  {id:"kh3",slot:"kidHat",emoji:"👑",label:"小皇冠",price:180},
+  {id:"kh1",slot:"kidHat",emoji:"🧢",label:"小探險帽",price:90,color:"#79A6C8",accent:"#F6E7B8",theme:"公園風"},
+  {id:"kh2",slot:"kidHat",emoji:"🌙",label:"星星睡帽",price:120,color:"#94AEE8",accent:"#FFF2A6",theme:"睡衣風"},
+  {id:"kh4",slot:"kidHat",emoji:"👒",label:"小小草帽",price:100,color:"#F1D58B",accent:"#E98A72",theme:"公園風"},
+  {id:"kh3",slot:"kidHat",emoji:"🎨",label:"奶茶貝雷帽",price:120,color:"#D8B98B",accent:"#FFF8EA",theme:"學院風"},
   {id:"ka1",slot:"kidAcc",emoji:"🎒",label:"紅色背包",price:90},
   {id:"ka2",slot:"kidAcc",emoji:"👓",label:"圓圓眼鏡",price:70},
   {id:"ka3",slot:"kidAcc",emoji:"🍀",label:"幸運徽章",price:60},
@@ -890,7 +895,7 @@ function KidView({gender,skin,top,bottom,shoes,hat,acc,size}){
         <ellipse cx="50" cy="145" rx="31" ry="4.5" fill="#54351F" opacity=".1"/>
 
         {/* 女生長髮後層與背包 */}
-        {gender!=="boy"&&<path d="M20 44 Q16 15 49 11 Q84 14 81 48 L79 108 Q72 120 64 111 L61 67 H39 L36 111 Q27 121 20 108Z" fill={H} stroke={O} strokeWidth="2"/>}
+        {gender!=="boy"&&<path d="M20 44 Q16 15 49 11 Q84 14 81 48 L79 108 Q72 120 64 111 L61 67 H39 L36 111 Q27 121 20 108Z" fill={H} opacity=".96"/>}
         {acc==="ka1"&&<path d="M28 82 Q12 84 14 116 L31 118 L36 87Z" fill="#E75C55" stroke="#9E3936" strokeWidth="2.2"/>}
 
         {/* 圓潤下身模板 */}
@@ -933,11 +938,28 @@ function KidView({gender,skin,top,bottom,shoes,hat,acc,size}){
         {top==="kt5"&&<><path d="M36 78 L42 74 H58 L64 78 L63 107 Q50 112 37 107Z" fill="#303B59"/>
           <path d="M40 76 L50 87 L60 76" fill="#F7F2E8"/><path d="M47 84 H53 L54 100 L50 104 L46 100Z" fill="#B33C45"/>
           <path d="M38 91H62 M38 103H62" stroke="#F0D39A" strokeWidth="1.2" opacity=".72"/></>}
+        {top==="kt10"&&<><path d="M38 76 Q50 86 62 76" fill="#FFF9EC" stroke="#D8B88A" strokeWidth="1"/>
+          <path d="M50 83V108" stroke="#E8D6B7" strokeWidth="1.5"/>
+          {[90,97,104].map(y=><circle key={y} cx="53" cy={y} r="1.2" fill="#D8B88A"/>)}
+          <path d="M43 84 Q50 89 57 84" fill="none" stroke="#D8B88A" strokeWidth="1" opacity=".65"/></>}
+        {top==="kt11"&&<><path d="M37 78 L44 74 H56 L63 78 L62 106 Q50 111 38 106Z" fill="#D8B98B" stroke="#A17855" strokeWidth="1"/>
+          <path d="M40 76 L50 88 L60 76" fill="#FFF8EA"/><path d="M43 92H57 M42 101H58" stroke="#FFF8EA" strokeWidth="1.6" opacity=".75"/>
+          <path d="M47 84 H53 L54 99 L50 103 L46 99Z" fill="#9E4B4D" opacity=".95"/></>}
+        {top==="kt12"&&<><path d="M37 77 Q50 89 63 77" fill="#FFF6E5" stroke="#E4C88D" strokeWidth="1"/>
+          <circle cx="43" cy="80" r="5" fill="#FFF6E5"/><circle cx="57" cy="80" r="5" fill="#FFF6E5"/>
+          <text x="50" y="103" fontSize="13" textAnchor="middle">🌼</text></>}
+        {top==="kt14"&&<><path d="M37 80 Q50 75 63 80 L62 107 Q50 112 38 107Z" fill="#FFF8D7"/>
+          <path d="M42 82 V108 M58 82 V108" stroke="#D19C36" strokeWidth="2.5" opacity=".8"/>
+          <path d="M37 91 H63 V108 Q50 114 37 108Z" fill="#F2CD74" stroke="#D19C36" strokeWidth="1"/>
+          <circle cx="44" cy="91" r="1.8" fill="#FFF8D7"/><circle cx="56" cy="91" r="1.8" fill="#FFF8D7"/></>}
         {top==="kt6"&&<><path d="M40 77 L50 86 L60 77" fill="#F5FCFF"/><path d="M50 85V107" stroke="#EAF7FF" strokeWidth="1.6"/>
           {[91,98,105].map(y=><circle key={y} cx="53" cy={y} r="1.25" fill="#4D7F9E"/>)}</>}
-        {top==="kt7"&&<><path d="M33 78 Q50 70 67 78 L74 127 Q50 134 26 127Z" fill="#F4B8C8" stroke="#B8738D" strokeWidth="1.8"/>
+        {top==="kt7"&&<><path d="M33 78 Q50 70 67 78 L74 127 Q50 134 26 127Z" fill="#F7C9D5" stroke="#B8738D" strokeWidth="1.8"/>
           <path d="M40 76 Q50 87 60 76" fill="#FFF5D6"/><path d="M29 110H71" stroke="#FFF5D6" strokeWidth="1.8"/>
           <text x="50" y="110" fontSize="14" textAnchor="middle">🌼</text></>}
+        {top==="kt13"&&<><path d="M33 78 Q50 70 67 78 L74 127 Q50 134 26 127Z" fill="#F2A9B8" stroke="#B66E81" strokeWidth="1.8"/>
+          <path d="M40 76 Q50 87 60 76" fill="#FFF7E8"/><path d="M29 109H71" stroke="#FFF7E8" strokeWidth="1.8"/>
+          <text x="43" y="108" fontSize="12" textAnchor="middle">🍓</text><text x="58" y="119" fontSize="10" textAnchor="middle">🍓</text></>}
         {(top==="kt8"||top==="kt9")&&<><path d="M39 77 L50 87 L61 77" fill={shirtAccent}/><path d="M50 86V107" stroke={shirtAccent} strokeWidth="1.6"/>
           {[91,98,105].map(y=><circle key={y} cx="53" cy={y} r="1.25" fill="#fff"/>)}<text x="40" y="101" fontSize="11">{top==="kt8"?"🌙":"⭐"}</text></>}
 
@@ -950,9 +972,9 @@ function KidView({gender,skin,top,bottom,shoes,hat,acc,size}){
         {gender==="boy"
           ?<><path d="M19 45 Q17 17 47 12 Q75 12 82 40 Q73 33 67 29 Q61 37 52 28 Q44 38 35 29 Q29 39 19 45Z" fill={H} stroke={O} strokeWidth="1.8"/>
             <path d="M28 27 Q45 16 65 24" fill="none" stroke={HI} strokeWidth="3" strokeLinecap="round" opacity=".65"/></>
-          :<><path d="M19 46 Q18 17 49 11 Q82 14 81 49 Q72 39 66 29 Q59 38 50 28 Q42 39 33 29 Q28 40 19 46Z" fill={H} stroke={O} strokeWidth="1.8"/>
+          :<><path d="M19 46 Q18 17 49 11 Q82 14 81 49 Q72 39 66 29 Q59 38 50 28 Q42 39 33 29 Q28 40 19 46Z" fill={H}/>
             <path d="M29 27 Q46 16 66 25" fill="none" stroke={HI} strokeWidth="3" strokeLinecap="round" opacity=".62"/>
-            <path d="M23 47 Q20 69 27 89 M77 47 Q81 69 73 89" fill="none" stroke={HI} strokeWidth="2.4" strokeLinecap="round" opacity=".55"/></>}
+            {/* 側邊線已移除：避免女生臉部左右出現多餘線條 */}</>}
         <path d="M34 39 Q39 36 44 39 M56 39 Q61 36 66 39" fill="none" stroke="#855E4B" strokeWidth="1.25" strokeLinecap="round" opacity=".62"/>
         <g className="kid-eye"><circle cx="39" cy="51" r="7.2" fill="#493026"/><circle cx="61" cy="51" r="7.2" fill="#493026"/>
           <circle cx="36.8" cy="48.2" r="2.25" fill="#fff"/><circle cx="58.8" cy="48.2" r="2.25" fill="#fff"/>
@@ -964,41 +986,103 @@ function KidView({gender,skin,top,bottom,shoes,hat,acc,size}){
         {/* 配件與帽子 */}
         {acc==="ka2"&&<><circle cx="39" cy="51" r="10" fill="none" stroke="#6A4A35" strokeWidth="2.1"/><circle cx="61" cy="51" r="10" fill="none" stroke="#6A4A35" strokeWidth="2.1"/><path d="M49 51H51" stroke="#6A4A35" strokeWidth="2.1"/></>}
         {acc==="ka3"&&<text x="65" y="91" fontSize="14">🍀</text>}
-        {hat==="kh1"&&<><path d="M20 34 Q27 7 61 11 Q77 15 79 35Z" fill="#55A6DF" stroke="#376E99" strokeWidth="1.7"/><path d="M53 34 Q81 30 88 39 Q68 43 51 38Z" fill="#3786C0" stroke="#376E99" strokeWidth="1.5"/></>}
-        {hat==="kh2"&&<><ellipse cx="36" cy="5" rx="8.5" ry="23" fill="#FFF4F6" stroke="#E8B9C4" strokeWidth="1.8"/><ellipse cx="65" cy="5" rx="8.5" ry="23" fill="#FFF4F6" stroke="#E8B9C4" strokeWidth="1.8"/><path d="M20 32 Q50 8 80 32Z" fill="#FFF4F6" stroke="#E8B9C4" strokeWidth="1.5"/></>}
-        {hat==="kh4"&&<><ellipse cx="50" cy="31" rx="39" ry="9" fill="#E8C778" stroke="#A67C3C" strokeWidth="1.8"/><path d="M26 30 Q28 5 50 5 Q72 6 74 30Z" fill="#F1D58B" stroke="#A67C3C" strokeWidth="1.8"/><path d="M28 23H72" stroke="#E98A72" strokeWidth="4.5"/></>}
-        {hat==="kh3"&&<text x="50" y="22" fontSize="33" textAnchor="middle">👑</text>}
+        {hat==="kh1"&&<><path d="M25 31 Q32 13 55 15 Q74 17 78 33 Q62 29 46 30 Q34 31 25 31Z" fill="#79A6C8" stroke="#376E99" strokeWidth="1.55"/>
+          <path d="M54 31 Q77 30 84 37 Q65 40 50 35Z" fill="#5E93BD" stroke="#376E99" strokeWidth="1.25"/><path d="M36 22 Q50 17 65 23" fill="none" stroke="#DDECF5" strokeWidth="1.5" opacity=".65"/></>}
+        {hat==="kh2"&&<><path d="M23 31 Q38 12 63 17 Q76 20 78 34 Q58 31 40 32 Z" fill="#94AEE8" stroke="#5F75B5" strokeWidth="1.55"/>
+          <path d="M58 17 Q69 8 74 18 Q68 22 60 21Z" fill="#94AEE8" stroke="#5F75B5" strokeWidth="1.35"/><circle cx="75" cy="18" r="4" fill="#FFF2A6"/>
+          <text x="47" y="28" fontSize="10" textAnchor="middle">⭐</text></>}
+        {hat==="kh4"&&<><ellipse cx="50" cy="31" rx="32" ry="7" fill="#E8C778" stroke="#A67C3C" strokeWidth="1.55"/>
+          <path d="M29 30 Q32 11 50 10 Q68 11 71 30Z" fill="#F1D58B" stroke="#A67C3C" strokeWidth="1.55"/><path d="M31 23H69" stroke="#E98A72" strokeWidth="3.2"/></>}
+        {hat==="kh3"&&<><path d="M26 30 Q37 12 61 16 Q74 18 78 31 Q58 29 44 31 Q34 33 26 30Z" fill="#D8B98B" stroke="#8D6B4D" strokeWidth="1.55"/>
+          <circle cx="61" cy="19" r="3" fill="#FFF8EA"/><path d="M33 26 Q48 19 68 25" fill="none" stroke="#FFF8EA" strokeWidth="1.5" opacity=".6"/></>}
       </svg>
     </div>);
 }
 
-/* 精緻小主人預覽：先用於入口首頁，衣櫃完成後會改由透明圖層組合 */
-const OWNER_PREVIEWS={
-  boy:"assets/characters/owner-boy.png",
-  girl:"assets/characters/owner-girl.png"
-};
+/* SVG 小主人預覽：不再依賴外部 PNG，避免 GitHub Pages 圖片路徑破圖 */
 function OwnerPreview({gender,size,style}){
-  const g=gender==="boy"?"boy":"girl";
-  const w=190*(size||1);
-  return <img src={OWNER_PREVIEWS[g]} alt={g==="boy"?"男生小主人":"女生小主人"}
-    draggable="false" style={{width:w,height:w,objectFit:"contain",display:"block",
-      userSelect:"none",WebkitUserDrag:"none",filter:"drop-shadow(0 8px 7px rgba(106,74,53,.13))",...style}}/>;
+  const s=size||1;
+  return <div style={{width:100*s,height:150*s,display:"inline-flex",alignItems:"flex-end",justifyContent:"center",...style}}>
+    <KidView gender={gender||"girl"} skin="#F2C7A5" size={s}/>
+  </div>;
 }
 function ActiveKid({gender,skin,top,bottom,shoes,hat,acc,size}){
-  const s=size||1;
-  const usePreview=!top&&!bottom&&!shoes&&!hat&&!acc&&(!skin||skin==="#F2C7A5"||skin==="#F6D2B8");
-  if(!usePreview)return <KidView gender={gender} skin={skin} top={top} bottom={bottom} shoes={shoes} hat={hat} acc={acc} size={s}/>;
-  return <div style={{width:100*s,height:150*s,display:"inline-flex",alignItems:"flex-end",justifyContent:"center"}}>
-    <OwnerPreview gender={gender} size={.79*s} style={{flexShrink:0,marginBottom:-3*s}}/>
-  </div>;
+  return <KidView gender={gender||"girl"} skin={skin||"#F2C7A5"} top={top} bottom={bottom} shoes={shoes} hat={hat} acc={acc} size={size||1}/>;
+}
+
+/* 服飾商品小圖：用 SVG 呈現，讓商店/衣櫃不只顯示 emoji */
+function KidItemIcon({item,size}){
+  const w=size||46;
+  if(!item)return <span/>;
+  const c=item.color||"#FFFDF8", a=item.accent||"#D9CEC1", dark="#73503F";
+  const common={stroke:dark,strokeWidth:2,strokeLinejoin:"round",strokeLinecap:"round"};
+  return <svg width={w} height={w} viewBox="0 0 64 64" style={{display:"block",margin:"0 auto 4px",filter:"drop-shadow(0 3px 1px rgba(90,60,30,.10))"}}>
+    {item.slot==="kidTop"&&item.dress&&<g>
+      <path d="M21 18 Q32 12 43 18 L51 54 Q32 60 13 54Z" fill={c} {...common}/>
+      <path d="M25 17 Q32 25 39 17" fill={a} stroke={dark} strokeWidth="1.5"/>
+      <path d="M18 42 H46" stroke={a} strokeWidth="2"/>
+    </g>}
+    {item.slot==="kidTop"&&!item.dress&&<g>
+      <path d="M19 19 Q32 12 45 19 Q50 24 51 32 L44 35 L42 55 Q32 59 22 55 L20 35 L13 32 Q14 24 19 19Z" fill={c} {...common}/>
+      <path d="M25 18 Q32 27 39 18" fill={a} stroke={dark} strokeWidth="1.5"/>
+      {item.id==="kt5"&&<><path d="M22 22 L32 34 L42 22 L43 53 Q32 58 21 53Z" fill="#303B59" stroke={dark} strokeWidth="1.7"/><path d="M29 31 H35 L36 44 L32 49 L28 44Z" fill="#B33C45"/></>}
+      {item.id==="kt10"&&<><path d="M24 18 Q32 27 40 18" fill="#FFF7E8" stroke="#D8B88A" strokeWidth="1.2"/><path d="M32 27V54" stroke="#E8D6B7" strokeWidth="1.4"/><circle cx="35" cy="35" r="1.2" fill="#D8B88A"/><circle cx="35" cy="43" r="1.2" fill="#D8B88A"/></>}
+      {item.id==="kt11"&&<><path d="M22 22 L32 34 L42 22 L43 53 Q32 58 21 53Z" fill="#D8B98B" stroke="#A17855" strokeWidth="1.5"/><path d="M25 20 L32 31 L39 20" fill="#FFF8EA"/><path d="M28 38H36 M27 47H37" stroke="#FFF8EA" strokeWidth="1.6"/></>}
+      {item.id==="kt12"&&<><circle cx="26" cy="22" r="5" fill="#FFF6E5"/><circle cx="38" cy="22" r="5" fill="#FFF6E5"/><text x="32" y="45" fontSize="12" textAnchor="middle">🌼</text></>}
+      {item.id==="kt14"&&<><path d="M24 25V55 M40 25V55" stroke="#D19C36" strokeWidth="2.5"/><path d="M21 35H43V55 Q32 60 21 55Z" fill="#F2CD74" stroke="#D19C36" strokeWidth="1.4"/></>}
+      {item.id==="kt1"&&<><path d="M20 32 H44" stroke="#fff" strokeWidth="3"/><path d="M21 43 H43" stroke="#fff" strokeWidth="3"/></>}
+      {item.id==="kt2"&&<text x="32" y="44" fontSize="16" textAnchor="middle">🌸</text>}
+      {item.id==="kt3"&&<text x="32" y="44" fontSize="16" textAnchor="middle">🦖</text>}
+      {item.id==="kt4"&&<text x="32" y="45" fontSize="17" textAnchor="middle">⭐</text>}
+      {item.id==="kt13"&&<><text x="25" y="45" fontSize="10">🍓</text><text x="38" y="52" fontSize="9">🍓</text></>}
+      {item.pajama&&<text x="25" y="45" fontSize="12">{item.id==="kt8"?"🌙":"⭐"}</text>}
+    </g>}
+    {item.slot==="kidBottom"&&item.skirt&&<g>
+      <path d="M17 17 H47 L53 53 Q32 60 11 53Z" fill={c} {...common}/>
+      <path d="M23 18 V54 M32 18 V57 M41 18 V54" stroke={a} strokeWidth="1.5" opacity=".65"/>
+      {item.plaid&&<><path d="M16 31 H49 M14 43 H51" stroke="#FFF8E8" strokeWidth="2" opacity=".72"/><path d="M27 17 V56 M38 17 V56" stroke={a} strokeWidth="1.2" opacity=".55"/></>}
+    </g>}
+    {item.slot==="kidBottom"&&!item.skirt&&<g>
+      <path d="M18 13 H46 L43 55 H33 L32 27 L31 55 H21Z" fill={c} {...common}/>
+      <path d="M32 14 V28" stroke={a} strokeWidth="1.5"/>
+      {item.plaid&&<><path d="M18 26 H45 M17 39 H44" stroke="#FFF8E8" strokeWidth="2" opacity=".72"/><path d="M26 14 V55 M38 14 V55" stroke={a} strokeWidth="1.2" opacity=".55"/></>}
+    </g>}
+    {item.slot==="kidShoes"&&<g>
+      <ellipse cx="23" cy="39" rx="16" ry="9" fill={c} {...common}/><ellipse cx="43" cy="39" rx="16" ry="9" fill={c} {...common}/>
+      <path d="M11 40 H35 M31 40 H55" stroke={a} strokeWidth="2" opacity=".75"/>
+      <path d="M18 34 L28 39 M38 34 L48 39" stroke={a} strokeWidth="1.4"/>
+    </g>}
+    {item.slot==="kidHat"&&<g>
+      {item.id==="kh2"?<><path d="M15 34 Q28 15 48 20 Q55 22 56 35 Q42 32 27 34Z" fill={c} {...common}/><path d="M45 20 Q54 10 58 21" fill={c} {...common}/><circle cx="59" cy="21" r="4" fill={a}/><text x="31" y="33" fontSize="10" textAnchor="middle">⭐</text></>:
+      item.id==="kh3"?<><path d="M14 35 Q25 17 44 19 Q54 20 58 34 Q43 32 30 34 Q20 36 14 35Z" fill={c} {...common}/><circle cx="44" cy="22" r="2.8" fill={a}/></>:
+      <><ellipse cx="32" cy="36" rx="22" ry="7" fill={c||"#F1D58B"} {...common}/><path d="M18 35 Q21 15 32 14 Q43 15 46 35Z" fill={c||"#F1D58B"} {...common}/>{item.id==="kh4"&&<path d="M20 29H44" stroke={a} strokeWidth="3"/>}</>}
+    </g>}
+    {item.slot==="kidAcc"&&<g>
+      <circle cx="32" cy="32" r="22" fill="#FFF8E8" stroke={dark} strokeWidth="2" opacity=".95"/>
+      <text x="32" y="40" fontSize="24" textAnchor="middle">{item.emoji}</text>
+    </g>}
+  </svg>;
+}
+
+function BaseKidItemIcon({slot,size}){
+  if(slot==="kidTop")return <KidItemIcon item={{slot:"kidTop",id:"base-white-top",color:"#FFFDF8",accent:"#DDD5C9"}} size={size}/>;
+  if(slot==="kidBottom")return <KidItemIcon item={{slot:"kidBottom",id:"base-white-bottom",color:"#F7F4EC",accent:"#DDD5C8",pants:true}} size={size}/>;
+  if(slot==="kidShoes")return <KidItemIcon item={{slot:"kidShoes",id:"base-sneakers",color:"#FFFDF7",accent:"#D9CEC1"}} size={size}/>;
+  if(slot==="kidHat")return <svg width={size||44} height={size||44} viewBox="0 0 64 64" style={{display:"block",margin:"0 auto 4px"}}><circle cx="32" cy="32" r="22" fill="#FFF8E8" stroke="#73503F" strokeWidth="2" opacity=".95"/><text x="32" y="40" fontSize="24" textAnchor="middle">💇</text></svg>;
+  return <svg width={size||44} height={size||44} viewBox="0 0 64 64" style={{display:"block",margin:"0 auto 4px"}}><circle cx="32" cy="32" r="22" fill="#FFF8E8" stroke="#73503F" strokeWidth="2" opacity=".95"/><text x="32" y="40" fontSize="24" textAnchor="middle">✨</text></svg>;
 }
 
 /* ═══════════════ AUDIO SYSTEM ═══════════════ */
 function createAudio(){
-  let ctx=null,musicNodes=[],musicOn=true;
+  let ctx=null,musicNodes=[],musicTimers=[],musicOn=true,musicStarted=false;
   const getCtx=()=>{
     if(!ctx)ctx=new (window.AudioContext||window.webkitAudioContext)();
     return ctx;
+  };
+  const clearMusic=()=>{
+    musicTimers.forEach(t=>clearTimeout(t));musicTimers=[];
+    musicNodes.forEach(n=>{try{n.stop();}catch(e){}});musicNodes=[];
+    musicStarted=false;
   };
   const beep=(freq,dur,vol,type)=>{
     try{
@@ -1011,136 +1095,53 @@ function createAudio(){
     }catch(e){}
   };
   const playChord=(freqs,dur,vol)=>{freqs.forEach(f=>beep(f,dur,vol||0.15));};
-
   return{
-    check:()=>{
-      // happy ascending ding
-      beep(523,.1,.3);
-      setTimeout(()=>beep(659,.1,.3),80);
-      setTimeout(()=>beep(784,.15,.35),160);
-    },
-    approve:()=>{
-      // triumphant chord
-      playChord([523,659,784],.4,.2);
-      setTimeout(()=>playChord([659,784,1047],.5,.18),200);
-    },
-    feed:()=>{
-      // cute nom nom
-      beep(392,.08,.2,"triangle");
-      setTimeout(()=>beep(440,.08,.2,"triangle"),120);
-      setTimeout(()=>beep(392,.08,.2,"triangle"),240);
-    },
-    pat:()=>{
-      // sparkle sound
-      beep(880,.08,.15,"sine");
-      setTimeout(()=>beep(1047,.08,.15),60);
-      setTimeout(()=>beep(1319,.12,.15),120);
-    },
-    achieve:()=>{
-      // fanfare
-      const notes=[523,659,784,1047];
-      notes.forEach((f,i)=>setTimeout(()=>beep(f,.2,.25),i*100));
-      setTimeout(()=>playChord([659,784,1047],.6,.2),450);
-    },
-    login:()=>{
-      // gentle morning chime
-      beep(528,.15,.2,"sine");
-      setTimeout(()=>beep(660,.15,.2),150);
-      setTimeout(()=>beep(792,.2,.2),300);
-    },
-    weekend:()=>{
-      // celebration
-      playChord([523,659],.15,.2);
-      setTimeout(()=>playChord([659,784],.15,.2),200);
-      setTimeout(()=>playChord([784,1047],.3,.2),400);
-    },
-    clean:()=>{
-      // whoosh clean
-      beep(300,.05,.15,"sawtooth");
-      setTimeout(()=>beep(600,.1,.15,"sine"),80);
-      setTimeout(()=>beep(900,.15,.15,"sine"),160);
-    },
-    buy:()=>{
-      beep(440,.08,.2);
-      setTimeout(()=>beep(550,.08,.2),100);
-      setTimeout(()=>beep(660,.12,.2),200);
-    },
-    bath:()=>{
-      // splashing sound
-      beep(400,.06,.15,"triangle");
-      setTimeout(()=>beep(500,.06,.15,"triangle"),80);
-      setTimeout(()=>beep(450,.06,.15,"triangle"),160);
-      setTimeout(()=>beep(520,.1,.15,"triangle"),240);
-    },
-    flower:()=>{
-      beep(659,.1,.2,"sine");
-      setTimeout(()=>beep(784,.1,.2),100);
-      setTimeout(()=>beep(1047,.15,.2),200);
-    },
-    ball:()=>{
-      beep(300,.05,.2,"triangle");
-      setTimeout(()=>beep(200,.1,.15,"triangle"),100);
-    },
+    check:()=>{beep(523,.1,.3);setTimeout(()=>beep(659,.1,.3),80);setTimeout(()=>beep(784,.15,.35),160);},
+    approve:()=>{playChord([523,659,784],.4,.2);setTimeout(()=>playChord([659,784,1047],.5,.18),200);},
+    feed:()=>{beep(392,.08,.2,"triangle");setTimeout(()=>beep(440,.08,.2,"triangle"),120);setTimeout(()=>beep(392,.08,.2,"triangle"),240);},
+    pat:()=>{beep(880,.08,.15,"sine");setTimeout(()=>beep(1047,.08,.15),60);setTimeout(()=>beep(1319,.12,.15),120);},
+    achieve:()=>{[523,659,784,1047].forEach((f,i)=>setTimeout(()=>beep(f,.2,.25),i*100));setTimeout(()=>playChord([659,784,1047],.6,.2),450);},
+    login:()=>{beep(528,.15,.2,"sine");setTimeout(()=>beep(660,.15,.2),150);setTimeout(()=>beep(792,.2,.2),300);},
+    weekend:()=>{playChord([523,659],.15,.2);setTimeout(()=>playChord([659,784],.15,.2),200);setTimeout(()=>playChord([784,1047],.3,.2),400);},
+    clean:()=>{beep(300,.05,.15,"sawtooth");setTimeout(()=>beep(600,.1,.15,"sine"),80);setTimeout(()=>beep(900,.15,.15,"sine"),160);},
+    buy:()=>{beep(440,.08,.2);setTimeout(()=>beep(550,.08,.2),100);setTimeout(()=>beep(660,.12,.2),200);},
+    bath:()=>{beep(400,.06,.15,"triangle");setTimeout(()=>beep(500,.06,.15,"triangle"),80);setTimeout(()=>beep(450,.06,.15,"triangle"),160);setTimeout(()=>beep(520,.1,.15,"triangle"),240);},
+    flower:()=>{beep(659,.1,.2,"sine");setTimeout(()=>beep(784,.1,.2),100);setTimeout(()=>beep(1047,.15,.2),200);},
+    ball:()=>{beep(300,.05,.2,"triangle");setTimeout(()=>beep(200,.1,.15,"triangle"),100);},
     startMusic:(onOff)=>{
       musicOn=onOff;
-      if(!onOff){musicNodes.forEach(n=>{try{n.stop();}catch(e){}});musicNodes=[];return;}
+      if(!onOff){clearMusic();return;}
+      if(musicStarted)return;
+      clearMusic();musicStarted=true;
       try{
         const c=getCtx();
-        const timers=[];
         const pNote=(freq,st,dur,vol,type)=>{
           const o=c.createOscillator(),g=c.createGain();
           o.connect(g);g.connect(c.destination);
-          o.type=type||"triangle";
-          o.frequency.setValueAtTime(freq,st);
+          o.type=type||"triangle";o.frequency.setValueAtTime(freq,st);
           g.gain.setValueAtTime(0,st);
-          g.gain.linearRampToValueAtTime(vol,st+0.025);
-          g.gain.exponentialRampToValueAtTime(vol*0.2,st+dur*0.65);
-          g.gain.exponentialRampToValueAtTime(0.001,st+dur*1.3);
-          o.start(st);o.stop(st+dur*1.4);
-          musicNodes.push(o);
+          g.gain.linearRampToValueAtTime(vol,st+0.03);
+          g.gain.exponentialRampToValueAtTime(Math.max(vol*0.25,0.001),st+dur*0.62);
+          g.gain.exponentialRampToValueAtTime(0.001,st+dur*1.25);
+          o.start(st);o.stop(st+dur*1.35);musicNodes.push(o);
         };
-        // 卡農和弦 C-G-Am-Em-F-C-F-G
         const bassSeq=[261,196,220,164,174,261,174,196];
-        const beatLen=2.0;
-        // 卡農主旋律
-        const canonTheme=[
-          {f:523,d:.5},{f:493,d:.5},{f:440,d:.5},{f:392,d:.5},
-          {f:349,d:.5},{f:392,d:.5},{f:440,d:.5},{f:349,d:.5},
-          {f:329,d:.5},{f:349,d:.5},{f:392,d:.5},{f:329,d:.5},
-          {f:293,d:.5},{f:329,d:.5},{f:349,d:.5},{f:293,d:.5},
-        ];
-        // 動森五聲音階點綴
-        const acPenta=[523,587,659,784,880,1047];
-        const acMelody=[2,4,5,4,2,0,2,4,5,2,4,5];
-        let loopT=c.currentTime+0.5;
+        const melody=[523,587,659,784,659,587,523,392,440,523,587,523];
+        const beatLen=1.8;
+        let loopT=c.currentTime+0.35;
         const playLoop=()=>{
-          if(!musicOn)return;
-          // 低音和弦
-          bassSeq.forEach((freq,i)=>{
-            pNote(freq,loopT+i*beatLen,beatLen*0.85,0.020,"sine");
-            pNote(freq*1.5,loopT+i*beatLen+0.4,beatLen*0.5,0.010,"sine");
-          });
-          // 卡農主旋律第一聲部
-          let off=0;
-          canonTheme.forEach(n=>{pNote(n.f,loopT+off,n.d,0.032,"triangle");off+=n.d;});
-          // 卡農第二聲部（延遲2拍，低八度）
-          off=0;
-          canonTheme.forEach(n=>{pNote(n.f*0.5,loopT+beatLen*2+off,n.d,0.016,"sine");off+=n.d;});
-          // 動森點綴（第4拍後輕輕飄入）
-          let acOff=beatLen*3.5;
-          acMelody.forEach((idx,i)=>{
-            pNote(acPenta[idx],loopT+acOff+i*0.52,0.48,0.020,"triangle");
-          });
+          if(!musicOn){clearMusic();return;}
+          bassSeq.forEach((freq,i)=>{pNote(freq,loopT+i*beatLen,beatLen*.75,0.014,"sine");});
+          melody.forEach((freq,i)=>{pNote(freq,loopT+i*.55,.46,0.020,"triangle");});
           const totalDur=bassSeq.length*beatLen;
-          loopT+=totalDur+1.2;
-          const tid=setTimeout(playLoop,(totalDur+0.8)*1000);
-          timers.push(tid);
+          loopT+=totalDur+1.0;
+          musicTimers.push(setTimeout(playLoop,(totalDur+0.7)*1000));
         };
         playLoop();
-      }catch(e){}
+      }catch(e){clearMusic();}
     },
-    setMusicOn:(v)=>{musicOn=v;},
-    stopMusic:()=>{musicNodes.forEach(n=>{try{n.stop();}catch(e){}});musicNodes=[];}
+    setMusicOn:(v)=>{musicOn=v;if(!v)clearMusic();},
+    stopMusic:()=>clearMusic()
   };
 }
 const Audio=createAudio();
@@ -1876,6 +1877,15 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
             <button className="btn" onClick={()=>{
               localStorage.removeItem(storageKey||"habitKingdom");
               if(playerId)["lastLogin_hk","lastStreak_hk","musicOn_hk","weather_hk","parkPetPan_hk","parkKidPan_hk"].forEach(k=>localStorage.removeItem(k+"_"+playerId));
+              const fam=readFamily();
+              if(fam){
+                const nextPlayers=fam.players.filter(p=>p.id!==playerId);
+                if(nextPlayers.length===0){
+                  getPetHabitSaveKeys().forEach(k=>localStorage.removeItem(k));
+                }else saveFamily({...fam,activePlayerId:nextPlayers[0].id,players:nextPlayers});
+              }else{
+                getPetHabitSaveKeys().forEach(k=>localStorage.removeItem(k));
+              }
               window.location.reload();
             }}
               style={{...bub("#FF6060"),width:"100%",padding:"13px 0",borderRadius:999,
@@ -1939,12 +1949,12 @@ function ClosetPage({profile,points,isTablet,closetTab,setClosetTab,equipped,set
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,maxHeight:isTablet?250:205,overflowY:"auto",padding:"3px 4px 8px 3px"}}>
           <button className="btn" onClick={()=>setEquipped(e=>({...e,[closetTab]:undefined}))} style={{...bub(!equipped[closetTab]?C.yellow:C.light,15),
             padding:"10px 5px",minHeight:86,color:C.brown,border:"none",outline:!equipped[closetTab]?"3px solid "+C.butter:"none",position:"relative"}}>
-            {!equipped[closetTab]&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}<div style={{fontSize:26}}>{active.icon}</div>
+            {!equipped[closetTab]&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}<BaseKidItemIcon slot={closetTab} size={44}/>
             <div style={{fontSize:9,fontWeight:900}}>{active.base}</div><div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>已擁有</div>
           </button>
           {items.map(item=>{const isEq=equipped[closetTab]===item.id;return <button key={item.id} className="btn" onClick={()=>equip(item)}
             style={{...bub(isEq?C.yellow:C.light,15),padding:"10px 5px",minHeight:86,color:C.brown,border:"none",outline:isEq?"3px solid "+C.butter:"none",position:"relative"}}>
-            {isEq&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}<div style={{fontSize:28}}>{item.emoji}</div>
+            {isEq&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}<KidItemIcon item={item} size={44}/>
             <div style={{fontSize:9,fontWeight:900}}>{item.label}</div><div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>{isEq?"穿著中":"點一下試穿"}</div>
           </button>;})}
           {items.length===0&&<button className="btn" onClick={openShop} style={{...bub("#FFF3E1",15),padding:"10px 5px",minHeight:86,color:C.soft,
@@ -2568,7 +2578,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             return(
               <div key={item.id} style={{...cardS(isEq?C.yellow:isOwn?C.light:C.card),
                 padding:"13px 10px",textAlign:"center"}}>
-                <div style={{fontSize:32,marginBottom:5}}>{item.emoji}</div>
+                {shopTab==="kid"?<KidItemIcon item={item} size={50}/>:<div style={{fontSize:32,marginBottom:5}}>{item.emoji}</div>}
                 <div style={{fontWeight:900,fontSize:12,color:C.brown,marginBottom:3}}>{item.label}</div>
                 {shopTab==="kid"&&item.theme&&<div style={{...bub(item.theme==="學院風"?"#EEE3D2":item.theme==="公園風"?"#DDF3D4":item.theme==="睡衣風"?"#E6E2FF":C.light,999),
                   padding:"2px 8px",fontSize:9,fontWeight:900,color:C.soft,display:"inline-block",marginBottom:5,border:"none"}}>{item.theme}</div>}
@@ -2699,7 +2709,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                     style={{...bub(!equipped[closetTab]?C.yellow:C.light,15),padding:"10px 5px",minHeight:82,color:C.brown,border:"none",
                       outline:!equipped[closetTab]?"3px solid "+C.butter:"none",position:"relative"}}>
                     {!equipped[closetTab]&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}
-                    <div style={{fontSize:25}}>{active.icon}</div>
+                    <BaseKidItemIcon slot={closetTab} size={43}/>
                     <div style={{fontSize:9,fontWeight:900,lineHeight:1.25}}>{active.base}</div>
                     <div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>已擁有</div>
                   </button>
@@ -2709,7 +2719,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                       style={{...bub(isEq?C.yellow:C.light,15),padding:"10px 5px",minHeight:82,color:C.brown,border:"none",
                         outline:isEq?"3px solid "+C.butter:"none",position:"relative"}}>
                       {isEq&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}
-                      <div style={{fontSize:27}}>{item.emoji}</div>
+                      <KidItemIcon item={item} size={43}/>
                       <div style={{fontSize:9,fontWeight:900,lineHeight:1.25}}>{item.label}</div>
                       <div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>{isEq?"穿著中":"點一下試穿"}</div>
                     </button>;
