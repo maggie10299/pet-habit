@@ -6,12 +6,14 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <title>寵物習慣王國 🐾</title>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{--theme-main:#F5A623;--theme-mid:#FFD97D;--theme-soft:#FFE566;--theme-border:rgba(255,215,140,.22);--theme-dark:#4A3000;}
@@ -115,65 +117,125 @@ const LEVELS=[
   {lv:5,name:"魔法姬",stage:"完全進化",emoji:"✨",min:1500,sz:1.1},
 ];
 
+/* Updated by Claude on 2026/06/23
+   Reason: New PNG art assets cover 4 pets only (小黃馬/貓咪/小狗/狐狸) — per requirement
+   #1 and the "force simple pet reselection" requirement, the roster is reduced from 6
+   to 4. 小黃雞(chick)/青蛙(frog)/卡皮巴拉(capy) are removed from selectable options.
+   Per the confirmed plan: no player currently has frog/capy selected, so no data
+   migration edge-case exists for those two. Players who DO have petType="chick" (if
+   any exist) will be swept into the forced reselection flow (see petUpdate20260623
+   logic near the App() component) same as everyone else — they keep all points/tasks/
+   room/purchases, they just pick a new pet from the 4. SVG PetView fallback for "dog"
+   is added further below (function Dog) so the game doesn't break before PNG assets
+   are wired in by Codex. */
 const PETS=[
   {id:"horse",label:"小黃馬",emoji:"🐴",desc:"活潑可愛，最愛奔跑！",c:"#FFE566",b:"#FFD97D"},
   {id:"cat",label:"貓咪",emoji:"🐱",desc:"慵懶優雅，愛撒嬌～",c:"#FFD97D",b:"#E8A020"},
-  {id:"chick",label:"小黃雞",emoji:"🐣",desc:"嗶嗶嗶！活力滿滿！",c:"#FFE033",b:"#D4A000"},
+  {id:"dog",label:"小狗",emoji:"🐶",desc:"忠心耿耿，最愛陪伴！",c:"#FFE8B8",b:"#D8A858"},
   {id:"fox",label:"小狐狸",emoji:"🦊",desc:"聰明機靈，最愛探險！",c:"#FF9F3F",b:"#D06000"},
-  {id:"frog",label:"青蛙",emoji:"🐸",desc:"呱呱！跳最高的我！",c:"#A8DDA8",b:"#4CAF50"},
-  {id:"capy",label:"卡皮巴拉",emoji:"🦫",desc:"佛系淡定，最會放鬆！",c:"#DEC4A8",b:"#8D6240"},
 ];
+/* Original 6-pet roster (chick/frog/capy removed 2026/06/23) — kept for reference:
+{id:"chick",label:"小黃雞",emoji:"🐣",desc:"嗶嗶嗶！活力滿滿！",c:"#FFE033",b:"#D4A000"},
+{id:"frog",label:"青蛙",emoji:"🐸",desc:"呱呱！跳最高的我！",c:"#A8DDA8",b:"#4CAF50"},
+{id:"capy",label:"卡皮巴拉",emoji:"🦫",desc:"佛系淡定，最會放鬆！",c:"#DEC4A8",b:"#8D6240"},
+*/
 
 const FOODS=[
   {id:"f1",emoji:"🍎",label:"蘋果",price:5,hunger:15},
   {id:"f2",emoji:"🥕",label:"紅蘿蔔",price:8,hunger:20},
   {id:"f3",emoji:"🌽",label:"玉米",price:12,hunger:25},
   {id:"f4",emoji:"🍓",label:"草莓",price:20,hunger:30},
-  {id:"f5",emoji:"🧁",label:"小蛋糕",price:50,hunger:50},
-  {id:"f6",emoji:"🍰",label:"生日蛋糕",price:100,hunger:80},
+  {id:"f5",emoji:"🥛",label:"牛奶",price:25,hunger:35},
+  {id:"f6",emoji:"🍕",label:"披薩",price:40,hunger:45},
+  {id:"f7",emoji:"🍔",label:"漢堡",price:45,hunger:48},
+  {id:"f8",emoji:"🧁",label:"小蛋糕",price:50,hunger:50},
+  {id:"f9",emoji:"🍰",label:"生日蛋糕",price:100,hunger:80},
 ];
 
+/* Updated by Claude on 2026/06/23
+   Reason: Per this update's requirement #3 (商店整理), all clothing-type shop items
+   are removed/de-listed this round — both pet outfits (OUTFITS) and kid clothing
+   (KID_ITEMS). Kept as empty arrays (not deleted) so existing equip/shop-render code
+   that maps over OUTFITS/KID_ITEMS doesn't break; the shop UI will simply show no
+   items in those tabs. Previously-owned items (if any player already bought one)
+   stay in their save data and will just render with no matching shop listing —
+   does not crash, does not erase player data. Original 20+ item definitions are kept
+   below as a comment block for Codex/future reference if clothing is reintroduced. */
 const OUTFITS=[
-  {id:"h1",slot:"hat",emoji:"👑",label:"皇冠",price:200},
-  {id:"h2",slot:"hat",emoji:"🌸",label:"花冠",price:100},
-  {id:"h3",slot:"hat",emoji:"🎀",label:"蝴蝶結",price:80},
-  {id:"h4",slot:"hat",emoji:"🎩",label:"紳士帽",price:120},
-  {id:"a1",slot:"acc",emoji:"💎",label:"寶石鍊",price:150},
-  {id:"a2",slot:"acc",emoji:"🌈",label:"彩虹翅",price:180},
-  {id:"a3",slot:"acc",emoji:"⭐",label:"星星貼",price:60},
+  {id:"summer_straw_hat",slot:"hat",emoji:"👒",label:"夏日草帽",price:260,
+    asset:"assets/pet-accessories/summer_straw_hat.webp",
+    thumb:"assets/pet-accessories/thumbs/summer_straw_hat.webp"},
+  {id:"flower_crown",slot:"hat",emoji:"🌸",label:"小花冠",price:240,
+    asset:"assets/pet-accessories/flower_crown.webp",
+    thumb:"assets/pet-accessories/thumbs/flower_crown.webp"},
+  {id:"star_scarf",slot:"acc",emoji:"⭐",label:"星星領巾",price:220,
+    asset:"assets/pet-accessories/star_scarf.webp",
+    thumb:"assets/pet-accessories/thumbs/star_scarf.webp"},
 ];
+/* Original OUTFITS (pet hats/accessories) — disabled 2026/06/23, kept for reference:
+{id:"h1",slot:"hat",emoji:"👑",label:"皇冠",price:200},
+{id:"h2",slot:"hat",emoji:"🌸",label:"花冠",price:100},
+{id:"h3",slot:"hat",emoji:"🎀",label:"蝴蝶結",price:80},
+{id:"h4",slot:"hat",emoji:"🎩",label:"紳士帽",price:120},
+{id:"a1",slot:"acc",emoji:"💎",label:"寶石鍊",price:150},
+{id:"a2",slot:"acc",emoji:"🌈",label:"彩虹翅",price:180},
+{id:"a3",slot:"acc",emoji:"⭐",label:"星星貼",price:60},
+*/
 
 /* 小主人服飾：共用同一套身體骨架，不限制男生女生穿著 */
 const KID_ITEMS=[
-  {id:"kt1",slot:"kidTop",emoji:"👕",label:"天空條紋衣",price:60,color:"#72C7F2",accent:"#FFFFFF",theme:"日常"},
-  {id:"kt2",slot:"kidTop",emoji:"🌸",label:"櫻花上衣",price:80,color:"#FF9FC5",accent:"#FFF0F6",theme:"日常"},
-  {id:"kt3",slot:"kidTop",emoji:"🦖",label:"恐龍上衣",price:100,color:"#78C98A",accent:"#FFF3A0",theme:"日常"},
-  {id:"kt4",slot:"kidTop",emoji:"🌟",label:"星星斗篷",price:150,color:"#8C78D8",accent:"#FFE566",theme:"日常"},
-  {id:"kt5",slot:"kidTop",emoji:"🎓",label:"深藍學院背心",price:140,color:"#303B59",accent:"#F7F2E8",theme:"學院風"},
-  {id:"kt10",slot:"kidTop",emoji:"🤍",label:"白色學院襯衫",price:110,color:"#FFFDF7",accent:"#D8B88A",theme:"學院風"},
-  {id:"kt11",slot:"kidTop",emoji:"🧶",label:"奶茶針織背心",price:150,color:"#D8B98B",accent:"#FFF8EA",theme:"學院風"},
-  {id:"kt6",slot:"kidTop",emoji:"🩵",label:"公園藍襯衫",price:100,color:"#76B9DF",accent:"#F5FCFF",theme:"公園風"},
-  {id:"kt12",slot:"kidTop",emoji:"🤍",label:"白色娃娃領上衣",price:120,color:"#FFFDF7",accent:"#F1D9A9",theme:"公園風"},
-  {id:"kt7",slot:"kidTop",emoji:"🌼",label:"雛菊公園洋裝",price:150,color:"#F7C9D5",accent:"#FFF5D6",theme:"公園風",dress:true},
-  {id:"kt13",slot:"kidTop",emoji:"🍓",label:"小草莓公園洋裝",price:160,color:"#F2A9B8",accent:"#FFF7E8",theme:"公園風",dress:true},
-  {id:"kt14",slot:"kidTop",emoji:"🌼",label:"奶油黃吊帶褲",price:150,color:"#F2CD74",accent:"#FFF8D7",theme:"公園風",overall:true},
-  {id:"kt8",slot:"kidTop",emoji:"🌙",label:"藍月亮睡衣",price:100,color:"#89AEE5",accent:"#FFF2A6",theme:"睡衣風",pajama:true},
-  {id:"kt9",slot:"kidTop",emoji:"💗",label:"粉紅星星睡衣",price:100,color:"#F1AFC4",accent:"#FFF4C8",theme:"睡衣風",pajama:true},
-  {id:"kb1",slot:"kidBottom",emoji:"👖",label:"學院格紋長褲",price:120,color:"#D8C8AE",accent:"#8F806C",theme:"學院風",pants:true,plaid:true},
-  {id:"kb2",slot:"kidBottom",emoji:"👗",label:"學院格紋短裙",price:120,color:"#D8C8AE",accent:"#8F806C",theme:"學院風",skirt:true,plaid:true},
-  {id:"kb3",slot:"kidBottom",emoji:"🌙",label:"藍月亮睡褲",price:90,color:"#89AEE5",accent:"#FFF2A6",theme:"睡衣風",pants:true,pajama:true},
-  {id:"kb4",slot:"kidBottom",emoji:"💗",label:"粉紅星星睡褲",price:90,color:"#F1AFC4",accent:"#FFF4C8",theme:"睡衣風",pants:true,pajama:true},
-  {id:"ks1",slot:"kidShoes",emoji:"👞",label:"學院小皮鞋",price:90,color:"#5C4437",accent:"#F4E8D7",theme:"學院風"},
-  {id:"ks2",slot:"kidShoes",emoji:"👟",label:"公園白球鞋",price:80,color:"#FFFDF7",accent:"#91B8D4",theme:"公園風"},
-  {id:"ks3",slot:"kidShoes",emoji:"🥿",label:"軟綿睡衣拖鞋",price:70,color:"#F5C5D2",accent:"#FFF2F5",theme:"睡衣風"},
-  {id:"kh1",slot:"kidHat",emoji:"🧢",label:"小探險帽",price:90,color:"#79A6C8",accent:"#F6E7B8",theme:"公園風"},
-  {id:"kh2",slot:"kidHat",emoji:"🌙",label:"星星睡帽",price:120,color:"#94AEE8",accent:"#FFF2A6",theme:"睡衣風"},
-  {id:"kh4",slot:"kidHat",emoji:"👒",label:"小小草帽",price:100,color:"#F1D58B",accent:"#E98A72",theme:"公園風"},
-  {id:"kh3",slot:"kidHat",emoji:"🎨",label:"奶茶貝雷帽",price:120,color:"#D8B98B",accent:"#FFF8EA",theme:"學院風"},
-  {id:"ka1",slot:"kidAcc",emoji:"🎒",label:"紅色背包",price:90},
-  {id:"ka2",slot:"kidAcc",emoji:"👓",label:"圓圓眼鏡",price:70},
-  {id:"ka3",slot:"kidAcc",emoji:"🍀",label:"幸運徽章",price:60},
 ];
+
+/* Updated by Claude on 2026/06/23
+   OUTFIT_CLOTHES_GIRL & OUTFIT_CLOTHES_BOY: Kid whole-outfit PNG system
+   Each outfit is a complete PNG image that replaces the base kid SVG.
+   Girls and boys have separate outfit IDs for tracking owned/equipped.
+   Default outfit: casual (included in new game initialisation).
+*/
+const OUTFIT_CLOTHES_GIRL=[
+  {id:"casual_g",label:"🌿 休閒",price:100,gender:"girl",slot:"outfit"},
+  {id:"school_g",label:"👓 校服",price:250,gender:"girl",slot:"outfit"},
+  {id:"denim_g",label:"👖 牛仔",price:300,gender:"girl",slot:"outfit"},
+  {id:"resort_g",label:"☀️ 渡假",price:300,gender:"girl",slot:"outfit"},
+];
+const OUTFIT_CLOTHES_BOY=[
+  {id:"casual_b",label:"🌿 休閒",price:100,gender:"boy",slot:"outfit"},
+  {id:"school_b",label:"👓 校服",price:250,gender:"boy",slot:"outfit"},
+  {id:"denim_b",label:"👖 牛仔",price:300,gender:"boy",slot:"outfit"},
+  {id:"resort_b",label:"☀️ 渡假",price:300,gender:"boy",slot:"outfit"},
+];
+/* Original KID_ITEMS (kid clothing, 20+ pieces across top/bottom/shoes/hat/acc) —
+   disabled 2026/06/23 per requirement to drop the SVG paper-doll clothing system in
+   favor of whole-outfit PNG switching. Kept for reference / possible Codex follow-up:
+{id:"kt1",slot:"kidTop",emoji:"👕",label:"天空條紋衣",price:60,color:"#72C7F2",accent:"#FFFFFF",theme:"日常"},
+{id:"kt2",slot:"kidTop",emoji:"🌸",label:"櫻花上衣",price:80,color:"#FF9FC5",accent:"#FFF0F6",theme:"日常"},
+{id:"kt3",slot:"kidTop",emoji:"🦖",label:"恐龍上衣",price:100,color:"#78C98A",accent:"#FFF3A0",theme:"日常"},
+{id:"kt4",slot:"kidTop",emoji:"🌟",label:"星星斗篷",price:150,color:"#8C78D8",accent:"#FFE566",theme:"日常"},
+{id:"kt5",slot:"kidTop",emoji:"🎓",label:"深藍學院背心",price:140,color:"#303B59",accent:"#F7F2E8",theme:"學院風"},
+{id:"kt10",slot:"kidTop",emoji:"🤍",label:"白色學院襯衫",price:110,color:"#FFFDF7",accent:"#D8B88A",theme:"學院風"},
+{id:"kt11",slot:"kidTop",emoji:"🧶",label:"奶茶針織背心",price:150,color:"#D8B98B",accent:"#FFF8EA",theme:"學院風"},
+{id:"kt6",slot:"kidTop",emoji:"🩵",label:"公園藍襯衫",price:100,color:"#76B9DF",accent:"#F5FCFF",theme:"公園風"},
+{id:"kt12",slot:"kidTop",emoji:"🤍",label:"白色娃娃領上衣",price:120,color:"#FFFDF7",accent:"#F1D9A9",theme:"公園風"},
+{id:"kt7",slot:"kidTop",emoji:"🌼",label:"雛菊公園洋裝",price:150,color:"#F7C9D5",accent:"#FFF5D6",theme:"公園風",dress:true},
+{id:"kt13",slot:"kidTop",emoji:"🍓",label:"小草莓公園洋裝",price:160,color:"#F2A9B8",accent:"#FFF7E8",theme:"公園風",dress:true},
+{id:"kt14",slot:"kidTop",emoji:"🌼",label:"奶油黃吊帶褲",price:150,color:"#F2CD74",accent:"#FFF8D7",theme:"公園風",overall:true},
+{id:"kt8",slot:"kidTop",emoji:"🌙",label:"藍月亮睡衣",price:100,color:"#89AEE5",accent:"#FFF2A6",theme:"睡衣風",pajama:true},
+{id:"kt9",slot:"kidTop",emoji:"💗",label:"粉紅星星睡衣",price:100,color:"#F1AFC4",accent:"#FFF4C8",theme:"睡衣風",pajama:true},
+{id:"kb1",slot:"kidBottom",emoji:"👖",label:"學院格紋長褲",price:120,color:"#D8C8AE",accent:"#8F806C",theme:"學院風",pants:true,plaid:true},
+{id:"kb2",slot:"kidBottom",emoji:"👗",label:"學院格紋短裙",price:120,color:"#D8C8AE",accent:"#8F806C",theme:"學院風",skirt:true,plaid:true},
+{id:"kb3",slot:"kidBottom",emoji:"🌙",label:"藍月亮睡褲",price:90,color:"#89AEE5",accent:"#FFF2A6",theme:"睡衣風",pants:true,pajama:true},
+{id:"kb4",slot:"kidBottom",emoji:"💗",label:"粉紅星星睡褲",price:90,color:"#F1AFC4",accent:"#FFF4C8",theme:"睡衣風",pants:true,pajama:true},
+{id:"ks1",slot:"kidShoes",emoji:"👞",label:"學院小皮鞋",price:90,color:"#5C4437",accent:"#F4E8D7",theme:"學院風"},
+{id:"ks2",slot:"kidShoes",emoji:"👟",label:"公園白球鞋",price:80,color:"#FFFDF7",accent:"#91B8D4",theme:"公園風"},
+{id:"ks3",slot:"kidShoes",emoji:"🥿",label:"軟綿睡衣拖鞋",price:70,color:"#F5C5D2",accent:"#FFF2F5",theme:"睡衣風"},
+{id:"kh1",slot:"kidHat",emoji:"🧢",label:"小探險帽",price:90,color:"#79A6C8",accent:"#F6E7B8",theme:"公園風"},
+{id:"kh2",slot:"kidHat",emoji:"🌙",label:"星星睡帽",price:120,color:"#94AEE8",accent:"#FFF2A6",theme:"睡衣風"},
+{id:"kh4",slot:"kidHat",emoji:"👒",label:"小小草帽",price:100,color:"#F1D58B",accent:"#E98A72",theme:"公園風"},
+{id:"kh3",slot:"kidHat",emoji:"🎨",label:"奶茶貝雷帽",price:120,color:"#D8B98B",accent:"#FFF8EA",theme:"學院風"},
+{id:"ka1",slot:"kidAcc",emoji:"🎒",label:"紅色背包",price:90},
+{id:"ka2",slot:"kidAcc",emoji:"👓",label:"圓圓眼鏡",price:70},
+{id:"ka3",slot:"kidAcc",emoji:"🍀",label:"幸運徽章",price:60},
+*/
 
 // 房間位置定義
 const ROOM_SLOTS=[
@@ -186,42 +248,34 @@ const ROOM_SLOTS=[
 ];
 
 const ROOMITEMS=[
-  // 壁紙
-  {id:"w1",type:"wp",emoji:"🌸",label:"粉花壁紙",price:150,bg:"linear-gradient(135deg,#ffe0f0,#ffc8e0)"},
-  {id:"w2",type:"wp",emoji:"⭐",label:"星空壁紙",price:200,bg:"linear-gradient(135deg,#1a1a4e,#2d2d7a)"},
-  {id:"w3",type:"wp",emoji:"🌿",label:"森林壁紙",price:150,bg:"linear-gradient(135deg,#c8f0c8,#90d890)"},
-  {id:"w4",type:"wp",emoji:"🍭",label:"糖果壁紙",price:180,bg:"linear-gradient(135deg,#ffd6f0,#c8f0ff)"},
-  // 左上牆
-  {id:"d1",type:"dc",slot:"tl",emoji:"⭐",label:"星星燈",price:100},
-  {id:"d2",type:"dc",slot:"tl",emoji:"🖼️",label:"掛畫",price:80},
-  {id:"d3",type:"dc",slot:"tl",emoji:"🕐",label:"時鐘",price:90},
-  // 右上牆
-  {id:"d4",type:"dc",slot:"tr",emoji:"🌿",label:"植物",price:60},
-  {id:"d5",type:"dc",slot:"tr",emoji:"🪟",label:"窗簾",price:120},
-  {id:"d6",type:"dc",slot:"tr",emoji:"🎐",label:"風鈴",price:70},
-  // 左地板
-  {id:"d7",type:"dc",slot:"ml",emoji:"🛋️",label:"粉沙發",price:150},
-  {id:"d8",type:"dc",slot:"ml",emoji:"📚",label:"書架",price:120},
-  {id:"d9",type:"dc",slot:"ml",emoji:"🪑",label:"小椅子",price:80},
-  // 右地板
-  {id:"d10",type:"dc",slot:"mr",emoji:"🌵",label:"仙人掌",price:60},
-  {id:"d11",type:"dc",slot:"mr",emoji:"🎠",label:"旋轉木馬",price:200},
-  {id:"d12",type:"dc",slot:"mr",emoji:"🪴",label:"大盆栽",price:90},
-  // 左角落
-  {id:"d13",type:"dc",slot:"bl",emoji:"🏆",label:"獎盃",price:200},
-  {id:"d14",type:"dc",slot:"bl",emoji:"🎸",label:"吉他",price:160},
-  {id:"d15",type:"dc",slot:"bl",emoji:"🎨",label:"畫板架",price:130},
-  // 右角落
-  {id:"d16",type:"dc",slot:"br",emoji:"🧸",label:"泰迪熊",price:80},
-  {id:"d17",type:"dc",slot:"br",emoji:"🎮",label:"遊戲機",price:180},
-  {id:"d18",type:"dc",slot:"br",emoji:"🪆",label:"俄羅斯娃娃",price:100},
+  // 奶油寵物房間 PNG/WebP 裝飾（2026-06-24）
+  {id:"cream_paw_round_rug",type:"dc",slot:"bl",emoji:"🐾",label:"奶油爪印地毯",price:220,
+    asset:"assets/furniture/cream_pet_room/cream_paw_round_rug.webp",
+    thumb:"assets/furniture/cream_pet_room/thumbs/cream_paw_round_rug.webp",scale:1.28},
+  {id:"cream_star_cushion",type:"dc",slot:"br",emoji:"⭐",label:"星星軟墊",price:180,
+    asset:"assets/furniture/cream_pet_room/cream_star_cushion.webp",
+    thumb:"assets/furniture/cream_pet_room/thumbs/cream_star_cushion.webp",scale:1.18},
+  {id:"cream_hanging_plant",type:"dc",slot:"tr",emoji:"🌿",label:"奶油吊掛植物",price:260,
+    asset:"assets/furniture/cream_pet_room/cream_hanging_plant.webp",
+    thumb:"assets/furniture/cream_pet_room/thumbs/cream_hanging_plant.webp",scale:1.12},
+  // emoji 裝飾版本（不需 PNG/SVG）
+  {id:"d_plant",type:"dc",slot:"tr",emoji:"🌿",label:"掛式植物",price:190},
+  {id:"d_bed",type:"dc",slot:"bl",emoji:"🛏️",label:"小床",price:250},
+  {id:"d_shelf",type:"dc",slot:"ml",emoji:"📚",label:"書架",price:240},
+  {id:"d_frame",type:"dc",slot:"br",emoji:"🖼️",label:"照片相框",price:160},
+  {id:"d_pot",type:"dc",slot:"mr",emoji:"🪴",label:"盆栽",price:100},
+  {id:"d_candle",type:"dc",slot:"tl",emoji:"🕯️",label:"蠟燭",price:130},
+  {id:"d_tapestry",type:"dc",slot:"tr",emoji:"🖼️",label:"掛毯",price:160},
+  {id:"d_sofa",type:"dc",slot:"ml",emoji:"🛋️",label:"沙發",price:240},
 ];
 
 const TOYS=[
   {id:"t1",emoji:"🎸",label:"小吉他",price:200,joy:25},
   {id:"t2",emoji:"🎨",label:"畫板",price:150,joy:20},
   {id:"t3",emoji:"🪀",label:"溜溜球",price:100,joy:15},
-  {id:"t4",emoji:"🎮",label:"遊戲機",price:280,joy:35},
+  {id:"t4",emoji:"🏀",label:"籃球",price:120,joy:22},
+  {id:"t5",emoji:"🪁",label:"風箏",price:180,joy:28},
+  {id:"t6",emoji:"🎮",label:"遊戲機",price:280,joy:35},
 ];
 
 const ACHIEVEMENTS=[
@@ -784,12 +838,17 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
   const lv=LEVELS[Math.min(level-1,4)],s=size*lv.sz*(kind==="chick"?.9:kind==="frog"?.94:1);
   const hI=OUTFITS.find(i=>i.id===hat),aI=OUTFITS.find(i=>i.id===acc);
   const happy=mood>=4,sick=mood<=1,lv5=level>=5;
+  /* Updated by Claude on 2026/06/23
+     Reason: Added "dog" config as an SVG fallback for the new 4th pet (小狗) so the
+     game still renders correctly before the real PNG dog assets are wired in by
+     Codex. Uses warm cream/tan tones distinct from fox (orange) and cat (yellow). */
   const cfg={
     cat:{b:"#FFD878",l:"#FFF1B3",d:"#B66C26",e:"#3D291B",k:"#F5A6B8"},
     chick:{b:"#FFE052",l:"#FFF5A8",d:"#C58B12",e:"#3B2A16",k:"#F5A6B8"},
     fox:{b:"#F79A48",l:"#FFE4B2",d:"#A94E1D",e:"#352217",k:"#F5A6B8"},
     frog:{b:"#82C985",l:"#CFF1C5",d:"#397B45",e:"#203A22",k:"#F5A6B8"},
-    capy:{b:"#C9986E",l:"#E6BE98",d:"#70472E",e:"#302219",k:"#E99391"}
+    capy:{b:"#C9986E",l:"#E6BE98",d:"#70472E",e:"#302219",k:"#E99391"},
+    dog:{b:"#F2D9A8",l:"#FCEFD4",d:"#B8895A",e:"#3A2A1C",k:"#F5A6B8"}
   }[kind];
   const B=cfg.b,L=cfg.l,D=cfg.d,E=cfg.e,K=cfg.k,W="#FFFDF4";
   const faceY=kind==="frog"?49:kind==="capy"?57:54;
@@ -807,6 +866,7 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
       {kind==="fox"&&<g className="cute-wiggle"><path d="M44 106 Q15 97 19 73 Q22 53 38 70 Q50 84 49 101Z" fill={B} stroke={D} strokeWidth="2.6"/><path d="M24 72 Q20 59 37 70 Q44 77 47 88 Q32 83 24 72Z" fill={W}/></g>}
       {kind==="capy"&&<ellipse className="cute-wiggle" cx="39" cy="102" rx="10" ry="7" fill={D}/>} 
       {kind==="chick"&&<><path d="M48 100 Q24 91 38 76 Q51 79 59 93Z" fill={L} stroke={D} strokeWidth="2.4"/><path d="M111 98 Q134 87 124 75 Q111 78 101 92Z" fill={L} stroke={D} strokeWidth="2.4"/></>}
+      {kind==="dog"&&<path className="cute-wiggle" d="M44 104 Q20 98 26 78 Q31 66 40 76 Q33 86 41 96" fill={B} stroke={D} strokeWidth="2.6" strokeLinecap="round"/>}
 
       {/* body and feet */}
       <ellipse cx="80" cy="106" rx={kind==="frog"?39:kind==="chick"?38:44} ry={kind==="frog"?28:31} fill={"url(#petBody-"+kind+")"} stroke={D} strokeWidth="2.7"/>
@@ -822,6 +882,7 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
       {kind==="capy"&&<><circle cx="73" cy="35" r="10" fill={D}/><circle cx="128" cy="37" r="10" fill={D}/><circle cx="73" cy="35" r="5" fill={K}/><circle cx="128" cy="37" r="5" fill={K}/></>}
       {kind==="frog"&&<><circle cx="78" cy="34" r="17" fill={B} stroke={D} strokeWidth="2.5"/><circle cx="124" cy="34" r="17" fill={B} stroke={D} strokeWidth="2.5"/></>}
       {kind==="chick"&&<path d="M83 28 Q91 10 99 29 Q108 12 112 34" fill={B} stroke={D} strokeWidth="2.5" strokeLinecap="round"/>}
+      {kind==="dog"&&<><ellipse cx="72" cy="40" rx="13" ry="22" fill={B} stroke={D} strokeWidth="2.6" transform="rotate(-18 72 40)"/><ellipse cx="130" cy="40" rx="13" ry="22" fill={B} stroke={D} strokeWidth="2.6" transform="rotate(18 130 40)"/></>}
 
       <ellipse cx="102" cy="59" rx={kind==="frog"?38:kind==="chick"?35:38} ry={kind==="capy"?31:34} fill={"url(#petBody-"+kind+")"} stroke={D} strokeWidth="2.8"/>
       <ellipse cx="91" cy="45" rx="16" ry="8" fill={W} opacity=".34" transform="rotate(-15 91 45)"/>
@@ -829,6 +890,7 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
       {kind==="cat"&&<><path d="M75 54 Q85 43 94 53" fill="none" stroke={D} strokeWidth="3"/><path d="M91 35 Q98 48 105 35" fill="none" stroke={D} strokeWidth="3"/></>}
       {kind==="capy"&&<ellipse cx="119" cy="70" rx="24" ry="16" fill={L} stroke={D} strokeWidth="2"/>}
       {kind==="frog"&&<ellipse cx="102" cy="69" rx="31" ry="20" fill={L} opacity=".65"/>}
+      {kind==="dog"&&<ellipse cx="102" cy="71" rx="27" ry="19" fill={L} opacity=".85"/>}
 
       {/* eyes */}
       {sick?<g stroke="#C84E52" strokeWidth="2.8" strokeLinecap="round"><path d={"M82 "+(faceY-4)+" l10 8 M92 "+(faceY-4)+" l-10 8"}/><path d={"M111 "+(faceY-4)+" l10 8 M121 "+(faceY-4)+" l-10 8"}/></g>
@@ -856,6 +918,7 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
       {kind==="frog"&&<><circle cx="95" cy="66" r="1.4" fill={D}/><circle cx="109" cy="66" r="1.4" fill={D}/></>}
       {kind==="chick"&&<><circle cx="75" cy="74" r="1.3" fill="#F5A36A"/><circle cx="80" cy="76" r="1" fill="#F5A36A"/></>}
       {kind==="capy"&&<path d="M91 29 Q96 21 101 29 Q106 21 111 30" fill="none" stroke={D} strokeWidth="2.2" strokeLinecap="round"/>}
+      {kind==="dog"&&<g stroke={D} strokeWidth="1.4" strokeLinecap="round" opacity=".7"><path d="M77 69L63 67 M77 73L62 76 M127 68L142 65 M127 73L143 77"/></g>}
       {hunger<30&&!eating&&<text x="62" y="52" fontSize="15" style={{animation:"float 1.5s infinite"}}>💧</text>}
       {eating&&<text x="141" y="44" fontSize="20" style={{animation:"hUp .6s forwards"}}>💛</text>}
       {hI&&<text x="102" y="29" fontSize="24" textAnchor="middle">{hI.emoji}</text>}
@@ -864,14 +927,163 @@ function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
   </div>;
 }
 
+/* Updated by Claude on 2026/06/23 (iteration 2)
+   Reason: Regenerated WebP assets after owner PNG tweaks:
+   - Female hair despill (reduced white fringing via alpha blur)
+   - Owner size increased (bottom_margin 0.03→0.01, pushed up)
+   All character/park assets re-encoded to WebP with same quality. */
+const IMG={
+  owner_boy_normal:"assets/owner/boy/normal.webp",
+  owner_girl_school_g:"assets/owner/girl/school_g.webp",
+  owner_boy_school_b:"assets/owner/boy/school_b.webp",
+  owner_boy_denim_b:"assets/owner/boy/denim_b.webp",
+  owner_girl_denim_g:"assets/owner/girl/denim_g.webp",
+  owner_girl_resort_g:"assets/owner/girl/resort_g.webp",
+  owner_boy_resort_b:"assets/owner/boy/resort_b.webp",
+  owner_girl_normal:"assets/owner/girl/normal.webp",
+  horse_normal:"assets/pets/horse/normal.webp",
+  horse_happy:"assets/pets/horse/happy.webp",
+  horse_sleep:"assets/pets/horse/sleep.webp",
+  horse_lonely:"assets/pets/horse/lonely.webp",
+  cat_normal:"assets/pets/cat/normal.webp",
+  cat_happy:"assets/pets/cat/happy.webp",
+  cat_sleep:"assets/pets/cat/sleep.webp",
+  cat_lonely:"assets/pets/cat/lonely.webp",
+  dog_normal:"assets/pets/dog/normal.webp",
+  dog_happy:"assets/pets/dog/happy.webp",
+  dog_sleep:"assets/pets/dog/sleep.webp",
+  dog_lonely:"assets/pets/dog/lonely.webp",
+  fox_normal:"assets/pets/fox/normal.webp",
+  fox_happy:"assets/pets/fox/happy.webp",
+  fox_sleep:"assets/pets/fox/sleep.webp",
+  fox_lonely:"assets/pets/fox/lonely.webp",
+  park_night:"assets/rooms/park/night.webp",
+  park_day:"assets/rooms/park/day.webp",
+  room_bedroom_sunny:"assets/rooms/bedroom/sunny_window.webp",
+};
+/* Updated by Claude on 2026/06/24
+   Reason: "休閒/casual" has no dedicated outfit PNG because it IS the base
+   look (white tee + denim shorts) that owner_girl_normal/owner_boy_normal
+   already show — confirmed by Maggie. These aliases just point the casual_g/
+   casual_b lookup keys at the existing normal sprites (same data, zero extra
+   bytes) so the closet/shop thumbnails render the real look instead of the
+   "尚未上架" placeholder, which would otherwise incorrectly imply casual has
+   no art yet when it's actually always available from the start. */
+IMG.owner_girl_casual_g=IMG.owner_girl_normal;
+IMG.owner_boy_casual_b=IMG.owner_boy_normal;
+;
+const IMG_FALLBACK="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 140"><rect width="160" height="140" rx="28" fill="#FFF7EA"/><circle cx="80" cy="64" r="34" fill="#FFE0B8" stroke="#8B6B4F" stroke-width="5"/><circle cx="67" cy="59" r="5" fill="#5B4636"/><circle cx="93" cy="59" r="5" fill="#5B4636"/><path d="M66 78 Q80 90 94 78" fill="none" stroke="#5B4636" stroke-width="5" stroke-linecap="round"/><text x="80" y="120" text-anchor="middle" font-size="16" fill="#8B6B4F" font-family="sans-serif">圖片載入中</text></svg>`);
+function handleImgError(e){
+  const img=e.currentTarget;
+  if(img.dataset.fallbackApplied)return;
+  img.dataset.fallbackApplied="1";
+  img.src=IMG_FALLBACK;
+}
+const ASSET_VERSION="20260624-dog-regenerated-accessories";
+function assetSrc(src){
+  if(!src||src.indexOf("data:")===0)return src;
+  return src+(src.indexOf("?")>=0?"&":"?")+"v="+ASSET_VERSION;
+}
+
+function RoomItemArt({item,size=64,thumb=false,style}){
+  const src=thumb?(item.thumb||item.asset):item.asset;
+  if(src)return <img src={assetSrc(src)} onError={handleImgError} alt={item.label||""} draggable={false}
+    style={{width:size,height:size,objectFit:"contain",display:"block",userSelect:"none",pointerEvents:"none",...style}}/>;
+  return <span style={{fontSize:size*.55,filter:"drop-shadow(0 4px 2px rgba(70,40,10,.14))"}}>{item.emoji}</span>;
+}
+
+function PetAccessoryArt({item,size=44,style}){
+  const src=item&&(item.thumb||item.asset);
+  if(src)return <img src={assetSrc(src)} onError={handleImgError} alt={item.label||""} draggable={false}
+    style={{width:size,height:size,objectFit:"contain",display:"block",userSelect:"none",pointerEvents:"none",...style}}/>;
+  return <span style={{fontSize:size*.62}}>{item&&item.emoji}</span>;
+}
+
+const PET_ACCESSORY_ANCHORS={
+  dog:{hat:{x:42,y:12,w:56,rot:-7},acc:{x:40,y:57,w:44,rot:0}},
+  cat:{hat:{x:50,y:12,w:52,rot:0},acc:{x:50,y:58,w:42,rot:0}},
+  fox:{hat:{x:50,y:12,w:52,rot:0},acc:{x:50,y:58,w:42,rot:0}},
+  horse:{hat:{x:58,y:10,w:54,rot:7},acc:{x:54,y:59,w:42,rot:0}},
+  chick:{hat:{x:50,y:12,w:50,rot:0},acc:{x:50,y:60,w:40,rot:0}},
+  frog:{hat:{x:50,y:10,w:52,rot:0},acc:{x:50,y:60,w:40,rot:0}},
+  capy:{hat:{x:50,y:13,w:52,rot:0},acc:{x:50,y:60,w:42,rot:0}},
+};
+
+function OwnerImg({gender,outfitId,size,style}){
+  const s=size||1;
+  /* Updated by Claude on 2026/06/24
+     Reason: hook up the whole-outfit PNG system. When outfitId is equipped,
+     look for an asset named owner_<gender>_<outfitId> (e.g. owner_girl_school_g).
+     Falls back to the base "normal" sprite whenever that key doesn't exist yet —
+     this is the expected state today since no outfit PNGs have been produced.
+     Once real art lands under those key names, it appears automatically with
+     zero further code changes. */
+  const base=gender==="boy"?"owner_boy":"owner_girl";
+  const outfitKey=outfitId?base+"_"+outfitId:null;
+  const src=(outfitKey&&IMG[outfitKey])||IMG[base+"_normal"];
+  return <img src={assetSrc(src)} onError={handleImgError} draggable={false} alt="" style={{width:100*s,height:150*s,
+    objectFit:"contain",objectPosition:"bottom center",display:"block",
+    userSelect:"none",pointerEvents:"none",...style}}/>;
+}
+
+function PetImg({petType,mood,hunger,running,eating,isNight,sleeping,size,style,hat,acc}){
+  const t=petType||"horse";
+  const m=mood==null?4:mood;
+  /* Updated by Claude on 2026/06/23
+     Reason: state priority, matching the asset set's 4 emotional states:
+     1) sleeping (neglect.sleeping — player was away 3+ days, pet dozed off waiting)
+        is the strongest, most deliberate signal in the existing game logic, so it
+        wins over everything else -> Sleep art.
+     2) mood<=1 (today's habits/interaction are low) -> Lonely art (sad/sulky face,
+        distinct from "sleeping" -- this is "needs attention today", not "away for
+        days").
+     3) isNight && not actively playing -> ambient Sleep art, so the pet looks
+        sleepy in the evening even without the multi-day neglect trigger.
+     4) mood>=4 -> Happy art. Otherwise -> Normal art (the default/idle look). */
+  let state="normal";
+  if(sleeping)state="sleep";
+  else if(m<=1)state="lonely";
+  else if(isNight&&!running&&!eating)state="sleep";
+  else if(m>=4)state="happy";
+  const key=t+"_"+state;
+  const src=IMG[key]||IMG[t+"_normal"]||IMG.horse_normal;
+  const s=size||1;
+  const hatItem=OUTFITS.find(i=>i.id===hat),accItem=OUTFITS.find(i=>i.id===acc);
+  const anchors=PET_ACCESSORY_ANCHORS[t]||PET_ACCESSORY_ANCHORS.dog;
+  const drawAccessory=(item,kind)=>{
+    if(!item)return null;
+    const a=anchors[kind]||anchors.hat;
+    const baseW=160*s;
+    return <div style={{position:"absolute",left:a.x+"%",top:a.y+"%",transform:"translate(-50%,-50%) rotate("+(a.rot||0)+"deg)",zIndex:kind==="hat"?4:5,
+      pointerEvents:"none",filter:"drop-shadow(0 3px 1px rgba(80,50,20,.10))"}}>
+      <PetAccessoryArt item={item} size={baseW*(a.w/100)}/>
+    </div>;
+  };
+  return <div style={{display:"inline-block",position:"relative",animation:running?"none":"float 3s ease-in-out infinite"}}>
+    <img src={assetSrc(src)} onError={handleImgError} draggable={false} alt="" style={{width:160*s,height:150*s,
+      objectFit:"contain",objectPosition:"bottom center",display:"block",
+      userSelect:"none",pointerEvents:"none",...style}}/>
+    {drawAccessory(hatItem,"hat")}
+    {drawAccessory(accItem,"acc")}
+  </div>;
+}
+
 function PetView(props){
   const t=props.petType||"horse";
-  if(t==="cat") return <CutePet kind="cat" {...props}/>;
+  /* Updated by Claude on 2026/06/23
+     Reason: The 4 real pets (horse/cat/dog/fox) now render the real hand-drawn PNG
+     art via PetImg instead of the SVG-drawn CutePet placeholder. chick/frog/capy
+     dispatch is KEPT here (SVG fallback) so any existing save with one of those
+     legacy petTypes still renders correctly instead of crashing/showing nothing —
+     these legacy players get swept into the forced reselection flow
+     (petUpdate20260623) on next load and will pick one of the 4 new pets, after
+     which this fallback path won't be hit again for them. Do not remove until
+     confident no legacy saves remain. */
+  if(t==="horse"||t==="cat"||t==="dog"||t==="fox") return <PetImg {...props}/>;
   if(t==="chick") return <CutePet kind="chick" {...props}/>;
-  if(t==="fox") return <CutePet kind="fox" {...props}/>;
   if(t==="frog") return <CutePet kind="frog" {...props}/>;
   if(t==="capy") return <CutePet kind="capy" {...props}/>;
-  return <HorsePremium {...props}/>;
+  return <PetImg {...props}/>;
 }
 
 /* ═══════════════ LITTLE OWNER ═══════════════ */
@@ -999,15 +1211,20 @@ function KidView({gender,skin,top,bottom,shoes,hat,acc,size}){
     </div>);
 }
 
-/* SVG 小主人預覽：不再依賴外部 PNG，避免 GitHub Pages 圖片路徑破圖 */
-function OwnerPreview({gender,size,style}){
-  const s=size||1;
-  return <div style={{width:100*s,height:150*s,display:"inline-flex",alignItems:"flex-end",justifyContent:"center",...style}}>
-    <KidView gender={gender||"girl"} skin="#F2C7A5" size={s}/>
-  </div>;
+/* Updated by Claude on 2026/06/24
+   Reason: outfitId is now wired end-to-end. equipped.outfit (set by ClosetPage's
+   equip()) flows down through ActiveKid/OwnerPreview into OwnerImg, which looks
+   for owner_<gender>_<outfitId> in IMG. Today that lookup always misses (no
+   outfit-pack PNGs exist yet) so every call site still renders the base PNG —
+   correct/expected behavior, not a bug. The old top/bottom/shoes/hat/acc props
+   (paper-doll slots) are no longer read here; they belonged to the disabled
+   KID_ITEMS system. KidView itself is left intact further down so
+   KidItemIcon/BaseKidItemIcon (small SVG shop icons) keep working unaffected. */
+function OwnerPreview({gender,outfitId,size,style}){
+  return <OwnerImg gender={gender||"girl"} outfitId={outfitId} size={size} style={style}/>;
 }
-function ActiveKid({gender,skin,top,bottom,shoes,hat,acc,size}){
-  return <KidView gender={gender||"girl"} skin={skin||"#F2C7A5"} top={top} bottom={bottom} shoes={shoes} hat={hat} acc={acc} size={size||1}/>;
+function ActiveKid({gender,outfitId,size}){
+  return <OwnerImg gender={gender||"girl"} outfitId={outfitId} size={size}/>;
 }
 
 /* 服飾商品小圖：用 SVG 呈現，讓商店/衣櫃不只顯示 emoji */
@@ -1244,6 +1461,55 @@ function Toast({msg,color}){
 }
 
 /* ═══════════════ ONBOARDING ═══════════════ */
+/* Updated by Claude on 2026/06/23
+   Reason: New component for the forced one-time pet reselection flow. Per requirement:
+   "本次更新後，所有玩家進入遊戲時，都直接進入「選擇寵物」畫面一次" — triggered when
+   profile exists but profile.petUpdate20260623Completed is not true. This is
+   intentionally NOT the full Onboarding flow (no name/PIN/task setup) — it's a single
+   lightweight screen so existing players aren't forced to redo setup. On confirm:
+   only profile.petType and profile.petUpdate20260623Completed are updated; points,
+   tasks, checked, owned, equipped, backpack, hunger, diary, wishes, bonusTasks,
+   achievements, streak, petMood, poops, neglect are all left completely untouched
+   (the caller spreads {...profile} so nothing else in profile is touched either).
+   No data is cleared, no migration logic beyond this single field swap. */
+function PetReselect({currentPetType,onConfirm}){
+  const [petType,setPet]=useState(
+    PETS.some(p=>p.id===currentPetType)?currentPetType:"horse"
+  );
+  return(
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#FFFBF0,#FFF5E8,#FFF0F8)",
+      display:"flex",alignItems:"center",justifyContent:"center",padding:20,overflowY:"auto"}}>
+      <div style={{...cardS(C.card),padding:"28px 20px",width:"100%",maxWidth:440}}>
+        <div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{fontSize:40,marginBottom:8}}>🎉</div>
+          <div style={{fontSize:19,fontWeight:900,color:C.brown,marginBottom:8}}>寵物王國更新囉！</div>
+          <div style={{fontSize:12,color:C.soft,fontWeight:800,lineHeight:1.7}}>
+            請選一位新的小夥伴陪你繼續冒險。<br/>
+            <span style={{fontSize:10,color:"#9A7040"}}>你的星星、任務紀錄和房間佈置都會保留喔 💛</span>
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+          {PETS.map(p=>(
+            <button key={p.id} className="btn" onClick={()=>setPet(p.id)} style={{
+              ...bub(petType===p.id?C.yellow:p.c+"28"),borderRadius:20,padding:"14px 10px",textAlign:"center",
+              outline:petType===p.id?"3px solid "+C.butter:"none",
+              boxShadow:petType===p.id?"0 6px 0 rgba(180,120,0,.18)":"0 4px 0 rgba(150,80,0,.07)"}}>
+              <div style={{animation:"float 3s infinite",marginBottom:6}}>
+                <PetView petType={p.id} level={1} mood={4} hunger={80} size={.42}/>
+              </div>
+              <div style={{fontSize:12,fontWeight:900,color:C.brown}}>{p.label}</div>
+              <div style={{fontSize:9,color:C.soft,fontWeight:700,marginTop:2}}>{p.desc}</div>
+            </button>))}
+        </div>
+        <button className="btn" onClick={()=>onConfirm(petType)} style={{
+          ...bub(C.orange),width:"100%",padding:"15px 0",borderRadius:999,
+          fontSize:16,fontWeight:900,color:"#fff",boxShadow:"0 6px 0 rgba(180,80,0,.2)"}}>
+          🌟 就選這隻！繼續冒險
+        </button>
+      </div>
+    </div>);
+}
+
 function Onboarding({onDone,initialKidName}){
   const [step,setStep]=useState(0);
   const [petType,setPet]=useState("horse");
@@ -1277,7 +1543,13 @@ function Onboarding({onDone,initialKidName}){
     if(step===5){
       if(pin.length<4)return setErr("請設定至少4位數字密碼！");
       if(pin!==pin2)return setErr("兩次密碼不一樣喔！");
-      onDone({kidName:kidName.trim(),petName:petName.trim()||"剛出生的小寶寶",pin,petType,tasks,gender,skin});return;
+      onDone({kidName:kidName.trim(),petName:petName.trim()||"剛出生的小寶寶",pin,petType,tasks,gender,skin,
+        /* Updated by Claude on 2026/06/23 — new players pick from the new 4-pet roster
+           during normal onboarding, so they should never see the PetReselect screen.
+           Also include default outfit (casual) based on gender. */
+        petUpdate20260623Completed:true});
+      // 回傳後在父組件設置預設衣服
+      return;
     }
     setStep(s=>s+1);
   };
@@ -1396,13 +1668,25 @@ function Onboarding({onDone,initialKidName}){
         {step===2&&<>
           <div style={{fontSize:21,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:6}}>創造你的小主人 🌟</div>
           <div style={{fontSize:12,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:12}}>讓{cur.label}認識你吧！</div>
-          <div style={{textAlign:"center",height:125,marginBottom:8}}>
-            <KidView gender={gender} skin={skin} size={.78}/>
+          {/* 並排預覽男生女生，方便對比 */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12,alignItems:"flex-end",justifyContent:"center"}}>
+            <div style={{textAlign:"center",padding:"8px",borderRadius:16,background:gender==="boy"?C.yellow:C.light,transition:"all .25s"}}>
+              <div style={{height:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+                <OwnerImg gender="boy" size={.65}/>
+              </div>
+              <div style={{fontSize:11,fontWeight:900,color:C.brown,marginTop:4}}>👦 男生</div>
+            </div>
+            <div style={{textAlign:"center",padding:"8px",borderRadius:16,background:gender==="girl"?C.yellow:C.light,transition:"all .25s"}}>
+              <div style={{height:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
+                <OwnerImg gender="girl" size={.65}/>
+              </div>
+              <div style={{fontSize:11,fontWeight:900,color:C.brown,marginTop:4}}>👧 女生</div>
+            </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-            {[["boy","👦 男生"],["girl","👧 女生"]].map(([k,l])=>(
+            {[["boy","選擇 👦 男生"],["girl","選擇 👧 女生"]].map(([k,l])=>(
               <button key={k} className="btn" onClick={()=>setGender(k)}
-                style={{...bub(gender===k?C.yellow:C.light,16),padding:"9px 0",fontSize:12,
+                style={{...bub(gender===k?C.yellow:C.light,16),padding:"10px 0",fontSize:12,
                   fontWeight:900,color:C.brown,border:"none",outline:gender===k?"3px solid "+C.butter:"none"}}>{l}</button>))}
           </div>
           <div style={{display:"flex",justifyContent:"center",gap:10,marginBottom:12}}>
@@ -1521,21 +1805,27 @@ function Onboarding({onDone,initialKidName}){
 
         {err&&<div style={{color:"#d04040",fontSize:12,fontWeight:800,textAlign:"center",margin:"6px 0"}}>{err}</div>}
 
-        {step>0&&<button className="btn" onClick={next} style={{
-          ...bub(C.orange),width:"100%",padding:"14px 0",borderRadius:999,
-          fontSize:15,fontWeight:900,color:"#fff",marginTop:14,
-          boxShadow:"0 6px 0 rgba(180,80,0,.2)"}}>
-          {step<5?"下一步 →":"🎉 開始冒險！"}
-        </button>}
-        {step>0&&<div style={{textAlign:"center",marginTop:10}}>
-          <span onClick={()=>setStep(s=>s-1)}
-            style={{color:"#c0a080",fontSize:12,fontWeight:800,cursor:"pointer"}}>← 返回</span>
+        {/* Updated by Claude on 2026/06/23
+            Reason: Fix back navigation in onboarding - previous "← 返回" was a plain
+            <span> with no button styling/hit area, hard to tap on mobile. Now a proper
+            full-width button row alongside "下一步", so users who pick the wrong pet
+            or character can reliably go back and reselect without getting stuck. */}
+        {step>0&&<div style={{display:"flex",gap:8,marginTop:14}}>
+          <button className="btn" onClick={()=>{setErr("");setStep(s=>s-1);}} style={{
+            ...bub(C.light),flex:"0 0 92px",padding:"14px 0",borderRadius:999,
+            fontSize:14,fontWeight:900,color:C.soft,border:"none"}}>← 返回</button>
+          <button className="btn" onClick={next} style={{
+            ...bub(C.orange),flex:1,padding:"14px 0",borderRadius:999,
+            fontSize:15,fontWeight:900,color:"#fff",
+            boxShadow:"0 6px 0 rgba(180,80,0,.2)"}}>
+            {step<5?"下一步 →":"🎉 開始冒險！"}
+          </button>
         </div>}
       </div>
     </div>);
 }
 /* ═══════════════ PARENT PANEL ═══════════════ */
-function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,musicOn,setMusicOn,storageKey,playerId,onClose}){
+function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,onClose}){
   const [authed,setAuthed]=useState(false);
   const [ptab,setPtab]=useState("tasks");
   const [nTask,setNTask]=useState(""),nPts=useRef(20);
@@ -1602,6 +1892,14 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
 
       {ptab==="tasks"&&<>
         <div style={{fontSize:11,color:C.soft,fontWeight:800,marginBottom:10}}>小孩完成後才能核准 ⭐</div>
+        <div style={{...bub(C.light,20),padding:5,display:"flex",gap:5,marginBottom:12,border:"none"}}>
+          {[["approval","🔐 核准模式","孩子打勾後，家長核准才發星星"],["trust","🌱 信任模式","孩子打勾後，立即發星星"]].map(([k,l,sub])=>(
+            <button key={k} className="btn" onClick={()=>setApprovalMode(k)}
+              style={{flex:1,...bub(approvalMode===k?C.yellow:"transparent",16),padding:"9px 8px",border:"none",boxShadow:approvalMode===k?"0 3px 0 rgba(0,0,0,.08)":"none"}}>
+              <div style={{fontSize:11,fontWeight:900,color:C.brown}}>{l}</div>
+              <div style={{fontSize:8,fontWeight:800,color:C.soft,marginTop:2}}>{sub}</div>
+            </button>))}
+        </div>
         {tasks.map(h=>{
           const kidKey="kid-"+today+"-"+h.id;
           const okKey="ok-"+today+"-"+h.id;
@@ -1910,64 +2208,88 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
 }
 
 /* ═══════════════ LITTLE OWNER CLOSET PAGE ═══════════════ */
-function ClosetPage({profile,points,isTablet,closetTab,setClosetTab,equipped,setEquipped,owned,equip,openShop}){
-  const tabs=[
-    {k:"kidTop",icon:"👕",label:"上衣",base:"基本白上衣"},
-    {k:"kidBottom",icon:"👖",label:"褲子",base:"基本白長褲"},
-    {k:"kidShoes",icon:"👟",label:"鞋襪",base:"白襪球鞋"},
-    {k:"kidHat",icon:"💇",label:"髮型帽子",base:"原本髮型"},
-    {k:"kidAcc",icon:"✨",label:"配件",base:"不戴配件"}
-  ];
-  const active=tabs.find(t=>t.k===closetTab)||tabs[0];
-  const items=KID_ITEMS.filter(i=>i.slot===closetTab&&owned.indexOf(i.id)>=0);
-  const dressed=equipped.kidTop||equipped.kidBottom||equipped.kidShoes||equipped.kidHat||equipped.kidAcc;
-  return <div style={{padding:isTablet?"18px 22px 24px":"14px 14px 20px",maxWidth:isTablet?720:480,margin:"0 auto"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-      <div><div style={{fontSize:isTablet?23:20,fontWeight:900,color:C.brown}}>🪞 {profile.kidName}的衣櫃</div>
-        <div style={{fontSize:10,color:C.soft,fontWeight:800,marginTop:2}}>每天都能換一個喜歡的造型</div></div>
-      <div style={{...bub(C.yellow,999),padding:"7px 12px",fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>⭐ {points}</div>
-    </div>
-    <div style={{display:"grid",gridTemplateColumns:isTablet?"minmax(270px,.9fr) minmax(340px,1.1fr)":"1fr",gap:14}}>
-      <div style={{...cardS("linear-gradient(180deg,#DDF4FF 0%,#FFF7DE 63%,#E6C89D 64%,#D9B785 100%)"),
-        height:isTablet?390:315,position:"relative",display:"flex",alignItems:"flex-end",justifyContent:"center",overflow:"hidden",paddingBottom:7}}>
-        <div style={{position:"absolute",top:15,left:16,fontSize:28}}>🪟</div><div style={{position:"absolute",top:18,right:16,fontSize:24}}>🌿</div>
-        <div style={{position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",...bub("rgba(255,255,255,.8)",999),
-          border:"none",padding:"5px 12px",fontSize:10,fontWeight:900,color:C.brown,whiteSpace:"nowrap"}}>{dressed?"✨ 今日穿搭":"🌱 基本造型"}</div>
-        <div style={{position:"absolute",bottom:22,left:"14%",width:"72%",height:17,borderRadius:"50%",background:"rgba(91,61,34,.13)",filter:"blur(2px)"}}/>
-        <div style={{animation:"float 3.2s ease-in-out infinite",position:"relative",zIndex:2}}>
-          <ActiveKid gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={equipped.kidTop}
-            bottom={equipped.kidBottom} shoes={equipped.kidShoes} hat={equipped.kidHat} acc={equipped.kidAcc} size={isTablet?1.98:1.72}/>
+/* Updated by Claude on 2026/06/23
+   Reason: Rebuilt the closet body per requirement #2 (紙娃娃式整套預覽). The old
+   per-slot (上衣/褲子/鞋襪/髮型/配件) tab+grid picker is removed here because
+   KID_ITEMS is now empty (clothing was fully de-listed from the shop this round,
+   see SHOP MODAL comment) -- with no items, every tab rendered nothing but an
+   empty "已擁有" base option and a dead-end "去商店收藏" card, which read as
+   broken rather than intentional. This is replaced with a clean "整套造型包準備
+   中" placeholder card. The large preview pane on the left is UNCHANGED (still
+   ActiveKid → now showing the real PNG owner automatically) and is exactly the
+   hook point for whole-outfit PNG packs later: each future pack becomes one
+   selectable card in a row, tapping one re-points ActiveKid/OwnerImg at that
+   pack's image instead of the base PNG. closetTab/setClosetTab/equipped/
+   setEquipped/owned/equip/openShop props are all still accepted (zero call-site
+   changes needed) but unused below until that content exists -- intentionally
+   inert, not deleted, so wiring in real packs later is a small diff. */
+function ClosetPage({profile,points,isTablet,closetTab,setClosetTab,equipped,setEquipped,owned,equip,openShop,setTab}){
+  // Updated by Claude on 2026/06/23 / Reason: Rewrite for gender-based outfits and outfit detail page
+  const playerGender=profile.gender||"girl";
+  const OUTFITS=playerGender==="boy"?OUTFIT_CLOTHES_BOY:OUTFIT_CLOTHES_GIRL;
+  const isPurchased=o=>owned.indexOf(o.id)>=0;
+
+  /* Updated by Claude on 2026/06/24
+     Reason: shared thumbnail renderer for both the closet grid and the detail
+     page. Looks for a real asset at owner_<gender>_<outfitId> first — once art
+     ships under that name it appears automatically, no further code changes.
+     Until then, shows an on-brand "尚未上架" placeholder (soft Morandi tone +
+     hanger icon) instead of a bare "?", so the empty state still looks designed
+     rather than broken. */
+  const OutfitThumb=({outfit,height,iconSize})=>{
+    const key="owner_"+playerGender+"_"+outfit.id;
+    const realArt=IMG[key];
+    if(realArt)return <img src={realArt} onError={handleImgError} alt={outfit.label} draggable={false} style={{
+      width:"100%",height,objectFit:"contain",userSelect:"none",pointerEvents:"none"}}/>;
+    return <div style={{width:"100%",height,borderRadius:10,background:"linear-gradient(135deg,#F3ECE2,#E9DECF)",
+      display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4}}>
+      <span style={{fontSize:iconSize,opacity:.55}}>👚</span>
+      <span style={{fontSize:9,fontWeight:800,color:"#A8957C"}}>尚未上架</span>
+    </div>;
+  };
+
+  // 若closetTab是某個outfit id，則顯示「穿衣褢」頁面（大圖預覽）
+  if(closetTab&&closetTab.startsWith("detail_")){
+    const outfitId=closetTab.substring(7);
+    const outfit=OUTFITS.find(o=>o.id===outfitId);
+    if(!outfit)return null;
+    const p=isPurchased(outfit);
+    
+    return <div style={{padding:isTablet?"18px 22px 24px":"14px 14px 20px",maxWidth:480,margin:"0 auto"}}>
+      <button className="btn" onClick={()=>setClosetTab(null)} style={{background:"none",border:"none",fontSize:14,fontWeight:900,color:C.soft,marginBottom:16,cursor:"pointer"}}>← 回衣櫃</button>
+      <div style={{...cardS(C.light),padding:isTablet?"18px 14px":"14px 12px",marginBottom:14,textAlign:"center"}}>
+        <div style={{opacity:p?1:.7,marginBottom:12}}>
+          <OutfitThumb outfit={outfit} height={isTablet?300:240} iconSize={isTablet?56:44}/>
         </div>
-      </div>
-      <div style={{...cardS(C.card),padding:isTablet?15:12,minWidth:0}}>
-        <div style={{display:"flex",gap:6,...bub(C.light,18),padding:5,border:"none",marginBottom:11,overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-          {tabs.map(t=><button key={t.k} className="btn" onClick={()=>setClosetTab(t.k)} style={{background:closetTab===t.k?C.yellow:"transparent",
-            border:"none",borderRadius:14,padding:"8px 6px",minWidth:68,flex:"1 0 68px",color:C.brown,fontSize:10,fontWeight:900,
-            boxShadow:closetTab===t.k?"0 3px 0 rgba(140,90,25,.11)":"none"}}><div style={{fontSize:20}}>{t.icon}</div>{t.label}</button>)}
-        </div>
-        <div style={{fontSize:11,fontWeight:900,color:C.soft,margin:"0 2px 8px"}}>{active.icon} 選擇{active.label}</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,maxHeight:isTablet?250:205,overflowY:"auto",padding:"3px 4px 8px 3px"}}>
-          <button className="btn" onClick={()=>setEquipped(e=>({...e,[closetTab]:undefined}))} style={{...bub(!equipped[closetTab]?C.yellow:C.light,15),
-            padding:"10px 5px",minHeight:86,color:C.brown,border:"none",outline:!equipped[closetTab]?"3px solid "+C.butter:"none",position:"relative"}}>
-            {!equipped[closetTab]&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}<BaseKidItemIcon slot={closetTab} size={44}/>
-            <div style={{fontSize:9,fontWeight:900}}>{active.base}</div><div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>已擁有</div>
+        <div style={{fontSize:isTablet?18:16,fontWeight:900,color:C.brown,marginBottom:4}}>{outfit.label}</div>
+        {!p&&<div style={{fontSize:12,color:C.soft,fontWeight:800,marginBottom:12}}>⭐{outfit.price}</div>}
+        {p?
+          <button className="btn" onClick={()=>equip(outfit)} style={{...bub(equipped.outfit===outfit.id?C.light:C.orange),borderRadius:999,padding:equipped.outfit===outfit.id?"8px 20px":"12px 20px",fontSize:equipped.outfit===outfit.id?12:15,fontWeight:900,color:equipped.outfit===outfit.id?C.soft:"#fff",border:"none",width:"100%",boxShadow:equipped.outfit===outfit.id?"none":"0 5px 0 rgba(180,80,0,.25)"}}>
+            {equipped.outfit===outfit.id?"✓ 正在穿著":"✨ 穿上"}
           </button>
-          {items.map(item=>{const isEq=equipped[closetTab]===item.id;return <button key={item.id} className="btn" onClick={()=>equip(item)}
-            style={{...bub(isEq?C.yellow:C.light,15),padding:"10px 5px",minHeight:86,color:C.brown,border:"none",outline:isEq?"3px solid "+C.butter:"none",position:"relative"}}>
-            {isEq&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}<KidItemIcon item={item} size={44}/>
-            <div style={{fontSize:9,fontWeight:900}}>{item.label}</div><div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>{isEq?"穿著中":"點一下試穿"}</div>
-          </button>;})}
-          {items.length===0&&<button className="btn" onClick={openShop} style={{...bub("#FFF3E1",15),padding:"10px 5px",minHeight:86,color:C.soft,
-            border:"2px dashed #E9C890",fontSize:9,fontWeight:900}}><div style={{fontSize:26}}>🛍️</div>去商店收藏</button>}
-        </div>
-        <button className="btn" onClick={openShop} style={{...bub(C.orange),width:"100%",padding:"12px 0",borderRadius:999,
-          fontSize:12,fontWeight:900,color:"#fff",border:"none",marginTop:13}}>逛逛服飾商店 🛍️</button>
+          :<button className="btn" onClick={()=>openShop()} style={{...bub(C.orange),borderRadius:999,padding:"8px 20px",fontSize:12,fontWeight:900,color:"#fff",border:"none",width:"100%"}}>
+            購買 ⭐{outfit.price}
+          </button>
+        }
       </div>
+    </div>;
+  }
+  
+  // 衣櫃列表頁面
+  return <div style={{padding:isTablet?"18px 22px 24px":"14px 14px 20px",maxWidth:480,margin:"0 auto"}}>
+    <div style={{fontSize:isTablet?20:18,fontWeight:900,color:C.brown,marginBottom:16}}>🪞 衣櫃</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+      {OUTFITS.map(o=>{const p=isPurchased(o);return <button key={o.id} className="btn" onClick={()=>setClosetTab("detail_"+o.id)} style={{
+        ...cardS(p?C.light:"#F5F5F5"),borderRadius:12,padding:12,display:"flex",flexDirection:"column",alignItems:"center",
+        gap:4,minHeight:140,border:"2px solid "+(p?C.butter:"#DDD"),opacity:p?1:0.62,cursor:"pointer"}}>
+        <OutfitThumb outfit={o} height={100} iconSize={28}/>
+        <div style={{fontSize:10,fontWeight:900,color:p?C.brown:"#999"}}>{o.label}</div>
+        {!p&&<div style={{fontSize:8,color:"#999"}}>⭐{o.price}</div>}
+      </button>;})}
     </div>
   </div>;
 }
 
-/* ═══════════════ V1.2 FAMILY ENTRY & PLAYER SWITCHING ═══════════════ */
 function FamilySetup({legacy,defaultName,addMode,onDone,onCancel}){
   const legacyProfile=legacy&&legacy.profile||{};
   const [familyName,setFamilyName]=useState("我的家庭");
@@ -2046,8 +2368,7 @@ function PlayerSelect({family,onSelect,onBack,onAdd}){
           return <button key={p.id} className="btn" onClick={()=>onSelect(p)} style={{...cardS(t.soft),padding:"15px 12px",textAlign:"center",
             color:t.dark,border:"3px solid "+t.border,...themeVars(p.themeId)}}>
             <div style={{height:150,display:"flex",alignItems:"flex-end",justifyContent:"center",overflow:"hidden"}}>
-              <KidView gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={eq.kidTop} bottom={eq.kidBottom}
-                shoes={eq.kidShoes} hat={eq.kidHat} acc={eq.kidAcc} size={.95}/>
+              <OwnerImg gender={profile.gender||"girl"} size={.95}/>
             </div>
             <div style={{fontSize:17,fontWeight:900,marginTop:3}}>{p.name||profile.kidName||"小主人"}</div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:7,margin:"8px 0"}}>
@@ -2117,6 +2438,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [points,setPoints]=useState(0);
   const [tasks,setTasks]=useState(DEFAULT_TASKS);
   const [checked,setChecked]=useState({});
+  const [approvalMode,setApprovalMode]=useState("approval");
   const [owned,setOwned]=useState([]);
   const [equipped,setEquipped]=useState({});
   const [backpack,setBackpack]=useState({});
@@ -2130,9 +2452,12 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [poops,setPoops]=useState([]);
   const [neglect,setNeglect]=useState({level:0,sleeping:false,roomMess:false,dirty:false,cost:0,needsBath:false,welcomePending:false});
   const [musicOn,setMusicOn]=useState(()=>localStorage.getItem(playerStorageKey("musicOn_hk"))!=="false");
-  const [weather,setWeather]=useState(()=>{
-    const saved=localStorage.getItem(playerStorageKey("weather_hk"));return ["sunny","cloudy","rainbow"].indexOf(saved)>=0?saved:"sunny";
-  });
+  /* Updated by Claude on 2026/06/23
+     Reason: Replace manual weather click-cycle (sunny/cloudy/rainbow) with automatic
+     day/night detection based on real device time. 19:00+ = night, before 19:00 = day.
+     No weather system (no rain/clouds) per updated requirements - park background is
+     purely an ambiance toggle and must not affect character/button readability. */
+  const [isNight,setIsNight]=useState(()=>new Date().getHours()>=19);
   const [bathing,setBathing]=useState(false);
   const [parkPetPan,setParkPetPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkPetPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
   const [parkKidPan,setParkKidPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkKidPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
@@ -2191,25 +2516,37 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       if(s.achievements)setAchievements(s.achievements);if(s.streak!=null)setStreak(s.streak);
       if(s.petMood!=null)setPetMood(s.petMood);if(s.poops)setPoops(s.poops);
       if(s.neglect)setNeglect(s.neglect);
+      if(s.approvalMode)setApprovalMode(s.approvalMode);
     }catch(e){}
   },[saveKey]);
 
   useEffect(()=>{
     if(!profile)return;
     localStorage.setItem(saveKey,JSON.stringify({
-      profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect}));
-  },[saveKey,profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect]);
+      profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect,approvalMode}));
+  },[saveKey,profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect,approvalMode]);
 
   // UI 偏好獨立保存，避免改動既有 habitKingdom 存檔格式。
+  // Updated by Claude on 2026/06/23 — removed weather_hk persistence (no longer manual/clicked)
   useEffect(()=>{
     const id=setTimeout(()=>{
       localStorage.setItem(playerStorageKey("musicOn_hk"),String(musicOn));
-      localStorage.setItem(playerStorageKey("weather_hk"),weather);
       localStorage.setItem(playerStorageKey("parkPetPan_hk"),String(parkPetPan));
       localStorage.setItem(playerStorageKey("parkKidPan_hk"),String(parkKidPan));
     },200);
     return()=>clearTimeout(id);
-  },[musicOn,weather,parkPetPan,parkKidPan]);
+  },[musicOn,parkPetPan,parkKidPan]);
+
+  /* Updated by Claude on 2026/06/23
+     Reason: Auto day/night park background. Checks real device time every minute so the
+     scene flips to night automatically at 19:00 without needing a page reload, and flips
+     back to day at any time before 19:00 (e.g. if app stays open overnight into morning). */
+  useEffect(()=>{
+    const checkTime=()=>setIsNight(new Date().getHours()>=19);
+    checkTime();
+    const id=setInterval(checkTime,60000);
+    return()=>clearInterval(id);
+  },[]);
 
   // 音樂啟動 - 第一次點擊頁面時啟動
   useEffect(()=>{
@@ -2363,8 +2700,27 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   }));
 
   if(!profile)return <div style={themeVars(themeId)}><Onboarding initialKidName={playerName} onDone={p=>{
-    setProfile(p);if(p.tasks)setTasks(p.tasks);if(onProfileChange)onProfileChange(p.kidName);
+    setProfile(p);
+    // 新玩家預設擁有對應性別的休閒衣服
+    const defaultOutfitId=p.gender==="boy"?"casual_b":"casual_g";
+    setOwned(o=>[...o,defaultOutfitId]);
+    if(p.tasks)setTasks(p.tasks);if(onProfileChange)onProfileChange(p.kidName);
   }}/></div>;
+
+  /* Updated by Claude on 2026/06/23
+     Reason: Force simple pet reselection after PNG asset update (6→4 pet roster).
+     Every existing player sees this exactly once. Only profile.petType and the
+     completion flag are changed — everything else in profile (kidName, pin, gender,
+     skin, tasks, etc.) is preserved via the {...profile} spread, and all other game
+     state (points/owned/equipped/diary/wishes/streak/room layout/purchases) is
+     untouched because this only calls setProfile, not any of the other setters. */
+  if(!profile.petUpdate20260623Completed){
+    return <div style={themeVars(themeId)}>
+      <PetReselect currentPetType={profile.petType} onConfirm={(newPetType)=>{
+        setProfile({...profile,petType:newPetType,petUpdate20260623Completed:true});
+      }}/>
+    </div>;
+  }
 
   // computed
   const day=new Date().getDay();
@@ -2417,6 +2773,11 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       setNeglect(n=>({...n,sleeping:false}));startPetAction("yawn","嗯……你回來了！🥱",50,3000);
       setSpeech("醒來第一眼就看到你了 💛");setTimeout(()=>setSpeech(""),3000);Audio.pat();return;
     }
+    if(tab!=="room"){
+      clearTimeout(actionRef.current);
+      setPetAction("hug");
+      actionRef.current=setTimeout(()=>setPetAction("idle"),1100);
+    }
     setPetMood(m=>Math.min(100,m+10));
     const msg=PET_SAYS[Math.floor(Math.random()*PET_SAYS.length)];
     setSpeech(msg);setTimeout(()=>setSpeech(""),3000);
@@ -2467,12 +2828,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     setTimeout(()=>{setBathing(false);setNeglect(n=>({...n,dirty:false,needsBath:false,level:n.roomMess?n.level:0}));
       if(neglect.needsBath&&!neglect.roomMess){toast2("全部恢復乾淨了！✨","#88cc88");Audio.achieve();}},3000);
   };
-  const changeWeather=()=>{
-    const weathers=["sunny","cloudy","rainbow"];
-    const next=weathers[(weathers.indexOf(weather)+1)%3];
-    setWeather(next);
-    if(next==="rainbow"){Audio.achieve();toast2("出現彩虹！🌈","#b35cf8");}
-  };
+  /* Updated by Claude on 2026/06/23
+     Reason: Removed changeWeather() - day/night is now fully automatic based on real
+     time (see isNight state + the 60s interval effect above). No more manual weather
+     click-cycling, no rain/cloud/rainbow states. */
 
   // wish cost find
   const activeWish=wishes.filter(w=>w.status==="active").sort((a,b)=>a.pts-b.pts)[0];
@@ -2529,7 +2888,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
           <div style={{fontSize:21,fontWeight:900,color:C.brown,marginBottom:4}}>建立你的小主人 🌟</div>
           <div style={{fontSize:11,fontWeight:800,color:C.soft,marginBottom:8}}>原本的任務、星星和寵物都會保留</div>
           <div style={{...cardS("linear-gradient(180deg,#DFF4FF,#FFF7DE)"),height:190,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
-            <KidView gender={avatarGender} skin={avatarSkin} size={1.08}/>
+            <OwnerImg gender={avatarGender} size={1.08}/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
             {[["boy","👦 男生"],["girl","👧 女生"]].map(([k,l])=><button key={k} className="btn" onClick={()=>setAvatarGender(k)}
@@ -2551,13 +2910,28 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
         tasks={tasks} setTasks={setTasks}
         musicOn={musicOn} setMusicOn={setMusicOn}
         storageKey={saveKey} playerId={playerId}
+        approvalMode={approvalMode} setApprovalMode={setApprovalMode}
         onClose={()=>setModal(null)}/>}
 
       {/* SHOP MODAL */}
       {modal==="shop"&&<Overlay onClose={()=>setModal(null)} wide>
         <div style={{fontSize:19,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:12}}>🛍️ 商店</div>
+        {/* Updated by Claude on 2026/06/23
+            Reason: Removed "🐾 寵物" (OUTFITS) and "👕 服飾" (KID_ITEMS) shop tabs per
+            requirement #3 — clothing items are de-listed this round. Shop now only
+            shows 食物/玩具/房間 (food/toy/room), which are unaffected and stay stable.
+            shopTab state defaults to "food" already, so removing these two tab buttons
+            is safe — there's no path that lands on "outfit"/"kid" anymore. [RESOLVED]
+            The closet's old openShop(()=>setShopTab("kid")) call site is now dead code
+            (ClosetPage/the closet modal no longer render any button that calls it) —
+            both closet UIs were rebuilt this round into a "整套造型包準備中" placeholder
+            (see ClosetPage above and the LITTLE OWNER CLOSET modal further below), so
+            there's no longer a dead-end "go shop for clothes" path reachable from the
+            closet at all. Codex follow-up: once the PNG whole-outfit wardrobe
+            (item #2 in this update) is wired up, either repoint that button to the new
+            wardrobe UI, or re-add a populated KID_ITEMS-equivalent for outfit purchases. */}
         <div style={{display:"flex",...bub(C.light,999),padding:4,gap:3,marginBottom:14}}>
-          {[["food","🍎 食物"],["toy","🎮 玩具"],["outfit","🐾 寵物"],["kid","👕 服飾"],["room","🏠 房間"]].map(([k,l])=>(
+          {[["food","🍎 食物"],["toy","🎮 玩具"],["pet","🐾 配件"],["outfit","👕 衣服"],["room","🏠 房間"]].map(([k,l])=>(
             <button key={k} className="btn" onClick={()=>setShopTab(k)}
               style={{flex:1,padding:"7px 2px",borderRadius:999,fontSize:10,fontWeight:900,color:C.brown,
                 background:shopTab===k?C.yellow:"transparent",
@@ -2569,7 +2943,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               color:C.brown,border:"none",outline:kidShopTheme===t?"2px solid "+C.butter:"none"}}>{t}</button>)}
         </div>}
         <div style={{display:"grid",gridTemplateColumns:isTablet?"repeat(3,1fr)":"1fr 1fr",gap:10}}>
-          {(shopTab==="food"?FOODS:shopTab==="toy"?TOYS:shopTab==="outfit"?OUTFITS:shopTab==="kid"?KID_ITEMS:ROOMITEMS)
+          {(shopTab==="food"?FOODS:shopTab==="toy"?TOYS:shopTab==="pet"?OUTFITS:shopTab==="outfit"?(profile&&profile.gender==="boy"?OUTFIT_CLOTHES_BOY:OUTFIT_CLOTHES_GIRL):shopTab==="kid"?KID_ITEMS:ROOMITEMS.filter(i=>i.asset))
             .filter(item=>shopTab!=="kid"||kidShopTheme==="全部"||item.theme===kidShopTheme).map(item=>{
             const isOwn=owned.indexOf(item.id)>=0;
             const isEq=equipped[item.slot||item.type]===item.id;
@@ -2578,7 +2952,24 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             return(
               <div key={item.id} style={{...cardS(isEq?C.yellow:isOwn?C.light:C.card),
                 padding:"13px 10px",textAlign:"center"}}>
-                {shopTab==="kid"?<KidItemIcon item={item} size={50}/>:<div style={{fontSize:32,marginBottom:5}}>{item.emoji}</div>}
+                {shopTab==="kid"?<KidItemIcon item={item} size={50}/>:shopTab==="pet"?
+                  <div style={{height:66,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:5}}>
+                    <PetAccessoryArt item={item} size={58}/>
+                  </div>
+                  :shopTab==="outfit"?
+                  (()=>{const og=profile&&profile.gender==="boy"?"owner_boy":"owner_girl";
+                    const art=IMG[og+"_"+item.id];
+                    return art?<img src={art} onError={handleImgError} alt={item.label} draggable={false} style={{width:"100%",height:60,objectFit:"contain",marginBottom:5}}/>
+                      :<div style={{width:"100%",height:60,background:"linear-gradient(135deg,#F3ECE2,#E9DECF)",borderRadius:8,
+                        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,marginBottom:5}}>
+                        <span style={{fontSize:22,opacity:.55}}>👚</span>
+                        <span style={{fontSize:8,fontWeight:800,color:"#A8957C"}}>尚未上架</span>
+                      </div>;})()
+                  :shopTab==="room"&&item.asset
+                    ?<div style={{height:66,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:5}}>
+                      <RoomItemArt item={item} thumb size={64}/>
+                    </div>
+                    :<div style={{fontSize:32,marginBottom:5}}>{item.emoji}</div>}
                 <div style={{fontWeight:900,fontSize:12,color:C.brown,marginBottom:3}}>{item.label}</div>
                 {shopTab==="kid"&&item.theme&&<div style={{...bub(item.theme==="學院風"?"#EEE3D2":item.theme==="公園風"?"#DDF3D4":item.theme==="睡衣風"?"#E6E2FF":C.light,999),
                   padding:"2px 8px",fontSize:9,fontWeight:900,color:C.soft,display:"inline-block",marginBottom:5,border:"none"}}>{item.theme}</div>}
@@ -2604,7 +2995,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                   <button className="btn" onClick={()=>equip(item)}
                     style={{...bub(isEq?C.orange:C.light),borderRadius:999,padding:"5px 14px",
                       fontSize:11,fontWeight:900,color:isEq?"#fff":C.soft,border:"none"}}>
-                    {shopTab==="kid"?(isEq?"✓ 穿著中":"試穿"):shopTab==="outfit"?(isEq?"✓ 穿戴中":"給寵物穿"):(isEq?"✓ 放置中":"放進房間")}</button>
+                    {shopTab==="kid"?(isEq?"✓ 穿著中":"試穿"):shopTab==="outfit"?(isEq?"✓ 穿著中":"購買"):shopTab==="pet"?(isEq?"✓ 戴著中":"戴上"):(isEq?"✓ 放置中":"放進房間")}</button>
                 :
                   <button className="btn" onClick={()=>buy(item)}
                     style={{...bub(can?C.orange:C.light),borderRadius:999,padding:"5px 14px",
@@ -2642,7 +3033,9 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               return(
                 <div key={o.id} style={{...bub(eq?C.yellow:C.light,16),padding:"10px 6px",textAlign:"center",cursor:"pointer",border:"none"}}
                   onClick={()=>setEquipped(e=>({...e,[o.slot]:e[o.slot]===o.id?undefined:o.id}))}>
-                  <div style={{fontSize:26}}>{o.emoji}</div>
+                  <div style={{height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <PetAccessoryArt item={o} size={34}/>
+                  </div>
                   <div style={{fontSize:10,fontWeight:900,color:C.brown}}>{o.label}</div>
                   {eq&&<div style={{fontSize:9,color:C.soft,fontWeight:900}}>穿戴中</div>}
                 </div>);})}
@@ -2655,17 +3048,19 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       </Overlay>}
 
       {/* LITTLE OWNER CLOSET */}
+      {/* Updated by Claude on 2026/06/23
+          Reason: Same rebuild as ClosetPage above (requirement #2, 紙娃娃式整套預覽)
+          applied to this second closet entry point (opened as a modal from elsewhere,
+          e.g. the room's "換裝" button) so both access points stay consistent. The
+          large preview pane is unchanged (ActiveKid → real PNG owner automatically);
+          the per-slot tab+grid picker is replaced with the same "整套造型包準備中"
+          placeholder since KID_ITEMS is empty this round. closetTab/setClosetTab/
+          equipped/setEquipped/owned/equip are all still in scope and untouched —
+          only the rendered JSX below changed, so re-wiring real outfit packs later
+          is a small, localized diff. */}
       {modal==="closet"&&<Overlay onClose={()=>setModal(null)} wide={isTablet}>
         {(()=>{
-          const closetTabs=[
-            {k:"kidTop",icon:"👕",label:"上衣",base:"基本白上衣"},
-            {k:"kidBottom",icon:"👖",label:"褲子",base:"基本白長褲"},
-            {k:"kidShoes",icon:"👟",label:"鞋襪",base:"白襪球鞋"},
-            {k:"kidHat",icon:"💇",label:"髮型帽子",base:"原本髮型"},
-            {k:"kidAcc",icon:"✨",label:"配件",base:"不戴配件"}
-          ];
-          const active=closetTabs.find(t=>t.k===closetTab)||closetTabs[0];
-          const items=KID_ITEMS.filter(i=>i.slot===closetTab&&owned.indexOf(i.id)>=0);
+          const dressed=!!equipped.outfit;
           return <>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
               <div>
@@ -2683,58 +3078,28 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                 <div style={{position:"absolute",bottom:21,left:"14%",width:"72%",height:16,borderRadius:"50%",background:"rgba(91,61,34,.13)",filter:"blur(2px)"}}/>
                 <div style={{position:"absolute",top:12,left:"50%",transform:"translateX(-50%)",...bub("rgba(255,255,255,.78)",999),
                   border:"none",padding:"5px 11px",fontSize:10,fontWeight:900,color:C.brown,whiteSpace:"nowrap"}}>
-                  {equipped.kidTop||equipped.kidBottom||equipped.kidShoes||equipped.kidHat||equipped.kidAcc?"✨ 今日穿搭":"🌱 基本造型"}
+                  {dressed?"✨ 今日穿搭":"🌱 基本造型"}
                 </div>
                 <div style={{animation:"float 3.2s ease-in-out infinite",position:"relative",zIndex:2}}>
-                  <ActiveKid gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"}
-                    top={equipped.kidTop} bottom={equipped.kidBottom} shoes={equipped.kidShoes}
-                    hat={equipped.kidHat} acc={equipped.kidAcc} size={isTablet?1.82:1.55}/>
+                  <ActiveKid gender={profile.gender||"girl"} outfitId={equipped.outfit} size={isTablet?1.82:1.55}/>
                 </div>
               </div>
 
               <div style={{display:"flex",flexDirection:"column",minWidth:0}}>
-                <div style={{display:"flex",gap:6,...bub(C.light,18),padding:5,border:"none",marginBottom:10,
-                  overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
-                  {closetTabs.map(t=><button key={t.k} className="btn" onClick={()=>setClosetTab(t.k)}
-                    style={{background:closetTab===t.k?C.yellow:"transparent",border:"none",borderRadius:14,padding:"8px 6px",minWidth:68,flex:"1 0 68px",
-                      color:C.brown,fontSize:10,fontWeight:900,boxShadow:closetTab===t.k?"0 3px 0 rgba(140,90,25,.11)":"none"}}>
-                    <div style={{fontSize:19,marginBottom:2}}>{t.icon}</div>{t.label}
-                  </button>)}
+                <div style={{...cardS(C.card),flex:1,padding:isTablet?15:12,display:"flex",flexDirection:"column",
+                  alignItems:"center",justifyContent:"center",textAlign:"center",gap:9,minHeight:isTablet?226:190}}>
+                  <div style={{fontSize:34}}>🧵</div>
+                  <div style={{fontSize:13,fontWeight:900,color:C.brown}}>整套造型包，準備中！</div>
+                  <div style={{fontSize:11,color:C.soft,fontWeight:800,lineHeight:1.7,maxWidth:220}}>
+                    以後可以在這裡一次切換一整套<br/>可愛造型，敬請期待 💌
+                  </div>
+                  <div style={{...bub(C.light,999),padding:"7px 14px",fontSize:10,fontWeight:900,color:C.soft,border:"none",marginTop:4}}>
+                    目前造型：基本造型 🌱
+                  </div>
                 </div>
-
-                <div style={{fontSize:11,fontWeight:900,color:C.soft,margin:"0 2px 8px"}}>{active.icon} 選擇{active.label}</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,alignContent:"start",
-                  maxHeight:isTablet?226:190,overflowY:"auto",padding:"3px 4px 7px 3px",WebkitOverflowScrolling:"touch"}}>
-                  <button className="btn" onClick={()=>setEquipped(e=>({...e,[closetTab]:undefined}))}
-                    style={{...bub(!equipped[closetTab]?C.yellow:C.light,15),padding:"10px 5px",minHeight:82,color:C.brown,border:"none",
-                      outline:!equipped[closetTab]?"3px solid "+C.butter:"none",position:"relative"}}>
-                    {!equipped[closetTab]&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}
-                    <BaseKidItemIcon slot={closetTab} size={43}/>
-                    <div style={{fontSize:9,fontWeight:900,lineHeight:1.25}}>{active.base}</div>
-                    <div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>已擁有</div>
-                  </button>
-                  {items.map(item=>{
-                    const isEq=equipped[closetTab]===item.id;
-                    return <button key={item.id} className="btn" onClick={()=>equip(item)}
-                      style={{...bub(isEq?C.yellow:C.light,15),padding:"10px 5px",minHeight:82,color:C.brown,border:"none",
-                        outline:isEq?"3px solid "+C.butter:"none",position:"relative"}}>
-                      {isEq&&<span style={{position:"absolute",right:6,top:4,fontSize:11}}>✓</span>}
-                      <KidItemIcon item={item} size={43}/>
-                      <div style={{fontSize:9,fontWeight:900,lineHeight:1.25}}>{item.label}</div>
-                      <div style={{fontSize:8,color:C.soft,fontWeight:800,marginTop:3}}>{isEq?"穿著中":"點一下試穿"}</div>
-                    </button>;
-                  })}
-                  {items.length===0&&<button className="btn" onClick={()=>setModal("shop")}
-                    style={{...bub("#FFF3E1",15),padding:"10px 5px",minHeight:82,color:C.soft,border:"2px dashed #E9C890",fontSize:9,fontWeight:900}}>
-                    <div style={{fontSize:25,marginBottom:3}}>🛍️</div>去商店收藏
-                  </button>}
-                </div>
-
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:"auto",paddingTop:14}}>
-                  <button className="btn" onClick={()=>setModal("shop")}
-                    style={{...bub(C.orange),padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>買新衣 🛍️</button>
+                <div style={{marginTop:14}}>
                   <button className="btn" onClick={()=>setModal(null)}
-                    style={{...bub(C.green),padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>完成穿搭 ✓</button>
+                    style={{...bub(C.green),width:"100%",padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>完成穿搭 ✓</button>
                 </div>
               </div>
             </div>
@@ -2885,12 +3250,6 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
           {onSwitch&&<button className="btn" onClick={()=>{saveSnapshot();onSwitch();}} aria-label="切換小主人"
             style={{...bub("#fff"),borderRadius:999,width:isTablet?44:32,height:isTablet?44:32,
               display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:isTablet?20:17}}>👥</button>}
-          <button className="btn" onClick={()=>setModal("calendar")} aria-label="心情日記"
-            style={{...bub("#fff"),borderRadius:999,width:isTablet?44:36,height:isTablet?44:36,
-              display:"flex",alignItems:"center",justifyContent:"center",overflow:"hidden",padding:0,
-              fontSize:isTablet?21:18}}>
-            📔
-          </button>
           <button className="btn" onClick={()=>setModal("pack")}
             style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>🎒</button>
           <button className="btn" onClick={()=>setModal("shop")}
@@ -2903,7 +3262,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       {/* ══════════ CLOSET ══════════ */}
       {tab==="closet"&&<ClosetPage profile={profile} points={points} isTablet={isTablet}
         closetTab={closetTab} setClosetTab={setClosetTab} equipped={equipped} setEquipped={setEquipped}
-        owned={owned} equip={equip} openShop={()=>{setShopTab("kid");setModal("shop");}}/>}
+        owned={owned} equip={equip} openShop={()=>{setShopTab("outfit");setModal("shop");}} setTab={setTab}/>}
 
       {/* ══════════ HOME ══════════ */}
       {tab==="home"&&(
@@ -2924,8 +3283,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                 {speech&&<div style={{...bub(C.card),position:"absolute",top:-34,left:"50%",transform:"translateX(-50%)",
                   borderRadius:14,padding:"5px 9px",fontSize:9,fontWeight:900,color:C.brown,
                   whiteSpace:"nowrap",zIndex:5,border:"none"}}>{speech}</div>}
-                <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
-                  hunger={hunger} mood={mood} size={isTablet?1.02:.79}/>
+                <div className={petAction!=="idle"?"pet-action-"+petAction:""}>
+                  <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
+                    hunger={hunger} mood={mood} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?1.02:.79}/>
+                </div>
                 {neglect.dirty&&<><span style={{position:"absolute",left:22,top:48,fontSize:10,zIndex:6,opacity:.7}}>🟤</span><span style={{position:"absolute",right:18,top:68,fontSize:8,zIndex:6,opacity:.65}}>🟤</span></>}
                 {neglect.sleeping&&<span style={{position:"absolute",right:-4,top:4,fontSize:19,zIndex:6}}>💤</span>}
               </button>
@@ -3010,10 +3371,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
           {/* QUICK ACTIONS */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:isTablet?14:10}}>
             {[
-              {icon:"📔",label:"我的日記",sub:"用月曆收藏每天的心情",bg:"#FFF0FF",fn:()=>setModal("calendar")},
               {icon:"🌳",label:"帶出去玩",sub:"公園奔跑餵食",bg:"#F0FFF0",fn:()=>setTab("park")},
               {icon:"🏡",label:"寵物房間",sub:"摸摸牠、清大便",bg:"#FFF8E0",fn:()=>setTab("room")},
               {icon:"🌠",label:"我的願望",sub:activeWish?activeWish.label:"新增一個願望",bg:"#F8F0FF",fn:()=>setTab("wish")},
+              {icon:"📔",label:"我的日記",sub:"用月曆收藏每天的心情",bg:"#FFE6F0",fn:()=>setModal("calendar")},
             ].map(a=>(
               <button key={a.label} className="btn" onClick={a.fn} style={{
                 ...cardS(a.bg),padding:isTablet?"16px 14px":"12px 12px",textAlign:"left",border:"none",width:"100%"}}>
@@ -3072,7 +3433,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               }}/>
             </div>
             <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,textAlign:"center"}}>
-              完成後等爸媽核准，星星存入罐子！⭐
+              {approvalMode==="trust"?"信任模式：打勾後星星立刻存入罐子！⭐":"核准模式：完成後等爸媽核准，星星存入罐子！⭐"}
             </div>
           </div>
 
@@ -3083,8 +3444,14 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               return(
                 <button key={h.id} className="btn"
                   onClick={()=>{if(appr)return;
-                    const now=!kDone;setChecked(c=>({...c,[kk]:now}));
-                    if(now){toast2("記錄完成！等爸媽核准 💛");Audio.check();}}}
+                    const now=!kDone;
+                    if(now&&approvalMode==="trust"){
+                      setChecked(c=>({...c,[kk]:true,[ka]:true}));
+                      setPoints(p=>p+h.pts);toast2("完成！星星已存入 🌟","#88cc88");Audio.approve();
+                    }else{
+                      setChecked(c=>({...c,[kk]:now}));
+                      if(now){toast2("記錄完成！等爸媽核准 💛");Audio.check();}
+                    }}}
                   style={{...bub(appr?C.yellow:kDone?C.light:C.card),
                     display:"flex",alignItems:"center",gap:isTablet?14:10,
                     padding:isTablet?"15px 17px":"12px 13px",
@@ -3143,7 +3510,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             <div style={{fontSize:fs(13),fontWeight:900,color:C.brown,marginBottom:3}}>
               太棒了！完成 {approved} 件任務 🎉
             </div>
-            <div style={{fontSize:fs(10),color:C.soft,fontWeight:800}}>等待爸媽 🔐 核准，星星就會存入罐子！</div>
+            <div style={{fontSize:fs(10),color:C.soft,fontWeight:800}}>{approvalMode==="trust"?"星星已經存入罐子囉！":"等待爸媽 🔐 核准，星星就會存入罐子！"}</div>
           </div>}
 
           {/* WEEKEND TASKS */}
@@ -3164,8 +3531,14 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               return(
                 <button key={t.id} className="btn"
                   onClick={()=>{if(appr)return;
-                    const now=!kDone;setChecked(c=>({...c,[kk]:now}));
-                    if(now){toast2("週末任務記錄完成！等爸媽核准 🎉","#FFB830");Audio.check();}}}
+                    const now=!kDone;
+                    if(now&&approvalMode==="trust"){
+                      setChecked(c=>({...c,[kk]:true,[ka]:true}));
+                      setPoints(p=>p+t.pts);toast2("週末任務完成！星星已存入 🌟","#88cc88");Audio.approve();
+                    }else{
+                      setChecked(c=>({...c,[kk]:now}));
+                      if(now){toast2("週末任務記錄完成！等爸媽核准 🎉","#FFB830");Audio.check();}
+                    }}}
                   style={{...bub(appr?C.yellow:kDone?C.light:C.card),
                     display:"flex",alignItems:"center",gap:isTablet?14:10,
                     width:"100%",
@@ -3199,44 +3572,52 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       {/* ══════════ PARK ══════════ */}
       {tab==="park"&&(
         <div style={{display:"flex",flexDirection:"column",maxWidth:isTablet?720:480,margin:"0 auto"}}>
+          {/* Updated by Claude on 2026/06/23
+              Reason: Replaced weather click-cycle background (sunny/cloudy/rainbow) with
+              automatic day/night scene based on isNight (real device time, 19:00 cutoff).
+              [RESOLVED] The real hand-drawn park_day/park_night WebP backgrounds are now
+              wired in via the IMG map above — backgroundColor is kept as a matching
+              fallback while the image decodes (or if an IMG lookup ever returns
+              undefined). Removed: cloud drift decorations, rainbow easter-egg, weather
+              toggle icon, and the CSS-drawn ground hill/path/stars/big trees that would
+              have doubled up on top of the new artwork (see the next comment further
+              down). Kept: grass tufts + flowers (clickable game elements via
+              pickFlower), ball/bath interactions, pet+kid drag, hunger badge — all
+              unaffected by this change. */}
           <div style={{position:"relative",height:isTablet?390:330,overflow:"hidden",
             margin:isTablet?"14px 22px 0":"10px 14px 0",borderRadius:24,
-            background:weather==="cloudy"
-              ?"linear-gradient(180deg,#B8CAD8 0%,#D9E2E8 58%,#9FD477 58%,#72B44C 100%)"
-              :weather==="rainbow"
-              ?"linear-gradient(180deg,#8ED5F4 0%,#FFE8C0 34%,#C8E8FF 58%,#A5D97A 58%,#74B54C 100%)"
-              :"linear-gradient(180deg,#8ED5F4 0%,#D8F2FF 58%,#A5D97A 58%,#74B54C 100%)",
-            border:"3px solid rgba(80,130,70,.14)",boxShadow:"0 7px 0 rgba(70,120,55,.12)",userSelect:"none"}}>
-            <div style={{position:"absolute",left:-45,right:-45,bottom:"28%",height:92,borderRadius:"50% 50% 0 0",
-              background:"#8BCB68",opacity:.95}}/>
-            <div style={{position:"absolute",left:"50%",bottom:-36,transform:"translateX(-50%) rotate(-4deg)",width:"46%",height:190,
-              borderRadius:"50% 50% 0 0",background:"linear-gradient(90deg,#E9C78E,#F6DDAE,#E9C78E)",opacity:.95}}/>
+            backgroundColor:isNight?"#1B2A52":"#8ED5F4",
+            backgroundImage:"url("+(isNight?IMG.park_night:IMG.park_day)+")",
+            backgroundSize:"cover",backgroundPosition:"center bottom",
+            border:"3px solid rgba(80,130,70,.14)",boxShadow:"0 7px 0 rgba(70,120,55,.12)",userSelect:"none",
+            transition:"background 1.2s ease"}}>
+            {/* Updated by Claude on 2026/06/23
+                Reason: Removed the CSS-drawn ground hill, path/walkway shape, twinkle
+                stars, and the two big 🌳/🌲 emoji trees — the new park_day/park_night
+                PNG art already has its own grass field, side trees, and (at night) a
+                starry sky baked in, so these would have doubled up on top of it.
+                Kept: the sun/moon corner badge (small UI indicator, doesn't overlap the
+                artwork), grass tufts and flowers (these are the clickable interactive
+                game elements via pickFlower, not just decoration), and all pet/kid
+                drag + ball/bath interactions — fully unaffected by this change. */}
             <div style={{position:"absolute",left:12,top:12,...bub("rgba(255,255,255,.78)",999),padding:"5px 11px",
               fontSize:10,fontWeight:900,color:C.brown,border:"none",zIndex:8}}>🌳 今天一起去公園</div>
             <div style={{position:"absolute",top:48,left:"50%",transform:"translateX(-50%)",zIndex:9,
               ...bub("rgba(255,255,255,.72)",999),padding:"3px 9px",fontSize:9,fontWeight:900,color:C.soft,border:"none",pointerEvents:"none"}}>
               ↔ 小主人與寵物可分開拖曳
             </div>
-            <div style={{position:"absolute",top:10,right:14,fontSize:isTablet?40:32,cursor:"pointer"}}
-              onClick={changeWeather}>
-              {weather==="sunny"?"☀️":weather==="cloudy"?"⛅":"🌈"}
+            {/* day/night indicator - decorative only, no click action (was the weather toggle button) */}
+            <div style={{position:"absolute",top:10,right:14,fontSize:isTablet?40:32,pointerEvents:"none"}}>
+              {isNight?"🌙":"☀️"}
             </div>
-            {[0,1].map(i=>(
-              <div key={i} style={{position:"absolute",top:(10+i*13)+"%",fontSize:isTablet?44:34,
-                opacity:weather==="cloudy"?1:.85,
-                animation:"cDrift "+(14+i*7)+"s linear infinite",animationDelay:i*-6+"s"}}>☁️</div>))}
-            {weather==="rainbow"&&<div style={{position:"absolute",top:"5%",left:"8%",
-              fontSize:isTablet?60:46,opacity:.75}}>🌈</div>}
             {[15,30,55,72,88].map((l,i)=>(
               <div key={i} style={{position:"absolute",bottom:"17%",left:l+"%",
                 fontSize:isTablet?20:16,animation:"gWave "+(1.5+i*.2)+"s ease-in-out infinite",
-                animationDelay:i*.15+"s"}}>🌿</div>))}
+                animationDelay:i*.15+"s",opacity:isNight?.6:1}}>🌿</div>))}
             {flowers.map(f=>(
               f.visible&&<div key={f.id} style={{position:"absolute",bottom:"15%",left:f.x+"%",
-                fontSize:isTablet?22:17,cursor:"pointer"}}
+                fontSize:isTablet?22:17,cursor:"pointer",opacity:isNight?.7:1}}
                 onClick={()=>pickFlower(f.id)}>{f.emoji}</div>))}
-            <div style={{position:"absolute",bottom:"17%",right:"2%",fontSize:isTablet?76:60,filter:"drop-shadow(0 5px 2px rgba(30,80,20,.18))"}}>🌳</div>
-            <div style={{position:"absolute",bottom:"18%",left:"2%",fontSize:isTablet?58:46}}>🌲</div>
             {ballVisible&&<div style={{position:"absolute",bottom:"24%",left:ballX+"%",
               fontSize:22,transition:"left 1.5s ease-in-out"}}>🎾</div>}
             {bathing&&[0,1,2,3].map(i=>(
@@ -3252,18 +3633,17 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               {feedItem&&<div style={{position:"absolute",top:-28,left:"50%",transform:"translateX(-50%)",
                 fontSize:22,animation:"bIn .3s"}}>{feedItem.emoji}</div>}
               <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
-                hunger={hunger} mood={mood} running={running} eating={eating} size={isTablet?.98:.78}/>
+                hunger={hunger} mood={mood} running={running} eating={eating} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?.98:.78}/>
               {neglect.dirty&&<><span style={{position:"absolute",left:28,top:58,fontSize:12,zIndex:8,opacity:.72}}>🟤</span><span style={{position:"absolute",right:24,top:86,fontSize:9,zIndex:8,opacity:.65}}>🟤</span></>}
             </div>
             <div style={{position:"absolute",bottom:"12%",left:isTablet?"18%":"13%",zIndex:5,
               marginLeft:parkKidPan,transform:ballVisible?"rotate(-5deg)":"none",transition:"transform .3s",animation:"float 3.6s ease-in-out infinite",touchAction:"none",cursor:"grab"}}
+              onClick={e=>{e.stopPropagation();setBallVisible(true);setBallX(Math.random()>.5?68:82);setTimeout(()=>setBallVisible(false),1600);toast2("一起玩一下！🎾","#88cc88");}}
               onPointerDown={e=>{e.stopPropagation();parkKidDragRef.current={x:e.clientX,pan:parkKidPan};if(e.currentTarget.setPointerCapture)e.currentTarget.setPointerCapture(e.pointerId);}}
               onPointerMove={e=>{if(!parkKidDragRef.current)return;const next=parkKidDragRef.current.pan+(e.clientX-parkKidDragRef.current.x);setParkKidPan(Math.max(-120,Math.min(120,next)));}}
               onPointerUp={()=>{parkKidDragRef.current=null;}}
               onPointerCancel={()=>{parkKidDragRef.current=null;}}>
-              <ActiveKid gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={equipped.kidTop}
-                bottom={equipped.kidBottom} shoes={equipped.kidShoes} hat={equipped.kidHat}
-                acc={equipped.kidAcc} size={isTablet?1.04:.90}/>
+              <ActiveKid gender={profile.gender||"girl"} outfitId={equipped.outfit} size={isTablet?1.22:1.08}/>
               {ballVisible&&<span style={{position:"absolute",top:43,right:-12,fontSize:18}}>✨</span>}
             </div>
             <div style={{position:"absolute",top:10,left:12}}>
@@ -3350,11 +3730,12 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
 
           {/* room scene - position based */}
           <div style={{...cardS((wp&&wp.bg)||"linear-gradient(180deg,#FFF8D8,#FFE7B3)"),
-            height:isTablet?390:330,marginBottom:10,position:"relative",overflow:"hidden",border:"3px solid rgba(180,120,50,.14)"}}>
-            <div style={{position:"absolute",inset:"0 0 36%",background:"linear-gradient(120deg,rgba(255,255,255,.22),transparent 60%)"}}/>
-            <div style={{position:"absolute",left:0,right:0,bottom:0,height:"36%",borderTop:"4px solid rgba(135,83,35,.18)",
+            height:isTablet?390:330,marginBottom:10,position:"relative",overflow:"hidden",border:"3px solid rgba(180,120,50,.14)",
+            backgroundImage:"url("+IMG.room_bedroom_sunny+")",backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat"}}>
+            <div style={{display:"none",position:"absolute",inset:"0 0 36%",background:"linear-gradient(120deg,rgba(255,255,255,.22),transparent 60%)"}}/>
+            <div style={{display:"none",position:"absolute",left:0,right:0,bottom:0,height:"36%",borderTop:"4px solid rgba(135,83,35,.18)",
               background:"repeating-linear-gradient(90deg,#DFAE72 0,#DFAE72 42px,#D49B60 43px,#D49B60 46px)"}}/>
-            <div style={{position:"absolute",left:"50%",bottom:18,transform:"translateX(-50%)",width:"52%",height:68,
+            <div style={{display:"none",position:"absolute",left:"50%",bottom:18,transform:"translateX(-50%)",width:"52%",height:68,
               borderRadius:"50%",background:"radial-gradient(ellipse,#FFF1A8,#F2C96F)",border:"3px solid rgba(180,115,35,.18)"}}/>
             {neglect.roomMess&&neglect.level===3&&[
               {l:"12%",b:20,r:-18},{l:"28%",b:46,r:12},{l:"67%",b:28,r:-8},{l:"82%",b:58,r:18}
@@ -3373,7 +3754,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             </div>
 
             {/* daylight window and ambient details */}
-            <div style={{position:"absolute",top:62,left:"50%",transform:"translateX(-50%)",width:82,height:58,
+            <div style={{display:"none",position:"absolute",top:62,left:"50%",transform:"translateX(-50%)",width:82,height:58,
               border:"7px solid #E4B86E",borderRadius:14,background:"linear-gradient(#AEE4FF 0 60%,#A9D97D 60%)",
               boxShadow:"inset 0 0 0 2px rgba(255,255,255,.7)"}}>
               <div style={{position:"absolute",left:"50%",top:0,bottom:0,width:3,background:"#E4B86E"}}/>
@@ -3392,7 +3773,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                 width:item?64:54,height:item?64:54,borderRadius:17,border:roomEdit?"2px dashed rgba(116,75,35,.35)":"none",
                 background:roomEdit?"rgba(255,255,255,.42)":"transparent",boxShadow:"none",
                 display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                {item?<><span style={{fontSize:isTablet?38:32,filter:"drop-shadow(0 4px 2px rgba(70,40,10,.14))"}}>{item.emoji}</span>
+                {item?<><RoomItemArt item={item} size={item.asset?(isTablet?86:74):(isTablet?42:36)}
+                    style={item.asset?{transform:"scale("+(item.scale||1)+")"}:undefined}/>
                   {roomEdit&&<span style={{fontSize:7,fontWeight:900,color:C.brown,background:"rgba(255,255,255,.78)",borderRadius:8,padding:"1px 4px"}}>{item.label}</span>}</>
                   :<span style={{fontSize:8,color:C.soft,fontWeight:900}}>{slot.label}</span>}
               </button>;
@@ -3401,8 +3783,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             <button className="btn" aria-label="和寵物抱抱" onClick={()=>{startPetAction("hug","最喜歡和你抱抱了！🤗",46,3800);setPetMood(m=>Math.min(100,m+6));Audio.pat();}}
               style={{position:"absolute",left:petAction==="hug"?(isTablet?190:98):(isTablet?150:74),bottom:34,zIndex:9,
                 animation:"float 3.5s ease-in-out infinite",transition:"left .7s ease",background:"transparent",border:"none",boxShadow:"none",padding:0}}>
-              <ActiveKid gender={profile.gender||"girl"} skin={profile.skin||"#F2C7A5"} top={equipped.kidTop}
-                bottom={equipped.kidBottom} shoes={equipped.kidShoes} hat={equipped.kidHat} acc={equipped.kidAcc} size={isTablet?1:.86}/>
+              <ActiveKid gender={profile.gender||"girl"} outfitId={equipped.outfit} size={isTablet?1.16:1.02}/>
               {petAction==="hug"&&<span style={{position:"absolute",top:22,right:-13,fontSize:18,animation:"spkl .8s infinite"}}>💛</span>}
             </button>
             <button className="btn" onClick={patPet} aria-label={"摸摸"+profile.petName} style={{position:"absolute",left:petRoomX+"%",bottom:31,
@@ -3415,7 +3796,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               {neglect.dirty&&<><span style={{position:"absolute",left:25,top:58,fontSize:13,zIndex:15,opacity:.72}}>🟤</span><span style={{position:"absolute",right:24,top:83,fontSize:10,zIndex:15,opacity:.65}}>🟤</span></>}
               <div className={neglect.sleeping?"pet-action-sleep":petAction!=="idle"&&petAction!=="walk"?"pet-action-"+petAction:""}>
                 <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc} hunger={hunger} mood={mood}
-                  running={petAction==="walk"} eating={toyPlaying!==null} size={isTablet?.92:.72}/>
+                  running={petAction==="walk"} eating={toyPlaying!==null} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?.92:.72}/>
               </div>
               {neglect.sleeping&&<span style={{position:"absolute",right:-5,top:0,fontSize:24,zIndex:15,animation:"float 1.8s infinite"}}>💤</span>}
             </button>
@@ -3485,7 +3866,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                       borderRight:"7px solid transparent",borderTop:"7px solid #fff"}}/>
                   </div>}
                   <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
-                    hunger={hunger} mood={mood} eating={toyPlaying!==null} size={isTablet?.72:.58}/>
+                    hunger={hunger} mood={mood} eating={toyPlaying!==null} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?.72:.58}/>
                 </div>
                 {toyPlaying&&<div style={{fontSize:24,animation:"float .5s infinite"}}>
                   {(TOYS.find(t=>t.id===toyPlaying)||{}).emoji}
@@ -3616,7 +3997,9 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                             style={{...bub(isPlaced?C.yellow:C.light),borderRadius:14,
                               padding:"9px 11px",textAlign:"center",border:"none",
                               outline:isPlaced?"3px solid "+C.butter:"none",minWidth:60}}>
-                            <div style={{fontSize:24}}>{d.emoji}</div>
+                            <div style={{height:34,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                              <RoomItemArt item={d} thumb size={d.asset?36:34}/>
+                            </div>
                             <div style={{fontSize:9,fontWeight:900,color:C.brown,marginTop:2}}>{d.label}</div>
                             {isPlaced
                               ?<div style={{fontSize:8,color:"#2a8a2a",fontWeight:900}}>✓ 放置中</div>
@@ -3796,4 +4179,5 @@ const root=ReactDOM.createRoot(document.getElementById("root"));
 root.render(React.createElement(FamilyRoot));
 </script>
 </body>
+</html>
 </html>
