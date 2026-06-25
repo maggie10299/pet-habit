@@ -1515,7 +1515,6 @@ function Onboarding({onDone,initialKidName}){
   const [petType,setPet]=useState("horse");
   const [kidName,setKid]=useState(initialKidName||"");
   const [gender,setGender]=useState("girl");
-  const [skin,setSkin]=useState("#F2C7A5");
   const [petName,setPName]=useState("");
   const [pin,setPin]=useState("");
   const [pin2,setPin2]=useState("");
@@ -1529,6 +1528,7 @@ function Onboarding({onDone,initialKidName}){
   const [newPts,setNewPts]=useState(10);
   const [newIcon,setNewIcon]=useState("⭐");
   const [guideOpen,setGuideOpen]=useState(false);
+  const [approvalMode,setApprovalMode]=useState("approval");
   const cur=PETS.find(p=>p.id===petType);
   const totalPts=tasks.reduce((a,t)=>a+t.pts,0);
 
@@ -1543,7 +1543,7 @@ function Onboarding({onDone,initialKidName}){
     if(step===5){
       if(pin.length<4)return setErr("請設定至少4位數字密碼！");
       if(pin!==pin2)return setErr("兩次密碼不一樣喔！");
-      onDone({kidName:kidName.trim(),petName:petName.trim()||"剛出生的小寶寶",pin,petType,tasks,gender,skin,
+      onDone({kidName:kidName.trim(),petName:petName.trim()||"剛出生的小寶寶",pin,petType,tasks,gender,approvalMode,
         /* Updated by Claude on 2026/06/23 — new players pick from the new 4-pet roster
            during normal onboarding, so they should never see the PetReselect screen.
            Also include default outfit (casual) based on gender. */
@@ -1689,12 +1689,6 @@ function Onboarding({onDone,initialKidName}){
                 style={{...bub(gender===k?C.yellow:C.light,16),padding:"10px 0",fontSize:12,
                   fontWeight:900,color:C.brown,border:"none",outline:gender===k?"3px solid "+C.butter:"none"}}>{l}</button>))}
           </div>
-          <div style={{display:"flex",justifyContent:"center",gap:10,marginBottom:12}}>
-            {["#F6D2B8","#DFAE88","#A96F4F"].map(c=>(
-              <button key={c} className="btn" aria-label="選擇膚色" onClick={()=>setSkin(c)}
-                style={{width:32,height:32,borderRadius:999,background:c,border:"3px solid #fff",
-                  outline:skin===c?"3px solid "+C.orange:"1px solid rgba(0,0,0,.1)"}}/>))}
-          </div>
           <div style={{...bub(C.light),borderRadius:20,padding:"12px 16px",display:"flex",alignItems:"center",gap:10}}>
             <span style={{fontSize:24}}>{gender==="boy"?"👦":"👧"}</span>
             <input style={{flex:1,fontSize:15,fontWeight:800,color:C.brown}} placeholder="輸入你的名字…"
@@ -1723,6 +1717,19 @@ function Onboarding({onDone,initialKidName}){
             <span style={{fontSize:12,fontWeight:900,color:C.brown}}>
               目前總分：{totalPts}/100分 {totalPts>100?"⚠️ 超過了！":totalPts===100?"🎯 剛好！":""}
             </span>
+          </div>
+          <div style={{...bub(C.cream,18),padding:"10px 12px",border:"none",marginBottom:10}}>
+            <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:7}}>任務完成模式</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {[["approval","🔐 核准模式","家長核准後發星星"],["trust","🌱 信任模式","孩子打勾後立刻發星星"]].map(([k,l,sub])=>(
+                <button key={k} className="btn" onClick={()=>setApprovalMode(k)}
+                  style={{...bub(approvalMode===k?C.yellow:C.card,16),padding:"9px 8px",border:"none",
+                    outline:approvalMode===k?"3px solid "+C.butter:"none",textAlign:"left"}}>
+                  <div style={{fontSize:11,fontWeight:900,color:C.brown,marginBottom:2}}>{l}</div>
+                  <div style={{fontSize:9,fontWeight:800,color:C.soft,lineHeight:1.35}}>{sub}</div>
+                </button>
+              ))}
+            </div>
           </div>
           <div style={{maxHeight:240,overflowY:"auto",marginBottom:10}}>
             {tasks.map(t=>(
@@ -2336,21 +2343,50 @@ function FamilyHome({family,onEnter,onAdd,onEditName}){
   const themeId=family.players[0]&&family.players[0].themeId||"butter";
   return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20,
     background:"linear-gradient(180deg,#F7FBF6,#FFF9EC)",...themeVars(themeId)}}>
-    <div style={{...cardS(C.card),width:"100%",maxWidth:520,padding:"30px 22px",textAlign:"center"}}>
-      <div style={{fontSize:42,marginBottom:5}}>🌿</div>
-      <div style={{fontSize:24,fontWeight:900,color:"var(--theme-dark)",marginBottom:6}}>🏠 {family.familyName||"我的家庭"}</div>
-      <button className="btn" onClick={onEditName} style={{background:"transparent",fontSize:10,color:C.soft,marginBottom:14}}>✏️ 修改家庭名稱</button>
-      <div style={{...bub(C.green,999),display:"inline-block",padding:"7px 15px",fontSize:12,fontWeight:900,color:C.brown,border:"none",marginBottom:18}}>
-        🌱 一起成長的第 {familyDay(family.familyCreatedAt)} 天
+    <div style={{...cardS(C.card),width:"100%",maxWidth:520,padding:"25px 20px 18px",textAlign:"center",overflow:"hidden",
+      background:"linear-gradient(180deg,#FFFDF8,#FFF6E8)"}}>
+      <div style={{...bub("var(--theme-soft)",999),display:"inline-flex",alignItems:"center",gap:5,padding:"6px 13px",
+        fontSize:11,fontWeight:900,color:"var(--theme-dark)",border:"none",marginBottom:10}}>
+        🌱 一起成長第 {familyDay(family.familyCreatedAt)} 天
       </div>
-      <div style={{fontSize:15,lineHeight:1.8,fontWeight:900,color:C.soft,marginBottom:22}}>每天 5~10 分鐘，<br/>陪習慣慢慢長大 🌱</div>
-      <div style={{display:"flex",justifyContent:"center",gap:8,marginBottom:18}}>
-        {family.players.map(p=>{const t=getTheme(p.themeId);return <div key={p.id} title={p.name} style={{width:42,height:42,borderRadius:999,
-          background:t.soft,border:"3px solid "+t.main,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🌟</div>;})}
+      <div style={{fontSize:26,fontWeight:900,color:"var(--theme-dark)",marginBottom:4}}>歡迎回家</div>
+      <div style={{fontSize:13,lineHeight:1.7,fontWeight:900,color:C.soft,marginBottom:12}}>
+        小夥伴們在王國裡等你 🌿
       </div>
-      <button className="btn" onClick={onEnter} style={{...bub(C.orange),width:"100%",padding:"15px 0",borderRadius:999,color:"#fff",fontSize:15,fontWeight:900,border:"none"}}>進入我的王國</button>
-      {family.players.length<3&&<button className="btn" onClick={onAdd} style={{...bub(C.light),width:"100%",padding:"11px 0",borderRadius:999,
-        color:C.soft,fontSize:11,fontWeight:900,border:"none",marginTop:9}}>＋ 新增小主人（{family.players.length}/3）</button>}
+      <div style={{position:"relative",height:178,margin:"2px auto 16px",maxWidth:390,borderRadius:32,
+        background:"linear-gradient(180deg,#EAF7FF,#FFF2D6)",border:"3px solid rgba(128,190,220,.35)",
+        boxShadow:"inset 0 -18px 0 rgba(255,255,255,.42)",overflow:"hidden"}}>
+        <span style={{position:"absolute",top:18,left:26,fontSize:18,animation:"spkl 2s infinite"}}>✨</span>
+        <span style={{position:"absolute",top:42,right:34,fontSize:16,animation:"spkl 2.6s infinite"}}>💛</span>
+        <div style={{position:"absolute",left:"12%",bottom:17,animation:"float 3.4s ease-in-out infinite"}}>
+          <PetView petType="cat" level={2} mood={5} hunger={90} size={.46}/>
+        </div>
+        <div style={{position:"absolute",left:"50%",bottom:12,transform:"translateX(-50%)",animation:"float 3s .2s ease-in-out infinite"}}>
+          <PetView petType="horse" level={2} mood={5} hunger={90} size={.62}/>
+        </div>
+        <div style={{position:"absolute",right:"12%",bottom:18,animation:"float 3.7s .45s ease-in-out infinite"}}>
+          <PetView petType="dog" level={2} mood={5} hunger={90} size={.46}/>
+        </div>
+        <div style={{position:"absolute",right:"34%",bottom:8,animation:"float 3.9s .65s ease-in-out infinite"}}>
+          <PetView petType="fox" level={2} mood={5} hunger={90} size={.38}/>
+        </div>
+        <div style={{position:"absolute",left:0,right:0,bottom:0,height:46,
+          background:"linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.55))"}}/>
+      </div>
+      <div style={{fontSize:14,lineHeight:1.8,fontWeight:900,color:C.soft,marginBottom:18}}>
+        每天 5~10 分鐘，陪習慣慢慢長大 🌱
+      </div>
+      <button className="btn" onClick={onEnter} style={{...bub(C.orange),width:"100%",padding:"15px 0",borderRadius:999,
+        color:"#fff",fontSize:15,fontWeight:900,border:"none"}}>進入我的王國</button>
+      <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:13,flexWrap:"wrap"}}>
+        {family.players.map(p=>{const t=getTheme(p.themeId);return <div key={p.id} title={p.name} style={{...bub(t.soft,999),
+          padding:"5px 9px",fontSize:10,fontWeight:900,color:t.dark,border:"none",boxShadow:"none"}}>{p.name||"小主人"}</div>;})}
+      </div>
+      <div style={{display:"flex",justifyContent:"center",gap:12,marginTop:11}}>
+        <button className="btn" onClick={onEditName} style={{background:"transparent",fontSize:10,color:C.soft,boxShadow:"none",padding:"4px 6px"}}>修改家庭名稱</button>
+        {family.players.length<3&&<button className="btn" onClick={onAdd} style={{background:"transparent",
+          color:C.soft,fontSize:10,fontWeight:900,border:"none",boxShadow:"none",padding:"4px 6px"}}>新增小主人</button>}
+      </div>
     </div>
   </div>;
 }
@@ -2696,11 +2732,13 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   },[profile,tab,roomEdit,equipped,neglect.sleeping,startPetAction]);
 
   const saveSnapshot=()=>localStorage.setItem(saveKey,JSON.stringify({
-    profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect
+    profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect,approvalMode
   }));
 
   if(!profile)return <div style={themeVars(themeId)}><Onboarding initialKidName={playerName} onDone={p=>{
-    setProfile(p);
+    const {approvalMode:initialApprovalMode,...profileData}=p;
+    setApprovalMode(initialApprovalMode||"approval");
+    setProfile(profileData);
     // 新玩家預設擁有對應性別的休閒衣服
     const defaultOutfitId=p.gender==="boy"?"casual_b":"casual_g";
     setOwned(o=>[...o,defaultOutfitId]);
@@ -2894,12 +2932,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             {[["boy","👦 男生"],["girl","👧 女生"]].map(([k,l])=><button key={k} className="btn" onClick={()=>setAvatarGender(k)}
               style={{...bub(avatarGender===k?C.yellow:C.light,16),padding:"10px 0",fontSize:12,fontWeight:900,color:C.brown,border:"none",outline:avatarGender===k?"3px solid "+C.butter:"none"}}>{l}</button>)}
           </div>
-          <div style={{fontSize:10,fontWeight:900,color:C.soft,marginBottom:7}}>選擇膚色</div>
-          <div style={{display:"flex",justifyContent:"center",gap:13,marginBottom:16}}>
-            {["#F6D2B8","#DFAE88","#A96F4F"].map(c=><button key={c} className="btn" onClick={()=>setAvatarSkin(c)} aria-label="選擇膚色"
-              style={{width:38,height:38,borderRadius:999,background:c,border:"3px solid #fff",outline:avatarSkin===c?"3px solid "+C.orange:"1px solid rgba(0,0,0,.1)"}}/>)}
-          </div>
-          <button className="btn" onClick={()=>{setProfile(p=>({...p,gender:avatarGender,skin:avatarSkin}));setModal(null);toast2("小主人登場了！一起去房間看看吧 💛");}}
+          <button className="btn" onClick={()=>{setProfile(p=>({...p,gender:avatarGender}));setModal(null);toast2("小主人登場了！一起去房間看看吧 💛");}}
             style={{...bub(C.orange),width:"100%",padding:"13px 0",borderRadius:999,fontSize:14,fontWeight:900,color:"#fff",border:"none"}}>就是這個造型！</button>
         </div>
       </Overlay>}
