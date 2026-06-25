@@ -73,8 +73,80 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 </head>
 <body>
 <div id="root"></div>
+
+<script>
+/* Maggie Lab Analytics v1.1 - updated by ChatGPT 2026-06-26
+   Purpose: track GAME EVENTS only, not generic page clicks.
+   Privacy: anonymous deviceId only; no child name, parent name, email, or location.
+*/
+(function(){
+  const ANALYTICS_ENDPOINT = "https://script.google.com/macros/s/AKfycbypOzDm62qDK32QzDWiFmFfyuleKYJ9ExepJ6W6YwaxTi1VdFwHNYHOLWaVsIpDJexz/exec";
+  const PRODUCT = "pet_habit_kingdom";
+  const VERSION = "beta_20260626";
+
+  function getDeviceId(){
+    const key = "maggielab_device_id_v1";
+    let id = localStorage.getItem(key);
+    if(!id){
+      id = "dev_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2,10);
+      localStorage.setItem(key, id);
+    }
+    return id;
+  }
+
+  window.trackGameEvent = function(event, params) {
+    if(!event) return;
+    const payload = {
+      product: PRODUCT,
+      event: event,
+      deviceId: getDeviceId(),
+      version: VERSION,
+      page: location.pathname,
+      time: new Date().toISOString(),
+      ...(params || {})
+    };
+
+    console.log("[MaggieLab Analytics]", payload);
+
+    try {
+      if(!ANALYTICS_ENDPOINT || ANALYTICS_ENDPOINT.includes("貼上")) return;
+
+      // no-cors avoids browser CORS blocking for Google Apps Script Web App POST.
+      // Because no-cors hides the response, success is confirmed in Google Sheet.
+      fetch(ANALYTICS_ENDPOINT, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload),
+        keepalive: true
+      }).catch(function(err) {
+        console.warn("[MaggieLab Analytics] send failed", err);
+      });
+    } catch(err) {
+      console.warn("[MaggieLab Analytics] error", err);
+    }
+  };
+
+  window.getMaggieLabStats = async function() {
+    const res = await fetch(ANALYTICS_ENDPOINT, { method: "GET" });
+    return await res.json();
+  };
+})();
+</script>
+
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
+
+const trackSafe=(event,params={})=>{
+  try{
+    if(window.trackGameEvent) window.trackGameEvent(event,params);
+  }catch(e){
+    console.warn("[MaggieLab Analytics] trackSafe error",e);
+  }
+};
+
+trackSafe("visit_game");
+
 
 /* ═══════════════ DESIGN TOKENS ═══════════════ */
 const C={
@@ -1543,6 +1615,7 @@ function Onboarding({onDone,initialKidName}){
     if(step===5){
       if(pin.length<4)return setErr("請設定至少4位數字密碼！");
       if(pin!==pin2)return setErr("兩次密碼不一樣喔！");
+      window.trackGameEvent&&window.trackGameEvent("create_character",{pet:petType,gender:gender,taskCount:tasks.length});
       onDone({kidName:kidName.trim(),petName:petName.trim()||"剛出生的小寶寶",pin,petType,tasks,gender,approvalMode,
         /* Updated by Claude on 2026/06/23 — new players pick from the new 4-pet roster
            during normal onboarding, so they should never see the PetReselect screen.
@@ -1640,7 +1713,7 @@ function Onboarding({onDone,initialKidName}){
               ))}
             </div>}
           </div>
-          <button className="btn" onClick={next} style={{
+          <button className="btn" onClick={()=>{window.trackGameEvent&&window.trackGameEvent("start_game");next();}} style={{
             ...bub(C.orange),width:"100%",padding:"15px 0",borderRadius:999,
             fontSize:16,fontWeight:900,color:"#fff",boxShadow:"0 6px 0 rgba(180,80,0,.2)"}}>
             🌟 開始我的冒險
@@ -1928,7 +2001,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
               {approved
                 ?<span style={{fontSize:18}}>✅</span>
                 :kidDone
-                ?<button className="btn" onClick={()=>{setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);Audio.approve();}}
+                ?<button className="btn" onClick={()=>{setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_approval"});Audio.approve();}}
                   style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>核准</button>
                 :<span style={{fontSize:11,color:"#c0a080",fontWeight:800}}>等待</span>}
             </div>);})}
@@ -1957,6 +2030,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
               {approved?<span style={{fontSize:18}}>✅</span>:kidDone
                 ?<button className="btn" onClick={()=>{
                     setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);
+                    window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_approval_weekend"});
                     if(h.isWeekend)setBonusTasks(ts=>ts.map(t=>t.id===h.id?{...t,ok:true}:t));
                     Audio.weekend();
                   }} style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>核准</button>
@@ -2787,6 +2861,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   ];
 
   const buy=(item)=>{
+    trackSafe("buy_item");
     if(points<item.price){toast2("點數不夠喔！😢","#e05060");return;}
     if(item.id.startsWith("f")){setBackpack(b=>({...b,[item.id]:(b[item.id]||0)+1}));}
     else{if(owned.indexOf(item.id)>=0){toast2("已經擁有了！");return;}setOwned(o=>[...o,item.id]);}
@@ -2835,9 +2910,11 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     setTimeout(()=>setRunning(false),2000);
   };
   const feedPet=(item)=>{
+    trackSafe("feed_pet");
     const bp={...backpack};if(!bp[item.id]||bp[item.id]<=0)return;
     bp[item.id]--;setBackpack(bp);setFeedItem(item);setEating(true);
     setHunger(h=>Math.min(100,h+item.hunger));
+    window.trackGameEvent&&window.trackGameEvent("feed_pet",{pet:profile.petType,food:item.id,foodLabel:item.label});
     Audio.feed();
     setTimeout(()=>{setEating(false);setFeedItem(null);},1500);
   };
@@ -3480,7 +3557,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                     const now=!kDone;
                     if(now&&approvalMode==="trust"){
                       setChecked(c=>({...c,[kk]:true,[ka]:true}));
-                      setPoints(p=>p+h.pts);toast2("完成！星星已存入 🌟","#88cc88");Audio.approve();
+                      setPoints(p=>p+h.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"trust"});toast2("完成！星星已存入 🌟","#88cc88");Audio.approve();
                     }else{
                       setChecked(c=>({...c,[kk]:now}));
                       if(now){toast2("記錄完成！等爸媽核准 💛");Audio.check();}
@@ -3567,7 +3644,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                     const now=!kDone;
                     if(now&&approvalMode==="trust"){
                       setChecked(c=>({...c,[kk]:true,[ka]:true}));
-                      setPoints(p=>p+t.pts);toast2("週末任務完成！星星已存入 🌟","#88cc88");Audio.approve();
+                      setPoints(p=>p+t.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:t.id,taskLabel:t.label,mode:"trust_weekend"});toast2("週末任務完成！星星已存入 🌟","#88cc88");Audio.approve();
                     }else{
                       setChecked(c=>({...c,[kk]:now}));
                       if(now){toast2("週末任務記錄完成！等爸媽核准 🎉","#FFB830");Audio.check();}
