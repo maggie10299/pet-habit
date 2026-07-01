@@ -86,7 +86,7 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 (function(){
 const ANALYTICS_ENDPOINT="https://script.google.com/macros/s/AKfycbwFuPv3IoIuv0ZcxRsQNVLO3K2J6WKkqqkK3CUox318AxB9bVrBoZl2L8NmWRQMsS4/exec";
 const PRODUCT="pet_habit";
-const VERSION="1.0.0-rc-beta";
+const VERSION="v1.0.0";
 const SOURCE_KEY="maggie_first_source";
 const FIRST_VISIT_KEY="maggie_first_visit";
 function resolveSource(){
@@ -157,7 +157,7 @@ if("serviceWorker" in navigator){
 
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
-const APP_VERSION="1.0.0-rc-beta";
+const APP_VERSION="v1.0.0";
 const APP_ENV="local-v1";
 const APP_SCHEMA_VERSION=2;
 const DEVELOPER_MODE=new URLSearchParams(location.search).get("dev")==="1"||localStorage.getItem("petHabitDeveloperMode")==="true";
@@ -3099,6 +3099,22 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       setHelpTopic(topic);
     }
   };
+  const acknowledgeInstallHint=()=>{
+    try{localStorage.setItem("petHabitInstallHintShown","true");}catch(e){}
+    setModal(null);
+  };
+  const maybeShowInstallHint=()=>{
+    try{
+      if(localStorage.getItem("petHabitInstallHintShown")==="true")return;
+      const standalone=window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches;
+      const iosStandalone=window.navigator&&window.navigator.standalone===true;
+      if(standalone||iosStandalone){
+        localStorage.setItem("petHabitInstallHintShown","true");
+        return;
+      }
+      setTimeout(()=>setModal(m=>m||"installHint"),450);
+    }catch(e){}
+  };
   const goTab=(next)=>{
     if(focusEndsAt){
       setModal("focusExitConfirm");
@@ -3481,6 +3497,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     setHunger(h=>Math.min(100,h+item.hunger));
     window.trackGameEvent&&window.trackGameEvent("feed_pet",{pet:profile.petType,food:item.id,foodLabel:item.label});
     Audio.feed();
+    maybeShowInstallHint();
     setTimeout(()=>{setEating(false);setFeedItem(null);},1500);
   };
   const throwBall=()=>{
@@ -3696,6 +3713,38 @@ Maggie 阿姨才有勇氣，
           style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:15,fontWeight:900,color:"#fff",border:"none"}}>
           開心收下
         </button>
+      </Overlay>}
+
+      {modal==="installHint"&&<Overlay onClose={acknowledgeInstallHint}>
+        <div style={{padding:22,textAlign:"center"}}>
+          <div style={{fontSize:42,marginBottom:8}}>??</div>
+          <h2 style={{margin:"0 0 8px",color:C.brown}}>?????</h2>
+          <p style={{fontSize:14,lineHeight:1.8,color:C.soft,fontWeight:800,whiteSpace:"pre-line"}}>
+            ???????????????{"\n"}
+            ???? App ???????????????
+          </p>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:16}}>
+            <button className="btn" onClick={acknowledgeInstallHint}
+              style={{...bub(C.light),padding:"13px 0",borderRadius:999,color:C.brown,border:"none"}}>???</button>
+            <button className="btn" onClick={()=>setModal("installGuide")}
+              style={{...bub(C.yellow),padding:"13px 0",borderRadius:999,color:C.brown,border:"none"}}>????</button>
+          </div>
+        </div>
+      </Overlay>}
+      {modal==="installGuide"&&<Overlay onClose={acknowledgeInstallHint}>
+        <div style={{padding:22,textAlign:"center"}}>
+          <div style={{fontSize:42,marginBottom:8}}>??</div>
+          <h2 style={{margin:"0 0 10px",color:C.brown}}>???????</h2>
+          <div style={{...cardS(C.light),padding:14,textAlign:"left",fontSize:13,lineHeight:1.8,color:C.soft,fontWeight:900}}>
+            <div style={{color:C.brown,marginBottom:4}}>iPhone / iPad</div>
+            <div>Safari ? ?? ? ?????</div>
+            <div style={{height:10}}/>
+            <div style={{color:C.brown,marginBottom:4}}>Android</div>
+            <div>Chrome ? ?? App / ?????</div>
+          </div>
+          <button className="btn" onClick={acknowledgeInstallHint}
+            style={{...bub(C.yellow),padding:"13px 0",borderRadius:999,color:C.brown,border:"none",width:"100%",marginTop:16}}>???</button>
+        </div>
       </Overlay>}
 
       {/* ACHIEVEMENT POPUP */}
