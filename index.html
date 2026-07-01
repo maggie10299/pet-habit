@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="theme-color" content="#F5A623"/>
+<link rel="manifest" href="manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png"/>
+<link rel="icon" href="assets/icons/favicon.png"/>
 <title>寵物習慣王國 🐾</title>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -38,6 +42,9 @@ body{
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 @keyframes kidBlink{0%,45%,49%,100%{transform:scaleY(1)}47%{transform:scaleY(.08)}}
+@keyframes drawerOpen{0%{transform:translateY(0)}100%{transform:translateY(18px)}}
+@keyframes paperOut{0%{transform:translateX(-50%) translateY(42px);opacity:0}100%{transform:translateX(-50%) translateY(0);opacity:1}}
+@keyframes sandFall{0%{stroke-dasharray:0 34;opacity:.2}50%{stroke-dasharray:18 16;opacity:1}100%{stroke-dasharray:0 34;opacity:.25}}
 .kid-eye{transform-box:fill-box;transform-origin:center;animation:kidBlink 4.8s infinite;}
 @keyframes ponyBlink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.08)}}
 @keyframes ponyEar{0%,82%,100%{transform:rotate(0)}88%{transform:rotate(-9deg)}93%{transform:rotate(7deg)}}
@@ -79,8 +86,31 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 (function(){
 const ANALYTICS_ENDPOINT="https://script.google.com/macros/s/AKfycbwFuPv3IoIuv0ZcxRsQNVLO3K2J6WKkqqkK3CUox318AxB9bVrBoZl2L8NmWRQMsS4/exec";
 const PRODUCT="pet_habit";
-const VERSION="v0.9.3";
-const SOURCE="direct";
+const VERSION="1.0.0-rc-beta";
+const SOURCE_KEY="maggie_first_source";
+const FIRST_VISIT_KEY="maggie_first_visit";
+function resolveSource(){
+ const q=new URLSearchParams(location.search).get("source");
+ if(q&&["website","threads","facebook","direct"].indexOf(q)>=0)return q;
+ if(q)return "unknown";
+ return document.referrer?"unknown":"direct";
+}
+function getFirstSource(){
+ let source=localStorage.getItem(SOURCE_KEY);
+ if(!source){
+  source=resolveSource();
+  localStorage.setItem(SOURCE_KEY,source);
+ }
+ return source;
+}
+function getFirstVisit(){
+ let first=localStorage.getItem(FIRST_VISIT_KEY);
+ if(!first){
+  first=new Date().toISOString();
+  localStorage.setItem(FIRST_VISIT_KEY,first);
+ }
+ return first;
+}
 function getDeviceId(){
  let id=localStorage.getItem("maggie_device_id");
  if(!id){
@@ -97,22 +127,78 @@ window.trackGameEvent=function(event,params={}){
   headers:{"Content-Type":"text/plain;charset=utf-8"},
   body:JSON.stringify({
    product:PRODUCT,
+   timestamp:new Date().toISOString(),
    event:event,
    deviceId:getDeviceId(),
    version:VERSION,
+   firstVisit:getFirstVisit(),
+   familyId:params.familyId||"",
+   childId:params.childId||"",
+   platform:navigator.platform||"",
+   browser:navigator.userAgent||"",
+   payload:params,
    pet:params.pet||"",
    task:params.task||"",
-   source:SOURCE
+   source:getFirstSource()
   }),
   keepalive:true
- }).catch(console.error);
+ }).catch(function(){});
 };
 window.getMaggieLabStats=async()=>await (await fetch(ANALYTICS_ENDPOINT)).json();
 })();
 </script>
+<script>
+if("serviceWorker" in navigator){
+  window.addEventListener("load",function(){
+    navigator.serviceWorker.register("sw.js").catch(function(){});
+  });
+}
+</script>
 
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
+const APP_VERSION="1.0.0-rc-beta";
+const APP_ENV="local-v1";
+const APP_SCHEMA_VERSION=2;
+const DEVELOPER_MODE=new URLSearchParams(location.search).get("dev")==="1"||localStorage.getItem("petHabitDeveloperMode")==="true";
+const makeLocalSaveId=()=>"local_"+Date.now()+"_"+Math.random().toString(36).slice(2,10);
+const backupLocalStorageSnapshot=(reason)=>{
+  try{
+    const key="petHabitMigrationBackup_"+new Date().toISOString();
+    const snapshot={reason,createdAt:new Date().toISOString(),localStorage:{}};
+    Object.keys(localStorage).forEach(k=>{snapshot.localStorage[k]=localStorage.getItem(k);});
+    localStorage.setItem(key,JSON.stringify(snapshot));
+    return key;
+  }catch(e){return null;}
+};
+const migrateSaveDataSafely=()=>{
+  try{
+    const flag="petHabitSchemaVersion";
+    const current=Number(localStorage.getItem(flag)||"0");
+    if(current>=APP_SCHEMA_VERSION)return true;
+    backupLocalStorageSnapshot("schema-"+current+"-to-"+APP_SCHEMA_VERSION);
+    const familyRaw=localStorage.getItem("petHabitFamily_v1");
+    if(familyRaw){
+      const family=JSON.parse(familyRaw);
+      if(family&&Array.isArray(family.players)){
+        family.players=family.players.map(p=>({
+          ...p,
+          localSaveId:p.localSaveId||makeLocalSaveId(),
+          futureGoogleUserId:p.futureGoogleUserId||"",
+          loginStatus:p.loginStatus||"local",
+          cloudSaveStatus:p.cloudSaveStatus||"not_connected"
+        }));
+        localStorage.setItem("petHabitFamily_v1",JSON.stringify(family));
+      }
+    }
+    localStorage.setItem(flag,String(APP_SCHEMA_VERSION));
+    return true;
+  }catch(e){
+    localStorage.setItem("petHabitMigrationError",String(e&&e.message||e));
+    return false;
+  }
+};
+migrateSaveDataSafely();
 
 const trackSafe=(event,params={})=>{
   try{
@@ -144,19 +230,30 @@ const cardS=(bg)=>({background:bg||C.card,borderRadius:24,
 
 const DEFAULT_TASKS=[
   {id:1,icon:"🏫",label:"7:40前到校",pts:20},
-  {id:2,icon:"✏️",label:"作業完整寫完",pts:12},
-  {id:3,icon:"📱",label:"3C不超過2小時",pts:20},
-  {id:4,icon:"🍽️",label:"飯後收拾碗筷",pts:10},
-  {id:5,icon:"🛁",label:"21:00前洗澡",pts:10},
-  {id:6,icon:"🌙",label:"21:30前上床",pts:12},
-  {id:7,icon:"👚",label:"睡前準備衣服",pts:8},
-  {id:8,icon:"🎒",label:"自己整理書包",pts:8},
+  {id:2,icon:"✏️",label:"作業完整寫完",pts:40},
+  {id:3,icon:"🌙",label:"21:30前上床",pts:40},
 ];
 
 const WEEKEND_TASKS=[
   {id:"w1",icon:"🏃",label:"和家人出去走走",pts:20},
   {id:"w2",icon:"🧹",label:"幫忙打掃家裡",pts:30},
 ];
+
+const OFFICIAL_EVENTS=[
+  {
+    id:"summer_2026",
+    title:"🌞 暑假特別任務",
+    provider:"Maggie Lab",
+    startDate:"2026-07-01",
+    endDate:"2026-08-31",
+    reward:{foodId:"f1",emoji:"🍎",label:"蘋果",qty:20},
+    missions:[
+      {id:"reading",icon:"📚",title:"閱讀挑戰",target:20,unit:"本"},
+      {id:"exercise",icon:"⚽",title:"運動挑戰",target:20,unit:"次"},
+    ]
+  }
+];
+const WISH_STAR_OPTIONS=[10,20,50,100,200,500];
 
 const LEVELS=[
   {lv:1,name:"小豆豆",stage:"幼年期",emoji:"🌱",min:0,sz:.8},
@@ -183,6 +280,12 @@ const PETS=[
   {id:"dog",label:"小狗",emoji:"🐶",desc:"忠心耿耿，最愛陪伴！",c:"#FFE8B8",b:"#D8A858"},
   {id:"fox",label:"小狐狸",emoji:"🦊",desc:"聰明機靈，最愛探險！",c:"#FF9F3F",b:"#D06000"},
 ];
+const HERO_PET_LAYOUT=[
+  {petType:"cat",x:18,size:.44,delay:"0s"},
+  {petType:"horse",x:41,size:.58,delay:".18s"},
+  {petType:"dog",x:64,size:.50,delay:".36s"},
+  {petType:"fox",x:84,size:.42,delay:".54s"},
+];
 /* Original 6-pet roster (chick/frog/capy removed 2026/06/23) — kept for reference:
 {id:"chick",label:"小黃雞",emoji:"🐣",desc:"嗶嗶嗶！活力滿滿！",c:"#FFE033",b:"#D4A000"},
 {id:"frog",label:"青蛙",emoji:"🐸",desc:"呱呱！跳最高的我！",c:"#A8DDA8",b:"#4CAF50"},
@@ -199,6 +302,9 @@ const FOODS=[
   {id:"f7",emoji:"🍔",label:"漢堡",price:45,hunger:48},
   {id:"f8",emoji:"🧁",label:"小蛋糕",price:50,hunger:50},
   {id:"f9",emoji:"🍰",label:"生日蛋糕",price:100,hunger:80},
+  {id:"f10",emoji:"🍙",label:"飯糰",price:60,hunger:55},
+  {id:"f11",emoji:"🍌",label:"香蕉",price:35,hunger:38},
+  {id:"f12",emoji:"🥞",label:"鬆餅",price:85,hunger:70},
 ];
 
 /* Updated by Claude on 2026/06/23
@@ -210,16 +316,34 @@ const FOODS=[
    stay in their save data and will just render with no matching shop listing —
    does not crash, does not erase player data. Original 20+ item definitions are kept
    below as a comment block for Codex/future reference if clothing is reintroduced. */
+const BLUE_BOW_COLLAR="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120"><rect width="180" height="120" fill="none"/><path d="M72 60 C44 34 18 28 14 51 C10 76 38 86 72 60Z" fill="#7EC8FF" stroke="#4C8FC0" stroke-width="6" stroke-linejoin="round"/><path d="M108 60 C136 34 162 28 166 51 C170 76 142 86 108 60Z" fill="#7EC8FF" stroke="#4C8FC0" stroke-width="6" stroke-linejoin="round"/><circle cx="90" cy="60" r="19" fill="#5AAFE8" stroke="#4C8FC0" stroke-width="6"/><path d="M29 49 C42 44 56 48 68 58" stroke="#EAF8FF" stroke-width="5" stroke-linecap="round" opacity=".8"/><path d="M151 49 C138 44 124 48 112 58" stroke="#EAF8FF" stroke-width="5" stroke-linecap="round" opacity=".8"/></svg>`);
+const RED_BOW_COLLAR="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120"><rect width="180" height="120" fill="none"/><path d="M72 60 C44 34 18 28 14 51 C10 76 38 86 72 60Z" fill="#FF8B9D" stroke="#C85B6D" stroke-width="6" stroke-linejoin="round"/><path d="M108 60 C136 34 162 28 166 51 C170 76 142 86 108 60Z" fill="#FF8B9D" stroke="#C85B6D" stroke-width="6" stroke-linejoin="round"/><circle cx="90" cy="60" r="19" fill="#F36F84" stroke="#C85B6D" stroke-width="6"/><path d="M29 49 C42 44 56 48 68 58" stroke="#FFE7EC" stroke-width="5" stroke-linecap="round" opacity=".85"/><path d="M151 49 C138 44 124 48 112 58" stroke="#FFE7EC" stroke-width="5" stroke-linecap="round" opacity=".85"/></svg>`);
+
 const OUTFITS=[
-  {id:"summer_straw_hat",slot:"hat",emoji:"👒",label:"夏日草帽",price:260,
+  {id:"summer_straw_hat",slot:"hat",anchorSlot:"hat",emoji:"👒",label:"夏日草帽",price:260,
     asset:"assets/pet-accessories/summer_straw_hat.webp",
     thumb:"assets/pet-accessories/thumbs/summer_straw_hat.webp"},
-  {id:"flower_crown",slot:"hat",emoji:"🌸",label:"小花冠",price:240,
+  {id:"flower_crown",slot:"hat",anchorSlot:"hat",emoji:"🌸",label:"小花冠",price:240,
     asset:"assets/pet-accessories/flower_crown.webp",
     thumb:"assets/pet-accessories/thumbs/flower_crown.webp"},
-  {id:"star_scarf",slot:"acc",emoji:"⭐",label:"星星領巾",price:220,
+  {id:"blue_bow_collar",slot:"hat",anchorSlot:"hat",emoji:"🎀",label:"藍色蝴蝶結（頭飾）",price:260,
+    asset:BLUE_BOW_COLLAR,thumb:BLUE_BOW_COLLAR},
+  {id:"red_bow_collar",slot:"hat",anchorSlot:"hat",emoji:"🎀",label:"紅色蝴蝶結（頭飾）",price:260,
+    asset:RED_BOW_COLLAR,thumb:RED_BOW_COLLAR},
+  {id:"founder_crown",slot:"hat",anchorSlot:"hat",emoji:"👑",label:"寵物王國皇冠（開國限定款）",price:0,
+    asset:"assets/pet-accessories/founder/founder_crown.png",thumb:"assets/pet-accessories/founder/founder_crown.png",giftOnly:true,hidden:true,locked:true},
+  {id:"star_scarf",slot:"neck",anchorSlot:"neck",emoji:"⭐",label:"星星領巾",price:220,
     asset:"assets/pet-accessories/star_scarf.webp",
-    thumb:"assets/pet-accessories/thumbs/star_scarf.webp"},
+    thumb:"assets/pet-accessories/thumbs/star_scarf.webp",hidden:true,locked:true},
+  {id:"blue_bowtie_pending",slot:"neck",anchorSlot:"neck",emoji:"🩵",label:"藍色領結（待驗收）",price:320,
+    asset:"assets/pet-accessories/pending/pet_accessory_blue_bowtie.png",
+    thumb:"assets/pet-accessories/pending/thumbs/pet_accessory_blue_bowtie.png",pending:true,hidden:true,locked:true},
+  {id:"adventure_backpack_pending",slot:"back",anchorSlot:"back",emoji:"🎒",label:"探險背包（待驗收）",price:380,
+    asset:"assets/pet-accessories/pending/pet_accessory_adventure_backpack.png",
+    thumb:"assets/pet-accessories/pending/thumbs/pet_accessory_adventure_backpack.png",pending:true,hidden:true,locked:true},
+  {id:"orange_checker_skirt_pending",slot:"body",anchorSlot:"body",emoji:"🟧",label:"橘色棋盤裙（待驗收）",price:360,
+    asset:"assets/pet-accessories/pending/pet_accessory_orange_checker_skirt.png",
+    thumb:"assets/pet-accessories/pending/thumbs/pet_accessory_orange_checker_skirt.png",pending:true,hidden:true,locked:true},
 ];
 /* Original OUTFITS (pet hats/accessories) — disabled 2026/06/23, kept for reference:
 {id:"h1",slot:"hat",emoji:"👑",label:"皇冠",price:200},
@@ -246,12 +370,16 @@ const OUTFIT_CLOTHES_GIRL=[
   {id:"school_g",label:"👓 校服",price:250,gender:"girl",slot:"outfit"},
   {id:"denim_g",label:"👖 牛仔",price:300,gender:"girl",slot:"outfit"},
   {id:"resort_g",label:"☀️ 渡假",price:300,gender:"girl",slot:"outfit"},
+  {id:"founder_g_01",label:"👕 活力運動套裝",price:380,gender:"girl",slot:"outfit"},
+  {id:"founder_g_02",label:"🌙 星星晚安睡衣",price:380,gender:"girl",slot:"outfit"},
 ];
 const OUTFIT_CLOTHES_BOY=[
   {id:"casual_b",label:"🌿 休閒",price:100,gender:"boy",slot:"outfit"},
   {id:"school_b",label:"👓 校服",price:250,gender:"boy",slot:"outfit"},
   {id:"denim_b",label:"👖 牛仔",price:300,gender:"boy",slot:"outfit"},
   {id:"resort_b",label:"☀️ 渡假",price:300,gender:"boy",slot:"outfit"},
+  {id:"founder_b_01",label:"👕 運動套裝",price:380,gender:"boy",slot:"outfit"},
+  {id:"founder_b_02",label:"🌙 星星晚安睡衣",price:380,gender:"boy",slot:"outfit"},
 ];
 /* Original KID_ITEMS (kid clothing, 20+ pieces across top/bottom/shoes/hat/acc) —
    disabled 2026/06/23 per requirement to drop the SVG paper-doll clothing system in
@@ -300,13 +428,22 @@ const ROOMITEMS=[
   // 奶油寵物房間 PNG/WebP 裝飾（2026-06-24）
   {id:"cream_paw_round_rug",type:"dc",slot:"bl",emoji:"🐾",label:"奶油爪印地毯",price:220,
     asset:"assets/furniture/cream_pet_room/cream_paw_round_rug.webp",
-    thumb:"assets/furniture/cream_pet_room/thumbs/cream_paw_round_rug.webp",scale:1.28},
+    thumb:"assets/furniture/cream_pet_room/thumbs/cream_paw_round_rug.webp",scale:1.9,roomSize:120},
   {id:"cream_star_cushion",type:"dc",slot:"br",emoji:"⭐",label:"星星軟墊",price:180,
     asset:"assets/furniture/cream_pet_room/cream_star_cushion.webp",
-    thumb:"assets/furniture/cream_pet_room/thumbs/cream_star_cushion.webp",scale:1.18},
+    thumb:"assets/furniture/cream_pet_room/thumbs/cream_star_cushion.webp",scale:1.45,roomSize:92},
   {id:"cream_hanging_plant",type:"dc",slot:"tr",emoji:"🌿",label:"奶油吊掛植物",price:260,
     asset:"assets/furniture/cream_pet_room/cream_hanging_plant.webp",
-    thumb:"assets/furniture/cream_pet_room/thumbs/cream_hanging_plant.webp",scale:1.12},
+    thumb:"assets/furniture/cream_pet_room/thumbs/cream_hanging_plant.webp",scale:1.28,roomSize:88},
+  {id:"cream_wood_bed_pending",type:"dc",slot:"bl",emoji:"🛏️",label:"奶油原木床（待驗收）",price:620,
+    asset:"assets/furniture/pending/room_furniture_cream_wood_bed.png",
+    thumb:"assets/furniture/pending/thumbs/room_furniture_cream_wood_bed.png",scale:2.35,roomSize:150,pending:true,locked:true},
+  {id:"cream_wood_wardrobe_pending",type:"dc",slot:"ml",emoji:"🚪",label:"奶油原木衣櫃（待驗收）",price:560,
+    asset:"assets/furniture/pending/room_furniture_cream_wood_wardrobe.png",
+    thumb:"assets/furniture/pending/thumbs/room_furniture_cream_wood_wardrobe.png",scale:1.85,roomSize:132,pending:true,locked:true},
+  {id:"cream_star_floor_lamp_pending",type:"dc",slot:"br",emoji:"💡",label:"奶油星星直立燈（待驗收）",price:420,
+    asset:"assets/furniture/pending/room_furniture_cream_star_floor_lamp.png",
+    thumb:"assets/furniture/pending/thumbs/room_furniture_cream_star_floor_lamp.png",scale:1.75,roomSize:124,pending:true,locked:true},
   // emoji 裝飾版本（不需 PNG/SVG）
   {id:"d_plant",type:"dc",slot:"tr",emoji:"🌿",label:"掛式植物",price:190},
   {id:"d_bed",type:"dc",slot:"bl",emoji:"🛏️",label:"小床",price:250},
@@ -316,6 +453,9 @@ const ROOMITEMS=[
   {id:"d_candle",type:"dc",slot:"tl",emoji:"🕯️",label:"蠟燭",price:130},
   {id:"d_tapestry",type:"dc",slot:"tr",emoji:"🖼️",label:"掛毯",price:160},
   {id:"d_sofa",type:"dc",slot:"ml",emoji:"🛋️",label:"沙發",price:240},
+  {id:"founder_first_resident_frame",type:"dc",slot:"tr",emoji:"🖼️",label:"寵物王國限定相框（開國限定款）",price:0,
+    asset:"assets/furniture/founder/first_resident_frame.png",
+    thumb:"assets/furniture/founder/first_resident_frame.png",scale:1.08,roomSize:92,giftOnly:true},
 ];
 
 const TOYS=[
@@ -325,22 +465,48 @@ const TOYS=[
   {id:"t4",emoji:"🏀",label:"籃球",price:120,joy:22},
   {id:"t5",emoji:"🪁",label:"風箏",price:180,joy:28},
   {id:"t6",emoji:"🎮",label:"遊戲機",price:280,joy:35},
+  {id:"t7",emoji:"🫧",label:"泡泡棒",price:140,joy:24},
+  {id:"t8",emoji:"🧸",label:"抱抱小熊",price:220,joy:30},
+  {id:"t9",emoji:"🎈",label:"彩色氣球",price:160,joy:26},
 ];
 
 const ACHIEVEMENTS=[
-  {id:"a1",icon:"🌟",label:"第一步",desc:"第一次核准任務"},
-  {id:"a2",icon:"🏫",label:"準時達人",desc:"到校5次"},
-  {id:"a3",icon:"✏️",label:"作業英雄",desc:"作業5次"},
-  {id:"a4",icon:"📱",label:"3C自律王",desc:"3C習慣5次"},
-  {id:"a5",icon:"🍽️",label:"小幫手",desc:"收碗筷5次"},
-  {id:"a6",icon:"🛁",label:"香香的",desc:"洗澡5次"},
-  {id:"a7",icon:"🌙",label:"早睡冠軍",desc:"早睡5次"},
-  {id:"a8",icon:"🔥",label:"連續3天",desc:"連續3天全部完成"},
-  {id:"a9",icon:"💎",label:"連續7天",desc:"連續7天+100點"},
-  {id:"a10",icon:"👑",label:"滿分達人",desc:"單日100分"},
-  {id:"a11",icon:"🛍️",label:"購物狂",desc:"第一次購物"},
-  {id:"a12",icon:"🦄",label:"完全進化",desc:"寵物升到最高級"},
+  {id:"a1",icon:"🌟",label:"第一個小約定",desc:"第一次完成並存入星星"},
+  {id:"a2",icon:"🏡",label:"歡迎回家",desc:"第一次回到王國"},
+  {id:"a3",icon:"✅",label:"小小行動派",desc:"累積完成5個小約定"},
+  {id:"a4",icon:"🤝",label:"被看見的努力",desc:"第一次由家長完成陪伴確認"},
+  {id:"a5",icon:"📔",label:"心情記錄員",desc:"第一次寫日記或記錄心情"},
+  {id:"a6",icon:"💛",label:"寵物好朋友",desc:"第一次照顧或摸摸寵物"},
+  {id:"a7",icon:"🛍️",label:"第一次收藏",desc:"第一次在商店購買物品"},
+  {id:"a8",icon:"🏠",label:"小小佈置家",desc:"第一次佈置房間"},
+  {id:"a9",icon:"🌳",label:"公園散步日",desc:"第一次去公園"},
+  {id:"a10",icon:"🌠",label:"願望種子",desc:"第一次送出願望"},
+  {id:"a11",icon:"🎯",label:"挑戰小勇士",desc:"第一次完成挑戰流程"},
+  {id:"a12",icon:"🔥",label:"三天的腳印",desc:"連續3天回來看看寵物"},
+  {id:"a_founder_beta",icon:"💌",label:"第一批小小夥伴",desc:"收到 Maggie 阿姨的開國紀念禮物"},
 ];
+
+const EMOTION_REPLIES={
+  happy:["今天的開心，我也感覺到了！","把這份好心情收進小天地吧。","你笑起來，王國也亮了一點。","今天有值得記住的小事情呢。","我想跟你一起慶祝一下！","快樂也可以慢慢長大。"],
+  sad:["難過的時候，我會陪你坐一下。","今天不需要很厲害，回來就很好。","把傷心說出來，也是一種勇敢。","我在這裡，慢慢呼吸就好。","明天可以再試一次，我陪你。","小天地會幫你保存這份心情。"],
+  angry:["生氣也沒關係，我們先停一下。","你的感覺很重要，慢慢說給我聽。","先深呼吸，等心裡比較鬆一點。","我會在旁邊陪你，不催你。","把怒氣畫成一朵雲，讓它飄走。","今天辛苦了，真的。"],
+  tired:["累了就先休息一下吧。","你已經努力很多了。","今天可以慢慢來，不用急。","我陪你充電，像小星星一樣。","做一點點也很棒。","休息也是照顧自己。"],
+  excited:["哇！今天的你亮晶晶的！","這份期待好像小煙火。","快把開心的事記下來！","我也想跟你一起跳一下。","今天的小天地好熱鬧。","這是值得收藏的一天！"]
+};
+
+const JIT_TUTORIALS={
+  tasks:{icon:"✅",title:"今天的小約定",steps:["完成後先打勾，寵物會先替你慶祝。","陪伴模式需要爸媽確認後才會發星星。","信任模式則會在你打勾後立刻得到星星。"]},
+  shop:{icon:"🛍️",title:"商店收藏",steps:["用星星買食物、玩具、房間物品。","買到的東西會進背包或房間。","價格保留一點挑戰感，讓孩子有目標。"]},
+  room:{icon:"🏡",title:"寵物房間",steps:["可以摸摸寵物、餵食、清理房間。","買到的家具會出現在房間裡。","之後也會加入更多互動裝飾。"]},
+  diary:{icon:"📔",title:"心情日記",steps:["每天選一個心情，也可以寫一句小日記。","月曆會留下每天的心情圖案。","寵物會回一句陪伴你的話。"]},
+  parent:{icon:"💛",title:"家長模式",steps:["爸媽可以開家庭會議、調整小約定。","也可以匯出 JSON 備份，避免資料遺失。","開發檢查資訊只會在 Developer Mode 顯示。"]},
+  park:{icon:"🌳",title:"公園散步",steps:["可以帶寵物與小主人到公園玩。","人物和寵物可以分開拖移。","這裡是孩子放鬆的小天地。"]},
+  desk:{icon:"📚",title:"書桌",steps:["有些孩子不知道先做哪一件事。","抽一張小紙條，先完成今天的一個小約定。"]},
+  focus:{icon:"⏳",title:"專注",steps:["孩子對時間還沒有概念。","透過沙漏，一步一步完成眼前的小任務。"]},
+  wish:{icon:"🌟",title:"願望",steps:["願望不是馬上完成。","而是陪孩子一起努力，慢慢實現。"]},
+  events:{icon:"🎉",title:"活動挑戰",steps:["除了每天的小約定，偶爾也來挑戰新的目標。","一起累積更多成長回憶。"]}
+};
+const TUTORIAL_VERSION=1;
 
 const PET_SAYS=["你來了！好開心！😊","今天也要一起加油！💪","我好喜歡你！❤️",
   "你是最棒的主人！🌟","我想你了！🥺","任務完成了嗎？✅",
@@ -378,11 +544,24 @@ const FAMILY_KEY="petHabitFamily_v1";
 const isPetHabitSaveKey=(key)=>key==="habitKingdom"||key==="lastLogin_hk"||key==="lastStreak_hk"||
   key==="musicOn_hk"||key==="weather_hk"||key==="parkPetPan_hk"||key==="parkKidPan_hk"||key===FAMILY_KEY||
   key.startsWith("habitKingdom_player_")||key.startsWith("lastLogin_hk_")||key.startsWith("lastStreak_hk_")||
-  key.startsWith("musicOn_hk_")||key.startsWith("weather_hk_")||key.startsWith("parkPetPan_hk_")||key.startsWith("parkKidPan_hk_");
+  key.startsWith("musicOn_hk_")||key.startsWith("weather_hk_")||key.startsWith("parkPetPan_hk_")||key.startsWith("parkKidPan_hk_")||
+  key.startsWith("founderGift_v1_claimed")||key.startsWith("petHabitRedeemedCodes_");
 const getPetHabitSaveKeys=()=>Object.keys(localStorage).filter(isPetHabitSaveKey);
 const readFamily=()=>{try{const f=JSON.parse(localStorage.getItem(FAMILY_KEY)||"null");return f&&Array.isArray(f.players)&&f.players.length>0&&f.players.length<=3?f:null;}catch(e){return null;}};
 const saveFamily=(family)=>localStorage.setItem(FAMILY_KEY,JSON.stringify(family));
 const readPlayerSave=(storageKey)=>{try{return JSON.parse(localStorage.getItem(storageKey)||"{}");}catch(e){return {};}};
+const dateOnly=(d)=>new Date(d+"T00:00:00");
+const getActiveOfficialEvents=()=>OFFICIAL_EVENTS.filter(ev=>{
+  const now=new Date(),start=dateOnly(ev.startDate),end=dateOnly(ev.endDate);
+  end.setHours(23,59,59,999);
+  return now>=start&&now<=end;
+});
+const getCurrentOrPreviewOfficialEvents=()=>DEVELOPER_MODE?OFFICIAL_EVENTS:getActiveOfficialEvents();
+const ensureEventProgress=(progress,ev)=>{
+  const base={};
+  ev.missions.forEach(m=>base[m.id]={count:0,pending:false,approvedToday:false});
+  return {...base,...(progress&&progress[ev.id]||{})};
+};
 const makePlayerId=()=>"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const familyDay=(createdAt)=>Math.max(1,Math.floor((Date.now()-new Date(createdAt||Date.now()).getTime())/86400000)+1);
 
@@ -884,7 +1063,7 @@ function HorsePremium({mood,level,hat,acc,hunger,running,eating,size}){
 /* 其餘夥伴共用的新版角色語言：幼態比例、柔和高光、粗描邊與動態表情 */
 function CutePet({kind,mood,level,hat,acc,hunger,running,eating,size}){
   mood=mood==null?4:mood;level=level||1;size=size||1;
-  const lv=LEVELS[Math.min(level-1,4)],s=size*lv.sz*(kind==="chick"?.9:kind==="frog"?.94:1);
+  const lv=LEVELS[Math.min(level-1,4)],s=size*lv.sz*(kind==="chick"?0.9:kind==="frog"?0.94:1);
   const hI=OUTFITS.find(i=>i.id===hat),aI=OUTFITS.find(i=>i.id===acc);
   const happy=mood>=4,sick=mood<=1,lv5=level>=5;
   /* Updated by Claude on 2026/06/23
@@ -989,6 +1168,10 @@ const IMG={
   owner_girl_denim_g:"assets/owner/girl/denim_g.webp",
   owner_girl_resort_g:"assets/owner/girl/resort_g.webp",
   owner_boy_resort_b:"assets/owner/boy/resort_b.webp",
+  owner_girl_founder_g_01:"assets/owner/girl/founder_g_01.png",
+  owner_girl_founder_g_02:"assets/owner/girl/founder_g_02.png",
+  owner_boy_founder_b_01:"assets/owner/boy/founder_b_01.png",
+  owner_boy_founder_b_02:"assets/owner/boy/founder_b_02.png",
   owner_girl_normal:"assets/owner/girl/normal.webp",
   horse_normal:"assets/pets/horse/normal.webp",
   horse_happy:"assets/pets/horse/happy.webp",
@@ -1008,7 +1191,7 @@ const IMG={
   fox_lonely:"assets/pets/fox/lonely.webp",
   park_night:"assets/rooms/park/night.webp",
   park_day:"assets/rooms/park/day.webp",
-  room_bedroom_sunny:"assets/rooms/bedroom/sunny_window.webp",
+  room_bedroom_sunny:"assets/rooms/bedroom/empty_furniture_room_v1.png",
 };
 /* Updated by Claude on 2026/06/24
    Reason: "休閒/casual" has no dedicated outfit PNG because it IS the base
@@ -1048,14 +1231,42 @@ function PetAccessoryArt({item,size=44,style}){
   return <span style={{fontSize:size*.62}}>{item&&item.emoji}</span>;
 }
 
+function FoodEffectInfo({item,center=false}){
+  if(!item)return null;
+  return <div style={{fontSize:9,color:C.soft,fontWeight:900,lineHeight:1.35,marginTop:3,textAlign:center?"center":"inherit"}}>
+    {item.hunger!=null&&<div>🍎 飽食 +{item.hunger}</div>}
+    {item.joy!=null&&<div>❤️ 心情 +{item.joy}</div>}
+  </div>;
+}
+
 const PET_ACCESSORY_ANCHORS={
-  dog:{hat:{x:42,y:12,w:56,rot:-7},acc:{x:40,y:57,w:44,rot:0}},
-  cat:{hat:{x:50,y:12,w:52,rot:0},acc:{x:50,y:58,w:42,rot:0}},
-  fox:{hat:{x:50,y:12,w:52,rot:0},acc:{x:50,y:58,w:42,rot:0}},
-  horse:{hat:{x:58,y:10,w:54,rot:7},acc:{x:54,y:59,w:42,rot:0}},
-  chick:{hat:{x:50,y:12,w:50,rot:0},acc:{x:50,y:60,w:40,rot:0}},
-  frog:{hat:{x:50,y:10,w:52,rot:0},acc:{x:50,y:60,w:40,rot:0}},
-  capy:{hat:{x:50,y:13,w:52,rot:0},acc:{x:50,y:60,w:42,rot:0}},
+  dog:{
+    hat:{x:43,y:20,width:30,rotation:-7,zIndex:6},
+    neck:{x:45,y:57,width:20,rotation:-2,zIndex:7},
+    back:{x:61,y:54,width:38,rotation:5,zIndex:3},
+    body:{x:55,y:74,width:48,rotation:0,zIndex:6}
+  },
+  cat:{
+    hat:{x:48,y:19,width:30,rotation:-2,zIndex:6},
+    neck:{x:48,y:56,width:20,rotation:0,zIndex:7},
+    back:{x:62,y:57,width:36,rotation:4,zIndex:3},
+    body:{x:56,y:76,width:46,rotation:0,zIndex:6}
+  },
+  fox:{
+    hat:{x:47,y:18,width:30,rotation:-4,zIndex:6},
+    neck:{x:47,y:56,width:20,rotation:0,zIndex:7},
+    back:{x:63,y:57,width:36,rotation:5,zIndex:3},
+    body:{x:56,y:77,width:46,rotation:0,zIndex:6}
+  },
+  horse:{
+    hat:{x:48,y:18,width:28,rotation:4,zIndex:6},
+    neck:{x:49,y:54,width:19,rotation:0,zIndex:7},
+    back:{x:64,y:56,width:36,rotation:5,zIndex:3},
+    body:{x:56,y:76,width:46,rotation:0,zIndex:6}
+  },
+  chick:{hat:{x:50,y:12,width:50,rotation:0,zIndex:4},neck:{x:50,y:60,width:40,rotation:0,zIndex:6},back:{x:39,y:56,width:40,rotation:0,zIndex:3},body:{x:50,y:77,width:48,rotation:0,zIndex:5}},
+  frog:{hat:{x:50,y:10,width:52,rotation:0,zIndex:4},neck:{x:50,y:60,width:40,rotation:0,zIndex:6},back:{x:38,y:55,width:40,rotation:0,zIndex:3},body:{x:50,y:76,width:48,rotation:0,zIndex:5}},
+  capy:{hat:{x:50,y:13,width:52,rotation:0,zIndex:4},neck:{x:50,y:60,width:42,rotation:0,zIndex:6},back:{x:38,y:55,width:42,rotation:0,zIndex:3},body:{x:50,y:76,width:50,rotation:0,zIndex:5}},
 };
 
 function OwnerImg({gender,outfitId,size,style}){
@@ -1075,7 +1286,7 @@ function OwnerImg({gender,outfitId,size,style}){
     userSelect:"none",pointerEvents:"none",...style}}/>;
 }
 
-function PetImg({petType,mood,hunger,running,eating,isNight,sleeping,size,style,hat,acc}){
+function PetImg({petType,mood,hunger,running,eating,isNight,sleeping,size,style,hat,neck,back,body,acc}){
   const t=petType||"horse";
   const m=mood==null?4:mood;
   /* Updated by Claude on 2026/06/23
@@ -1097,23 +1308,29 @@ function PetImg({petType,mood,hunger,running,eating,isNight,sleeping,size,style,
   const key=t+"_"+state;
   const src=IMG[key]||IMG[t+"_normal"]||IMG.horse_normal;
   const s=size||1;
-  const hatItem=OUTFITS.find(i=>i.id===hat),accItem=OUTFITS.find(i=>i.id===acc);
+  const hatItem=OUTFITS.find(i=>i.id===hat),
+    neckItem=OUTFITS.find(i=>i.id===neck||i.id===acc),
+    backItem=OUTFITS.find(i=>i.id===back),
+    bodyItem=OUTFITS.find(i=>i.id===body);
   const anchors=PET_ACCESSORY_ANCHORS[t]||PET_ACCESSORY_ANCHORS.dog;
+  const showAccessories=!sleeping&&state!=="sleep";
   const drawAccessory=(item,kind)=>{
     if(!item)return null;
     const a=anchors[kind]||anchors.hat;
     const baseW=160*s;
-    return <div style={{position:"absolute",left:a.x+"%",top:a.y+"%",transform:"translate(-50%,-50%) rotate("+(a.rot||0)+"deg)",zIndex:kind==="hat"?4:5,
+    return <div style={{position:"absolute",left:a.x+"%",top:a.y+"%",transform:"translate(-50%,-50%) rotate("+((a.rotation!=null?a.rotation:a.rot)||0)+"deg)",zIndex:a.zIndex||5,
       pointerEvents:"none",filter:"drop-shadow(0 3px 1px rgba(80,50,20,.10))"}}>
-      <PetAccessoryArt item={item} size={baseW*(a.w/100)}/>
+      <PetAccessoryArt item={item} size={baseW*((a.width||a.w||42)/100)}/>
     </div>;
   };
   return <div style={{display:"inline-block",position:"relative",animation:running?"none":"float 3s ease-in-out infinite"}}>
     <img src={assetSrc(src)} onError={handleImgError} draggable={false} alt="" style={{width:160*s,height:150*s,
       objectFit:"contain",objectPosition:"bottom center",display:"block",
       userSelect:"none",pointerEvents:"none",...style}}/>
-    {drawAccessory(hatItem,"hat")}
-    {drawAccessory(accItem,"acc")}
+    {showAccessories&&drawAccessory(hatItem,"hat")}
+    {showAccessories&&drawAccessory(backItem,"back")}
+    {showAccessories&&drawAccessory(neckItem,"neck")}
+    {showAccessories&&drawAccessory(bodyItem,"body")}
   </div>;
 }
 
@@ -1489,13 +1706,52 @@ function Overlay({onClose,children,wide}){
       zIndex:1500,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"0 0 0 0"}}
       onClick={onClose}>
       <div style={{...cardS(C.card),borderRadius:"28px 28px 0 0",
-        padding:"22px 18px 32px",width:"100%",maxWidth:wide?768:480,
-        maxHeight:"90vh",overflowY:"auto",animation:"slideUp .3s"}}
-        onClick={e=>e.stopPropagation()}>{children}</div>
+        padding:"22px 18px 32px",width:"100%",maxWidth:wide?768:480,position:"relative",
+        height:wide?"90vh":undefined,maxHeight:"90vh",overflowY:"auto",animation:"slideUp .3s"}}
+        onClick={e=>e.stopPropagation()}>
+        <button className="btn" onClick={onClose} aria-label="關閉"
+          style={{position:"absolute",top:12,right:12,zIndex:5,...bub("rgba(255,255,255,.88)",999),
+            width:34,height:34,padding:0,fontSize:16,fontWeight:900,color:C.brown,border:"none",
+            display:"flex",alignItems:"center",justifyContent:"center"}}>✕</button>
+        {children}
+      </div>
     </div>);
 }
 
 const Sh=(text)=>(<div style={{fontSize:18,fontWeight:900,color:C.brown,marginBottom:12,textAlign:"center"}}>{text}</div>);
+
+/* ═══════════════ IMPORT LOCAL DATA MODAL (Added by Claude 2026/06/29) ═══════════════
+   Reason: front-end-only piece of the "登入後偵測舊資料" flow from the Phase 1
+   login plan. This component and the helper below do NOT call Supabase or any
+   network API — they only read localStorage (which is safe, no connection
+   needed) and render the UI. Codex hooks this in by:
+     1. After a successful Google login + family/user creation, call
+        hasLocalGameData(storageKey) to decide whether to show this modal.
+     2. Render <ImportLocalDataModal onImport={...} onSkip={...}/> and put the
+        real "read localStorage -> write to Supabase" logic inside onImport,
+        and whatever "mark as skipped, don't ask again" logic inside onSkip.
+   This file does not call either callback itself anywhere — it's wired to
+   nothing yet, by design, until the real login flow exists to trigger it. */
+function hasLocalGameData(storageKey){
+  try{
+    const raw=localStorage.getItem(storageKey||"habitKingdom");
+    return !!raw;
+  }catch(e){return false;}
+}
+function ImportLocalDataModal({onImport,onSkip}){
+  return <Overlay onClose={onSkip}>
+    <div style={{fontSize:40,textAlign:"center",marginBottom:8}}>📦</div>
+    {Sh("發現此裝置已有遊戲紀錄")}
+    <div style={{fontSize:13,color:C.soft,fontWeight:800,textAlign:"center",lineHeight:1.6,marginBottom:20,padding:"0 8px"}}>
+      是否要把這個裝置上的進度，匯入到目前的帳號？
+    </div>
+    <button className="btn" onClick={onImport} style={{...bub(C.orange),width:"100%",padding:"13px 0",
+      borderRadius:999,fontSize:15,fontWeight:900,color:"#fff",border:"none",marginBottom:10,
+      boxShadow:"0 5px 0 rgba(180,80,0,.25)"}}>📥 匯入這份紀錄</button>
+    <button className="btn" onClick={onSkip} style={{...bub(C.light),width:"100%",padding:"11px 0",
+      borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,border:"none"}}>略過，從新帳號開始</button>
+  </Overlay>;
+}
 
 /* ═══════════════ TOAST ═══════════════ */
 function Toast({msg,color}){
@@ -1586,8 +1842,8 @@ function Onboarding({onDone,initialKidName}){
     setErr("");
     if(step===2&&!kidName.trim())return setErr("請輸入你的名字！");
     if(step===4){
-      if(totalPts>100)return setErr("習慣總分超過100分了，請調整一下 😊");
-      if(tasks.length===0)return setErr("至少需要一個習慣任務！");
+      if(totalPts>100)return setErr("今日星星超過100顆了，請調整一下 😊");
+      if(tasks.length===0)return setErr("至少需要一個小約定！");
     }
     if(step===5){
       if(pin.length<4)return setErr("請設定至少4位數字密碼！");
@@ -1607,24 +1863,24 @@ function Onboarding({onDone,initialKidName}){
   const removeTask=(id)=>setTasks(ts=>ts.filter(t=>t.id!==id));
   const addTask=()=>{
     if(!newLabel.trim())return;
-    if(totalPts+newPts>100)return setErr("加了這個任務會超過100分喔 😊");
+    if(totalPts+newPts>100)return setErr("加了這個小約定會超過100顆星星喔 😊");
     setTasks(ts=>[...ts,{id:Date.now(),icon:newIcon,label:newLabel.trim(),pts:newPts}]);
     setNewLabel("");setNewPts(10);setNewIcon("⭐");setErr("");
   };
   const saveEdit=()=>{
     if(!editLabel.trim())return;
     const next=tasks.filter(t=>t.id!==editIdx).reduce((a,t)=>a+t.pts,0)+editPts;
-    if(next>100)return setErr("修改後總分會超過100分喔 😊");
+    if(next>100)return setErr("修改後會超過100顆星星喔 😊");
     setTasks(ts=>ts.map(t=>t.id===editIdx?{...t,label:editLabel,pts:editPts,icon:editIcon}:t));
     setEditIdx(null);setErr("");
   };
 
   const GUIDE=[
-    {icon:"🌱",title:"第一次使用",text:"跟孩子一起選寵物、設定習慣清單，約5分鐘完成！"},
-    {icon:"✅",title:"每天怎麼用",text:"孩子完成習慣後打勾，爸媽按 🔐 核准，星星就入帳囉！"},
-    {icon:"⭐",title:"點數",text:"每日登入 +5，完成習慣最多 +100，可以買食物、玩具餵寵物並實現許的願望！"},
+    {icon:"🌱",title:"第一次使用",text:"跟孩子一起選寵物、開一場家庭會議，約5分鐘完成！"},
+    {icon:"✅",title:"每天怎麼用",text:"孩子完成小約定後打勾，爸媽陪伴確認，星星就入帳囉！"},
+    {icon:"⭐",title:"星星",text:"每日登入 +5，完成小約定最多 +100，可以買食物、玩具餵寵物並實現許的願望！"},
     {icon:"🌠",title:"願望清單",text:"孩子許願 → 爸媽設定星星數 → 孩子努力存夠 → 爸媽決定實現"},
-    {icon:"🎵",title:"音樂",text:"家長後台可以隨時開關！"},
+    {icon:"🎵",title:"音樂",text:"孩子可以在首頁直接開關！"},
   ];
 
   return(
@@ -1646,7 +1902,7 @@ function Onboarding({onDone,initialKidName}){
             </div>
             <div style={{fontSize:25,fontWeight:900,color:C.brown,marginBottom:4,letterSpacing:".02em"}}>寵物習慣王國</div>
             <div style={{fontSize:12,color:C.soft,fontWeight:800,lineHeight:1.7}}>
-              選一位小主人，和小黃馬展開新生活！
+              選一位小主人，和你的寵物展開新生活。
             </div>
           </div>
 
@@ -1760,18 +2016,21 @@ function Onboarding({onDone,initialKidName}){
         </>}
 
         {step===4&&<>
-          <div style={{fontSize:21,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:4}}>設定習慣任務 📋</div>
-          <div style={{fontSize:11,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:10}}>爸媽跟小孩一起討論，可以修改！</div>
+          <div style={{fontSize:21,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:4}}>家庭會議 📋</div>
+          <div style={{fontSize:12,color:C.brown,fontWeight:900,textAlign:"center",lineHeight:1.7,marginBottom:8}}>
+            每個家庭，都有自己的小約定。<br/>今天一起討論一下吧。
+          </div>
+          <div style={{fontSize:10,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:10}}>每日星星上限 100 顆，可依孩子狀況慢慢調整。</div>
           <div style={{...bub(totalPts>100?"#FFD0D0":totalPts===100?C.green:C.yellow,16),
-            padding:"7px 14px",textAlign:"center",marginBottom:10,border:"none"}}>
+            padding:"7px 14px",textAlign:"center",marginBottom:10,border:"none",opacity:.82}}>
             <span style={{fontSize:12,fontWeight:900,color:C.brown}}>
-              目前總分：{totalPts}/100分 {totalPts>100?"⚠️ 超過了！":totalPts===100?"🎯 剛好！":""}
+              目前設定：{totalPts}/100 顆星星 {totalPts>100?"⚠️ 超過了！":""}
             </span>
           </div>
           <div style={{...bub(C.cream,18),padding:"10px 12px",border:"none",marginBottom:10}}>
-            <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:7}}>任務完成模式</div>
+            <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:7}}>小約定完成模式</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-              {[["approval","🔐 核准模式","家長核准後發星星"],["trust","🌱 信任模式","孩子打勾後立刻發星星"]].map(([k,l,sub])=>(
+              {[["approval","💛 陪伴模式","家長陪伴確認後發星星"],["trust","🌱 信任模式","孩子打勾後立刻發星星"]].map(([k,l,sub])=>(
                 <button key={k} className="btn" onClick={()=>setApprovalMode(k)}
                   style={{...bub(approvalMode===k?C.yellow:C.card,16),padding:"9px 8px",border:"none",
                     outline:approvalMode===k?"3px solid "+C.butter:"none",textAlign:"left"}}>
@@ -1795,7 +2054,7 @@ function Onboarding({onDone,initialKidName}){
                         value={editLabel} onChange={e=>setEditLabel(e.target.value)} maxLength={16}/>
                     </div>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:11,color:C.soft,fontWeight:800}}>分數：</span>
+                      <span style={{fontSize:11,color:C.soft,fontWeight:800}}>星星：</span>
                       <input type="number" inputMode="numeric" min="5" max="50" value={editPts}
                         onChange={e=>setEditPts(Number(e.target.value))}
                         style={{width:50,...bub(C.card,10),padding:"4px 6px",fontSize:13,
@@ -1812,7 +2071,7 @@ function Onboarding({onDone,initialKidName}){
                     display:"flex",alignItems:"center",gap:8,border:"none"}}>
                     <span style={{fontSize:18}}>{t.icon}</span>
                     <span style={{flex:1,fontSize:12,fontWeight:800,color:C.brown}}>{t.label}</span>
-                    <span style={{...bub(C.peach,999),padding:"2px 8px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>{t.pts}分</span>
+                    <span style={{...bub(C.peach,999),padding:"2px 8px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>{t.pts}⭐</span>
                     <button className="btn" onClick={()=>{setEditIdx(t.id);setEditLabel(t.label);setEditPts(t.pts);setEditIcon(t.icon);}}
                       style={{...bub(C.butter,10),padding:"4px 9px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>✏️</button>
                     <button className="btn" onClick={()=>removeTask(t.id)}
@@ -1822,7 +2081,7 @@ function Onboarding({onDone,initialKidName}){
             ))}
           </div>
           <div style={{...bub(C.cream,18),padding:"10px 12px",border:"none",marginBottom:8}}>
-            <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:7}}>➕ 新增任務</div>
+            <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:7}}>➕ 新增今日約定</div>
             <div style={{display:"flex",gap:6,marginBottom:7,alignItems:"center"}}>
               <input style={{...bub(C.card,12),padding:"6px 8px",width:42,fontSize:18,
                 textAlign:"center",border:"none",fontWeight:900,color:C.brown}}
@@ -1832,7 +2091,7 @@ function Onboarding({onDone,initialKidName}){
                 value={newLabel} onChange={e=>setNewLabel(e.target.value)} maxLength={16}/>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:11,color:C.soft,fontWeight:800}}>分數：</span>
+              <span style={{fontSize:11,color:C.soft,fontWeight:800}}>星星：</span>
               <input type="number" inputMode="numeric" min="5" max="50" value={newPts}
                 onChange={e=>setNewPts(Number(e.target.value))}
                 style={{width:50,...bub(C.card,10),padding:"4px 6px",fontSize:13,
@@ -1848,7 +2107,7 @@ function Onboarding({onDone,initialKidName}){
 
         {step===5&&<>
           <div style={{fontSize:21,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:6}}>設定家長密碼🔐</div>
-          <div style={{fontSize:12,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:14}}>核准任務和管理願望時需要</div>
+          <div style={{fontSize:12,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:14}}>陪伴確認和管理願望時需要</div>
           {[{v:pin,set:setPin},{v:pin2,set:setPin2}].map((f,i)=>(
             <div key={i} style={{...bub(C.light),borderRadius:20,padding:"12px 16px",
               display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
@@ -1882,7 +2141,30 @@ function Onboarding({onDone,initialKidName}){
     </div>);
 }
 /* ═══════════════ PARENT PANEL ═══════════════ */
-function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,onClose}){
+function EventApproveControl({eventId,mission,setOfficialEventProgress}){
+  const [qty,setQty]=useState(1);
+  return <div style={{marginTop:10,display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
+    <div style={{display:"flex",alignItems:"center",gap:6}}>
+      <button className="btn" onClick={()=>setQty(q=>Math.max(1,q-1))}
+        style={{...bub(C.light,999),width:30,height:30,fontSize:16,fontWeight:900,color:C.brown,border:"none"}}>−</button>
+      <div style={{...bub(C.card,12),minWidth:42,textAlign:"center",padding:"6px 8px",fontSize:14,fontWeight:900,color:C.brown,border:"none"}}>{qty}</div>
+      <button className="btn" onClick={()=>setQty(q=>Math.min(20,q+1))}
+        style={{...bub(C.light,999),width:30,height:30,fontSize:16,fontWeight:900,color:C.brown,border:"none"}}>＋</button>
+    </div>
+    <button className="btn" onClick={()=>{
+      setOfficialEventProgress(all=>{
+        const current={...(all[eventId]||{})};
+        const old=current[mission.id]||{count:0,pending:false};
+        current[mission.id]={...old,count:Math.min(mission.target,(old.count||0)+qty),pending:false,approvedToday:true};
+        return {...all,[eventId]:current};
+      });
+      trackSafe("official_event_approve",{eventId,missionId:mission.id,qty});
+    }} style={{...bub(C.orange,999),padding:"7px 13px",fontSize:11,fontWeight:900,color:"#fff",border:"none"}}>
+      確認 +{qty}
+    </button>
+  </div>;
+}
+function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,owned,setOwned,backpack,setBackpack,officialEventProgress,setOfficialEventProgress,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,isTablet,toast2,onClose}){
   const [authed,setAuthed]=useState(false);
   const [ptab,setPtab]=useState("tasks");
   const [nTask,setNTask]=useState(""),nPts=useRef(20);
@@ -1896,6 +2178,8 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
   const [hNewIcon,setHNewIcon]=useState("⭐");
   const [habitErr,setHabitErr]=useState("");
   const [backupMsg,setBackupMsg]=useState("");
+  const [giftCode,setGiftCode]=useState("");
+  const [giftCodeMsg,setGiftCodeMsg]=useState("");
   const backupInputRef=useRef(null);
   const day=new Date().getDay();
   const today=new Date().toLocaleDateString("zh-TW");
@@ -1928,29 +2212,90 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
       window.location.reload();
     }catch(err){setBackupMsg("❌ 無法匯入：這不是有效的 Pet Habit 備份檔");}
   };
+  const redeemGiftCode=()=>{
+    const code=giftCode.trim().toUpperCase();
+    const key="petHabitRedeemedCodes_"+(playerId||"solo");
+    let redeemed=[];
+    try{redeemed=JSON.parse(localStorage.getItem(key)||"[]");if(!Array.isArray(redeemed))redeemed=[];}catch(e){redeemed=[];}
+    if(code!=="FOUNDING-GIFT"){
+      setGiftCodeMsg("這組密碼好像不對喔，請再確認一次。");
+      return;
+    }
+    if(redeemed.indexOf(code)>=0){
+      setGiftCodeMsg("這組禮物密碼已經使用過囉。");
+      return;
+    }
+    const giftIds=["founder_crown","founder_first_resident_frame"];
+    setOwned(o=>Array.from(new Set([...(o||[]),...giftIds])));
+    setBackpack(b=>({...b,f1:(b.f1||0)+20}));
+    redeemed.push(code);
+    localStorage.setItem(key,JSON.stringify(redeemed));
+    setGiftCode("");
+    setGiftCodeMsg("🎁 密碼箱打開了！禮物已放進收藏。");
+    if(toast2)toast2("🎁 密碼箱打開了！禮物已放進收藏。","#88cc88");
+  };
+  const moveHabit=(idx,dir)=>{
+    const next=idx+dir;
+    if(next<0||next>=tasks.length)return;
+    setTasks(ts=>{
+      const copy=[...ts];
+      const tmp=copy[idx];
+      copy[idx]=copy[next];
+      copy[next]=tmp;
+      return copy;
+    });
+    setHabitErr("");
+  };
+
+  if(!authed&&!profile.pin)return(
+    <Overlay onClose={onClose}>
+      <div style={{fontSize:38,textAlign:"center",marginBottom:8}}>🔐</div>
+      {Sh("尚未設定家長密碼")}
+      <div style={{fontSize:12,color:C.soft,fontWeight:800,textAlign:"center",lineHeight:1.7,marginBottom:16}}>
+        這份舊存檔沒有家長密碼，所以目前無法顯示輸入密碼畫面。<br/>
+        請先進入家長控制台確認資料，之後可在後續版本補設定密碼流程。
+      </div>
+      <button className="btn" onClick={()=>setAuthed(true)}
+        style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:14,fontWeight:900,color:"#fff",border:"none",marginBottom:8}}>
+        先進入家長控制台
+      </button>
+      <button className="btn" onClick={onClose}
+        style={{...bub(C.light,999),width:"100%",padding:"11px 0",fontSize:12,fontWeight:900,color:C.soft,border:"none"}}>
+        稍後再說
+      </button>
+    </Overlay>);
 
   if(!authed)return(
     <NumPad title="家長登入" subtitle="輸入你設定的數字密碼"
       correctPin={profile.pin} onSuccess={()=>setAuthed(true)} onClose={onClose}/>);
 
-  const TABS=[{k:"tasks",l:"✅ 核准"},{k:"habits",l:"📋 習慣"},{k:"bonus",l:"⭐ 挑戰"},{k:"wish",l:"🌠 願望"},{k:"music",l:"🎵 音樂"},{k:"reset",l:"♻️ 重置"}];
+  const TABS=[
+    {k:"tasks",label:"☑ 今日確認"},
+    {k:"habits",label:"✏ 寶貝習慣"},
+    {k:"bonus",label:"⭐ 寶貝挑戰"},
+    {k:"wish",label:"🌟 寶貝願望"},
+    {k:"reset",label:"💾 資料備份"}
+  ];
 
   return(
     <Overlay onClose={onClose} wide>
       <div style={{fontSize:20,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:14}}>家長控制台 👨‍👩‍👧</div>
-      {/* tabs */}
-      <div style={{display:"flex",gap:4,...bub(C.light,20),padding:4,marginBottom:16}}>
+      {/* final parent tabs */}
+      <div style={{display:"flex",gap:6,overflowX:"auto",padding:"2px 2px 10px",marginBottom:8,
+        WebkitOverflowScrolling:"touch"}}>
         {TABS.map(t=>(
           <button key={t.k} className="btn" onClick={()=>setPtab(t.k)}
-            style={{flex:1,padding:"8px 4px",borderRadius:16,fontSize:11,fontWeight:900,color:C.brown,
-              background:ptab===t.k?C.yellow:"transparent",
-              boxShadow:ptab===t.k?"0 3px 0 rgba(0,0,0,.08)":"none",border:"none"}}>{t.l}</button>))}
+            style={{...bub(ptab===t.k?C.yellow:C.card,999),padding:"9px 12px",minWidth:"max-content",
+              fontSize:11,fontWeight:900,color:C.brown,border:"2px solid "+(ptab===t.k?C.orange:"rgba(116,75,35,.12)"),
+              boxShadow:ptab===t.k?"0 3px 0 rgba(180,120,0,.18)":"none"}}>
+            {t.label}
+          </button>))}
       </div>
 
       {ptab==="tasks"&&<>
-        <div style={{fontSize:11,color:C.soft,fontWeight:800,marginBottom:10}}>小孩完成後才能核准 ⭐</div>
+        <div style={{fontSize:11,color:C.soft,fontWeight:800,marginBottom:10}}>小孩完成後，家長可以陪伴確認 ⭐</div>
         <div style={{...bub(C.light,20),padding:5,display:"flex",gap:5,marginBottom:12,border:"none"}}>
-          {[["approval","🔐 核准模式","孩子打勾後，家長核准才發星星"],["trust","🌱 信任模式","孩子打勾後，立即發星星"]].map(([k,l,sub])=>(
+          {[["approval","💛 陪伴模式","孩子打勾後，家長陪伴確認才發星星"],["trust","🌱 信任模式","孩子打勾後，立即發星星"]].map(([k,l,sub])=>(
             <button key={k} className="btn" onClick={()=>setApprovalMode(k)}
               style={{flex:1,...bub(approvalMode===k?C.yellow:"transparent",16),padding:"9px 8px",border:"none",boxShadow:approvalMode===k?"0 3px 0 rgba(0,0,0,.08)":"none"}}>
               <div style={{fontSize:11,fontWeight:900,color:C.brown}}>{l}</div>
@@ -1971,7 +2316,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                 <div style={{fontWeight:800,fontSize:13,color:C.brown}}>{h.label}</div>
                 <div style={{fontSize:10,fontWeight:800,marginTop:2,
                   color:approved?"#2a8a2a":kidDone?"#1a6a1a":"#c0a080"}}>
-                  {approved?"✅ 已核准":kidDone?"✓ 小孩已完成，等待核准":"⏳ 還沒完成"}
+                  {approved?"✅ 已確認":kidDone?"✓ 小孩已完成，等待陪伴確認":"⏳ 還沒完成"}
                 </div>
               </div>
               <span style={{...bub(C.peach),borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:900,color:C.brown}}>+{h.pts}⭐</span>
@@ -1979,15 +2324,16 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                 ?<span style={{fontSize:18}}>✅</span>
                 :kidDone
                 ?<button className="btn" onClick={()=>{setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_approval"});Audio.approve();}}
-                  style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>核准</button>
-                :<span style={{fontSize:11,color:"#c0a080",fontWeight:800}}>等待</span>}
+                  style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>確認</button>
+                :<button className="btn" onClick={()=>{setChecked(c=>({...c,[kidKey]:true,[okKey]:true}));setPoints(p=>p+h.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_assist"});Audio.approve();}}
+                  style={{...bub(C.green),borderRadius:999,padding:"6px 12px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>代為確認</button>}
             </div>);})}
         {isWeekend&&<>
           <div style={{display:"flex",alignItems:"center",gap:8,margin:"16px 0 9px",padding:"9px 12px",
             ...bub("linear-gradient(135deg,#FFF3C0,#FFE566)",16),border:"none"}}>
             <span style={{fontSize:22}}>🎉</span>
-            <div><div style={{fontSize:12,fontWeight:900,color:C.brown}}>假日習慣核准</div>
-              <div style={{fontSize:9,fontWeight:800,color:C.soft}}>與孩子頁的週末任務同步</div></div>
+            <div><div style={{fontSize:12,fontWeight:900,color:C.brown}}>假日小約定確認</div>
+              <div style={{fontSize:9,fontWeight:800,color:C.soft}}>與孩子頁的週末小約定同步</div></div>
           </div>
           {[...WEEKEND_TASKS,...bonusTasks.filter(t=>t.isWeekend&&!t.ok)].map(h=>{
             const kidKey="wkid-"+today+"-"+h.id;
@@ -2000,7 +2346,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:800,fontSize:13,color:C.brown}}>{h.label}</div>
                 <div style={{fontSize:10,fontWeight:800,marginTop:2,color:approved?"#2a8a2a":kidDone?"#1a6a1a":"#c0a080"}}>
-                  {approved?"✅ 已核准":kidDone?"✓ 小孩已完成，等待核准":"⏳ 還沒完成"}
+                  {approved?"✅ 已確認":kidDone?"✓ 小孩已完成，等待陪伴確認":"⏳ 還沒完成"}
                 </div>
               </div>
               <span style={{...bub(C.peach),borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:900,color:C.brown}}>+{h.pts}⭐</span>
@@ -2010,19 +2356,57 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                     window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_approval_weekend"});
                     if(h.isWeekend)setBonusTasks(ts=>ts.map(t=>t.id===h.id?{...t,ok:true}:t));
                     Audio.weekend();
-                  }} style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>核准</button>
-                :<span style={{fontSize:11,color:"#c0a080",fontWeight:800}}>等待</span>}
+                  }} style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>確認</button>
+                :<button className="btn" onClick={()=>{
+                    setChecked(c=>({...c,[kidKey]:true,[okKey]:true}));setPoints(p=>p+h.pts);
+                    window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_assist_weekend"});
+                    if(h.isWeekend)setBonusTasks(ts=>ts.map(t=>t.id===h.id?{...t,ok:true}:t));
+                    Audio.weekend();
+                  }} style={{...bub(C.green),borderRadius:999,padding:"6px 12px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>代為確認</button>}
             </div>;
+          })}
+        </>}
+        {getCurrentOrPreviewOfficialEvents().length>0&&<>
+          <div style={{display:"flex",alignItems:"center",gap:8,margin:"16px 0 9px",padding:"11px 12px",
+            ...bub("linear-gradient(135deg,#FFE9A8,#FFD36A)",18),border:"2px solid rgba(214,139,35,.22)",boxShadow:"0 4px 0 rgba(190,120,20,.10)"}}>
+            <span style={{fontSize:22}}>🎉</span>
+            <div><div style={{fontSize:12,fontWeight:900,color:C.brown}}>官方活動確認</div>
+              <div style={{fontSize:9,fontWeight:800,color:C.soft}}>孩子送出後，家長可調整 +1 / +5 等數量</div></div>
+          </div>
+          {getCurrentOrPreviewOfficialEvents().map(ev=>{
+            const ep=ensureEventProgress(officialEventProgress,ev);
+            return ev.missions.map(m=>{
+              const p=ep[m.id]||{count:0,pending:false};
+              const done=(p.count||0)>=m.target;
+              if(!p.pending&&done)return null;
+              return <div key={ev.id+"-"+m.id} style={{...bub(done?"#D9F8D7":p.pending?"#FFF1B8":"#FFFFFF",18),padding:"12px 13px",marginBottom:9,
+                border:"2px solid "+(done?"#86D887":p.pending?C.orange:"rgba(116,75,35,.12)")}}>
+                <div style={{display:"flex",alignItems:"center",gap:9}}>
+                  <span style={{fontSize:22}}>{m.icon}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:900,color:C.brown}}>{m.title}</div>
+                    <div style={{fontSize:10,fontWeight:900,color:C.soft,marginTop:2}}>進度：{Math.min(p.count||0,m.target)} / {m.target} {m.unit}</div>
+                    <div style={{height:8,borderRadius:999,background:"rgba(80,45,15,.08)",overflow:"hidden",marginTop:5}}>
+                      <div style={{width:Math.min(100,((p.count||0)/m.target)*100)+"%",height:"100%",borderRadius:999,background:done?"#67C96B":"linear-gradient(90deg,#FFD36A,#F5A623)"}}/>
+                    </div>
+                  </div>
+                  <span style={{...bub(done?C.green:p.pending?C.orange:C.light,999),padding:"4px 8px",fontSize:10,fontWeight:900,color:p.pending?"#fff":C.brown,border:"none"}}>
+                    {p.pending?"可核准":done?"已完成":"等待孩子"}
+                  </span>
+                </div>
+                {p.pending&&!done&&<EventApproveControl eventId={ev.id} mission={m} setOfficialEventProgress={setOfficialEventProgress}/>}
+              </div>;
+            });
           })}
         </>}
       </>}
 
       {ptab==="habits"&&<>
           <div style={{fontSize:11,color:C.soft,fontWeight:800,marginBottom:10}}>
-            可以新增、修改、刪除習慣任務 ✏️　目前 {tasks.reduce((a,t)=>a+t.pts,0)}/100 分
+            可以新增、修改、刪除小約定 ✏️　目前 {tasks.reduce((a,t)=>a+t.pts,0)}/100 顆星星
           </div>
           {habitErr&&<div style={{...bub("#FFE5E5",14),padding:"9px 12px",fontSize:11,fontWeight:900,color:"#C23B3B",marginBottom:9,border:"none"}}>⚠️ {habitErr}</div>}
-          {tasks.map(t=>(
+          {tasks.map((t,idx)=>(
             <div key={t.id} style={{marginBottom:8}}>
               {hEditIdx===t.id
                 ?<div style={{...bub(C.yellow,18),padding:"10px 12px",border:"none"}}>
@@ -2035,7 +2419,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                       value={hEditLabel} onChange={e=>setHEditLabel(e.target.value)} maxLength={16}/>
                   </div>
                   <div style={{display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{fontSize:11,color:C.soft,fontWeight:800}}>分數：</span>
+                    <span style={{fontSize:11,color:C.soft,fontWeight:800}}>星星：</span>
                     <input type="number" inputMode="numeric" min="5" max="50" value={hEditPts}
                       onChange={e=>setHEditPts(Number(e.target.value))}
                       style={{width:50,...bub(C.card,10),padding:"4px 6px",fontSize:13,
@@ -2043,7 +2427,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                     <button className="btn" onClick={()=>{
                       if(!hEditLabel.trim())return;
                       const total=tasks.filter(x=>x.id!==t.id).reduce((a,x)=>a+x.pts,0)+hEditPts;
-                      if(total>100){setHabitErr("修改後每日總分會超過 100 分，請降低分數");return;}
+                      if(total>100){setHabitErr("修改後每日星星會超過 100 顆，請降低星星數");return;}
                       setTasks(ts=>ts.map(x=>x.id===t.id?{...x,label:hEditLabel,pts:hEditPts,icon:hEditIcon}:x));
                       setHEditIdx(null);setHabitErr("");
                     }} style={{...bub(C.orange),borderRadius:999,padding:"5px 14px",
@@ -2058,8 +2442,12 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                   <span style={{fontSize:18}}>{t.icon}</span>
                   <span style={{flex:1,fontSize:12,fontWeight:800,color:C.brown}}>{t.label}</span>
                   <span style={{...bub(C.peach,999),padding:"2px 8px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>
-                    {t.pts}分
+                    {t.pts}⭐
                   </span>
+                  <button className="btn" onClick={()=>moveHabit(idx,-1)} disabled={idx===0}
+                    style={{...bub(idx===0?C.card:C.light,10),padding:"4px 7px",fontSize:11,fontWeight:900,color:idx===0?C.soft:C.brown,border:"none",opacity:idx===0?.45:1}}>↑</button>
+                  <button className="btn" onClick={()=>moveHabit(idx,1)} disabled={idx===tasks.length-1}
+                    style={{...bub(idx===tasks.length-1?C.card:C.light,10),padding:"4px 7px",fontSize:11,fontWeight:900,color:idx===tasks.length-1?C.soft:C.brown,border:"none",opacity:idx===tasks.length-1?.45:1}}>↓</button>
                   <button className="btn" onClick={()=>{setHEditIdx(t.id);setHEditLabel(t.label);setHEditPts(t.pts);setHEditIcon(t.icon);setHabitErr("");}}
                     style={{...bub(C.butter,10),padding:"4px 9px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>✏️</button>
                   <button className="btn" onClick={()=>{setTasks(ts=>ts.filter(x=>x.id!==t.id));setHabitErr("");}}
@@ -2078,20 +2466,53 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                 value={hNewLabel} onChange={e=>setHNewLabel(e.target.value)} maxLength={16}/>
             </div>
             <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <span style={{fontSize:11,color:C.soft,fontWeight:800}}>分數：</span>
+              <span style={{fontSize:11,color:C.soft,fontWeight:800}}>星星：</span>
               <input type="number" inputMode="numeric" min="5" max="50" value={hNewPts}
                 onChange={e=>setHNewPts(Number(e.target.value))}
                 style={{width:50,...bub(C.card,10),padding:"4px 6px",fontSize:13,
                   fontWeight:900,color:C.brown,border:"none",textAlign:"center"}}/>
               <button className="btn" onClick={()=>{
                 if(!hNewLabel.trim())return;
-                if(tasks.reduce((a,t)=>a+t.pts,0)+hNewPts>100){setHabitErr("新增後每日總分會超過 100 分，請降低分數或先刪除其他習慣");return;}
+                if(tasks.reduce((a,t)=>a+t.pts,0)+hNewPts>100){setHabitErr("新增後每日星星會超過 100 顆，請降低星星數或先刪除其他小約定");return;}
                 setTasks(ts=>[...ts,{id:Date.now(),icon:hNewIcon,label:hNewLabel.trim(),pts:hNewPts}]);
                 setHNewLabel("");setHNewPts(10);setHNewIcon("⭐");setHabitErr("");
               }} style={{...bub(C.orange),borderRadius:999,padding:"5px 16px",
                 fontSize:11,fontWeight:900,color:"#fff",border:"none",marginLeft:"auto"}}>新增</button>
             </div>
           </div>
+      </>}
+
+      {ptab==="event"&&<>
+        <div style={{fontSize:11,color:C.soft,fontWeight:800,marginBottom:10}}>
+          官方活動由 Maggie Lab 提供，家長只負責陪伴確認，不可新增、修改或刪除。
+        </div>
+        {getCurrentOrPreviewOfficialEvents().map(ev=>{
+          const ep=ensureEventProgress(officialEventProgress,ev);
+          return <div key={ev.id} style={{...bub(C.light,20),padding:14,marginBottom:12,border:"none"}}>
+            <div style={{fontSize:17,fontWeight:900,color:C.brown,marginBottom:3}}>{ev.title}</div>
+            <div style={{fontSize:10,fontWeight:800,color:C.soft,marginBottom:10}}>期間：{ev.startDate.slice(5).replace("-","/")}～{ev.endDate.slice(5).replace("-","/")}　提供：{ev.provider}</div>
+            <div style={{...bub(C.yellow,16),padding:"9px 11px",fontSize:11,fontWeight:900,color:C.brown,marginBottom:12,border:"none"}}>
+              🏅 完成全部挑戰獎勵：{ev.reward.emoji} ×{ev.reward.qty}
+            </div>
+            {ev.missions.map(m=>{
+              const p=ep[m.id]||{count:0,pending:false};
+              const done=p.count>=m.target;
+              return <div key={m.id} style={{...bub(done?C.green:p.pending?C.yellow:C.card,16),padding:"11px 12px",marginBottom:8,border:"none"}}>
+                <div style={{display:"flex",alignItems:"center",gap:9}}>
+                  <span style={{fontSize:24}}>{m.icon}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:900,color:C.brown}}>{m.title}</div>
+                    <div style={{fontSize:10,fontWeight:800,color:C.soft}}>進度：{Math.min(p.count,m.target)} / {m.target} {m.unit}</div>
+                  </div>
+                  <div style={{fontSize:10,fontWeight:900,color:done?"#2a8a2a":p.pending?C.brown:C.soft}}>
+                    {done?"已達成":p.pending?"等待確認":"可完成"}
+                  </div>
+                </div>
+                {p.pending&&!done&&<EventApproveControl eventId={ev.id} mission={m} setOfficialEventProgress={setOfficialEventProgress}/>}
+              </div>;
+            })}
+          </div>;
+        })}
       </>}
 
       {ptab==="bonus"&&<>
@@ -2102,7 +2523,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
               value={nTask} onChange={e=>setNTask(e.target.value)} maxLength={20}/>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:12,color:C.soft,fontWeight:800}}>獎勵點數：</span>
+            <span style={{fontSize:12,color:C.soft,fontWeight:800}}>獎勵星星：</span>
             <input type="number" inputMode="numeric" min="5" max="200" defaultValue={20}
               onChange={e=>nPts.current=Number(e.target.value)}
               style={{width:60,...bub(C.card,12),padding:"5px 8px",fontSize:14,fontWeight:900,color:C.brown,border:"none",textAlign:"center"}}/>
@@ -2123,7 +2544,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
             <span style={{...bub(C.peach),borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:900,color:C.brown}}>+{t.pts}⭐</span>
             {t.ok?<span style={{fontSize:11,color:C.brown,fontWeight:900}}>✓</span>
               :t.done?<button className="btn" onClick={()=>{setBonusTasks(ts=>ts.map(b=>b.id===t.id?{...b,ok:true}:b));setPoints(p=>p+t.pts);}}
-                style={{...bub(C.orange),borderRadius:999,padding:"5px 12px",fontSize:11,fontWeight:900,color:"#fff",border:"none"}}>核准</button>
+                style={{...bub(C.orange),borderRadius:999,padding:"5px 12px",fontSize:11,fontWeight:900,color:"#fff",border:"none"}}>確認</button>
               :<span style={{fontSize:11,color:"#c0a080",fontWeight:800}}>等待中</span>}
             <button className="btn" onClick={()=>setBonusTasks(ts=>ts.filter(b=>b.id!==t.id))}
               style={{...bub(C.red),borderRadius:10,padding:"4px 8px",fontSize:11,fontWeight:900,color:"#c03030",border:"none"}}>✕</button>
@@ -2142,15 +2563,16 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                 <div style={{fontSize:10,color:C.soft,fontWeight:800}}>小孩希望：{w.kidPts||"?"}⭐</div>
               </div>
               <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"center"}}>
-                <div style={{display:"flex",alignItems:"center",gap:4}}>
-                  <span style={{fontSize:11,color:C.soft,fontWeight:800}}>正式點數：</span>
-                  <input type="number" inputMode="numeric" defaultValue={w.kidPts||100}
-                    onChange={e=>setWishes(ws=>ws.map(x=>x.id===w.id?{...x,pts:Number(e.target.value)}:x))}
-                    style={{width:55,...bub(C.card,10),padding:"3px 6px",fontSize:13,fontWeight:900,color:C.brown,border:"none",textAlign:"center"}}/>
+                <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap",maxWidth:170}}>
+                  <span style={{fontSize:11,color:C.soft,fontWeight:800}}>正式星星：</span>
+                  {WISH_STAR_OPTIONS.map(v=><button key={v} className="btn" onClick={()=>setWishes(ws=>ws.map(x=>x.id===w.id?{...x,pts:v}:x))}
+                    style={{...bub((w.pts||w.kidPts||100)===v?C.yellow:C.card,999),padding:"3px 7px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>
+                    {v}
+                  </button>)}
                 </div>
                 <div style={{display:"flex",gap:6}}>
                   <button className="btn" onClick={()=>setWishes(ws=>ws.map(x=>x.id===w.id?{...x,status:"active"}:x))}
-                    style={{...bub(C.orange),borderRadius:999,padding:"4px 10px",fontSize:11,fontWeight:900,color:"#fff",border:"none"}}>批准</button>
+                    style={{...bub(C.orange),borderRadius:999,padding:"4px 10px",fontSize:11,fontWeight:900,color:"#fff",border:"none"}}>同意</button>
                   <button className="btn" onClick={()=>setWishes(ws=>ws.map(x=>x.id===w.id?{...x,status:"denied"}:x))}
                     style={{...bub(C.red),borderRadius:999,padding:"4px 10px",fontSize:11,fontWeight:900,color:"#c03030",border:"none"}}>拒絕</button>
                 </div>
@@ -2163,7 +2585,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
         {wishes.filter(w=>w.status!=="pending").map(w=>(
           <div key={w.id} style={{display:"flex",alignItems:"center",gap:10,
             ...bub(w.status==="done"?C.green:w.status==="denied"?C.red:C.light,18),
-            padding:"11px 13px",marginBottom:7,border:"none",opacity:w.status==="done"||w.status==="denied"?.7:1}}>
+            padding:"11px 13px",marginBottom:7,border:"none",opacity:(w.status==="done"||w.status==="denied")?0.7:1}}>
             <span style={{fontSize:20}}>{w.emoji||"🌟"}</span>
             <div style={{flex:1}}>
               <div style={{fontWeight:900,fontSize:12,color:C.brown}}>{w.label}</div>
@@ -2200,11 +2622,11 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
       </>}
 
       {ptab==="reset"&&<>
-        <div style={{...bub("#EEF8FF",20),padding:"16px 14px",marginBottom:14,border:"none"}}>
+        <div style={{...bub("#EEF8FF",20),padding:"18px 16px",marginBottom:18,border:"none"}}>
           <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:7}}>
             <span style={{fontSize:28}}>💾</span>
             <div><div style={{fontSize:15,fontWeight:900,color:C.brown}}>存檔備份</div>
-              <div style={{fontSize:10,color:C.soft,fontWeight:800}}>換裝置或更新前，建議先匯出 JSON</div></div>
+              <div style={{fontSize:10,color:C.soft,fontWeight:800}}>匯出 JSON / 匯入 JSON，保護目前裝置裡的資料。</div></div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
             <button className="btn" onClick={exportBackup}
@@ -2215,11 +2637,79 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
           <input ref={backupInputRef} type="file" accept=".json,application/json" onChange={importBackup} style={{display:"none"}}/>
           {backupMsg&&<div style={{fontSize:10,fontWeight:900,color:backupMsg.startsWith("✅")?"#2A7A3B":"#C23B3B",textAlign:"center",marginTop:9}}>{backupMsg}</div>}
         </div>
+        <div style={{...bub("#FFF8E8",20),padding:"18px 16px",marginBottom:18,border:"2px solid rgba(245,166,35,.18)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+            <span style={{fontSize:26}}>🎁</span>
+            <div>
+              <div style={{fontSize:15,fontWeight:900,color:C.brown}}>禮物密碼箱</div>
+              <div style={{fontSize:10,color:C.soft,fontWeight:800}}>輸入禮物密碼，可以領取特別禮物。</div>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:8,alignItems:"center"}}>
+            <input value={giftCode} onChange={e=>setGiftCode(e.target.value)} placeholder="請輸入禮物密碼"
+              style={{...bub(C.card,14),padding:"11px 12px",fontSize:12,fontWeight:900,color:C.brown,border:"none",textTransform:"uppercase"}}/>
+            <button className="btn" onClick={redeemGiftCode}
+              style={{...bub(C.orange,999),padding:"11px 13px",fontSize:11,fontWeight:900,color:"#fff",border:"none",whiteSpace:"nowrap"}}>
+              打開密碼箱
+            </button>
+          </div>
+          {giftCodeMsg&&<div style={{fontSize:10,fontWeight:900,color:giftCodeMsg.startsWith("🎁")?"#2A7A3B":"#C23B3B",textAlign:"center",marginTop:9}}>{giftCodeMsg}</div>}
+        </div>
+        <div style={{...bub("#F8F0FF",20),padding:"18px 16px",marginBottom:20,border:"2px solid rgba(150,96,208,.16)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+            <span style={{fontSize:24}}>💌</span>
+            <div>
+              <div style={{fontSize:15,fontWeight:900,color:C.brown}}>告訴 Maggie Lab</div>
+              <div style={{fontSize:10,color:C.soft,fontWeight:800,lineHeight:1.6}}>有任何想法，<br/>都歡迎和 Maggie Lab 分享 ❤️</div>
+            </div>
+          </div>
+          <a href="https://forms.gle/p1CtL45E7AC34ztG6" target="_blank" rel="noopener noreferrer"
+            style={{...bub(C.orange,999),display:"block",textAlign:"center",padding:"11px 12px",fontSize:12,fontWeight:900,color:"#fff",textDecoration:"none",border:"none"}}>
+            💌 開啟回饋表單
+          </a>
+        </div>
+        <div style={{height:1,background:"rgba(120,90,55,.12)",margin:"2px 0 18px"}}/>
+        <div style={{...bub("#FFF8E8",20),padding:"18px 16px",marginBottom:20,border:"2px solid rgba(245,166,35,.22)"}}>
+          <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+            <span style={{fontSize:24}}>🔒</span>
+            <div>
+              <div style={{fontSize:14,fontWeight:900,color:C.brown,marginBottom:4}}>資料與隱私說明</div>
+              <div style={{fontSize:11,color:C.soft,fontWeight:800,lineHeight:1.7}}>
+                Maggie Lab 尊重每個家庭的隱私。<br/>
+                目前資料保存在此裝置中。<br/>
+                若未來啟用登入或雲端同步，我們會先清楚告知家長，再由您自行決定是否使用。<br/>
+                我們希望陪伴孩子成長，而不是收集孩子的資料。
+              </div>
+            </div>
+          </div>
+        </div>
+        {DEVELOPER_MODE&&<div style={{...bub("#F7FAFF",20),padding:"15px 14px",marginBottom:14,border:"none"}}>
+          <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:9}}>
+            <span style={{fontSize:24}}>🩺</span>
+            <div>
+              <div style={{fontSize:14,fontWeight:900,color:C.brown}}>Health Check</div>
+              <div style={{fontSize:10,color:C.soft,fontWeight:800}}>給家長 / Debug 使用，孩子頁不顯示</div>
+            </div>
+          </div>
+          {[
+            ["Version",APP_VERSION],
+            ["Login","本機模式（尚未登入）"],
+            ["Cloud Save","尚未啟用"],
+            ["Analytics","Apps Script endpoint 保留"]
+          ].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",gap:10,
+              fontSize:10,fontWeight:900,color:C.soft,padding:"4px 0",borderTop:"1px solid rgba(100,70,30,.06)"}}>
+              <span>{k}</span><span style={{color:C.brown,textAlign:"right"}}>{v}</span>
+            </div>
+          ))}
+        </div>}
+        <div style={{height:1,background:"rgba(120,90,55,.12)",margin:"2px 0 18px"}}/>
+        <div style={{fontSize:12,fontWeight:900,color:"#cc3333",margin:"2px 0 10px"}}>Danger Zone</div>
         <div style={{...bub("#fff5f5",20),padding:"18px 14px",marginBottom:14,textAlign:"center",border:"none",background:"#fff5f5"}}>
           <div style={{fontSize:34,marginBottom:8}}>⚠️</div>
           <div style={{fontSize:15,fontWeight:900,color:"#cc3333",marginBottom:6}}>格式化 / 重新開始</div>
           <div style={{fontSize:11,color:"#888",fontWeight:800,lineHeight:1.7}}>
-            清除所有資料（點數、任務、寵物、願望）<br/>
+            清除所有資料（星星、小約定、寵物、願望）<br/>
             <span style={{color:"#cc3333",fontWeight:900}}>此操作無法復原！</span>
           </div>
         </div>
@@ -2253,9 +2743,9 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
       </>}
 
       <div style={{textAlign:"center",marginTop:16,paddingTop:12,borderTop:"1px solid rgba(100,70,30,.08)"}}>
-        <a href="https://www.instagram.com/hello.maggie/" target="_blank" rel="noopener noreferrer"
+        <a href="https://maggielab.github.io/home/index.html" target="_blank" rel="noopener noreferrer"
           style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,fontWeight:900,color:C.soft,textDecoration:"none"}}>
-          ✨ 作者：<span style={{color:"#C35A8A"}}>@hello.maggie</span>
+          Made with <span style={{color:"#D85B75"}}>❤️</span> by <span style={{color:C.brown}}>Maggie Lab</span>
         </a>
       </div>
 
@@ -2284,7 +2774,8 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
 function ClosetPage({profile,points,isTablet,closetTab,setClosetTab,equipped,setEquipped,owned,equip,openShop,setTab}){
   // Updated by Claude on 2026/06/23 / Reason: Rewrite for gender-based outfits and outfit detail page
   const playerGender=profile.gender||"girl";
-  const OUTFITS=playerGender==="boy"?OUTFIT_CLOTHES_BOY:OUTFIT_CLOTHES_GIRL;
+  const OUTFITS=(playerGender==="boy"?OUTFIT_CLOTHES_BOY:OUTFIT_CLOTHES_GIRL)
+    .filter(o=>!o.giftOnly||owned.indexOf(o.id)>=0);
   const isPurchased=o=>owned.indexOf(o.id)>=0;
 
   /* Updated by Claude on 2026/06/24
@@ -2320,11 +2811,15 @@ function ClosetPage({profile,points,isTablet,closetTab,setClosetTab,equipped,set
           <OutfitThumb outfit={outfit} height={isTablet?300:240} iconSize={isTablet?56:44}/>
         </div>
         <div style={{fontSize:isTablet?18:16,fontWeight:900,color:C.brown,marginBottom:4}}>{outfit.label}</div>
-        {!p&&<div style={{fontSize:12,color:C.soft,fontWeight:800,marginBottom:12}}>⭐{outfit.price}</div>}
+        {!p&&!outfit.locked&&<div style={{fontSize:12,color:C.soft,fontWeight:800,marginBottom:12}}>⭐{outfit.price}</div>}
         {p?
           <button className="btn" onClick={()=>equip(outfit)} style={{...bub(equipped.outfit===outfit.id?C.light:C.orange),borderRadius:999,padding:equipped.outfit===outfit.id?"8px 20px":"12px 20px",fontSize:equipped.outfit===outfit.id?12:15,fontWeight:900,color:equipped.outfit===outfit.id?C.soft:"#fff",border:"none",width:"100%",boxShadow:equipped.outfit===outfit.id?"none":"0 5px 0 rgba(180,80,0,.25)"}}>
             {equipped.outfit===outfit.id?"✓ 正在穿著":"✨ 穿上"}
           </button>
+          :outfit.locked?
+          <div style={{...bub(C.light),borderRadius:16,padding:"10px 14px",fontSize:12,fontWeight:900,color:C.soft,width:"100%"}}>
+            🎁 即將上架，等待 Founder 提供素材
+          </div>
           :<button className="btn" onClick={()=>openShop()} style={{...bub(C.orange),borderRadius:999,padding:"8px 20px",fontSize:12,fontWeight:900,color:"#fff",border:"none",width:"100%"}}>
             購買 ⭐{outfit.price}
           </button>
@@ -2342,7 +2837,8 @@ function ClosetPage({profile,points,isTablet,closetTab,setClosetTab,equipped,set
         gap:4,minHeight:140,border:"2px solid "+(p?C.butter:"#DDD"),opacity:p?1:0.62,cursor:"pointer"}}>
         <OutfitThumb outfit={o} height={100} iconSize={28}/>
         <div style={{fontSize:10,fontWeight:900,color:p?C.brown:"#999"}}>{o.label}</div>
-        {!p&&<div style={{fontSize:8,color:"#999"}}>⭐{o.price}</div>}
+        {!p&&!o.locked&&<div style={{fontSize:8,color:"#999"}}>⭐{o.price}</div>}
+        {!p&&o.locked&&<div style={{fontSize:8,color:"#A8957C",fontWeight:900}}>🎁即將上架</div>}
       </button>;})}
     </div>
   </div>;
@@ -2409,18 +2905,12 @@ function FamilyHome({family,onEnter,onAdd,onEditName}){
         boxShadow:"inset 0 -18px 0 rgba(255,255,255,.42)",overflow:"hidden"}}>
         <span style={{position:"absolute",top:18,left:26,fontSize:18,animation:"spkl 2s infinite"}}>✨</span>
         <span style={{position:"absolute",top:42,right:34,fontSize:16,animation:"spkl 2.6s infinite"}}>💛</span>
-        <div style={{position:"absolute",left:"12%",bottom:17,animation:"float 3.4s ease-in-out infinite"}}>
-          <PetView petType="cat" level={2} mood={5} hunger={90} size={.46}/>
-        </div>
-        <div style={{position:"absolute",left:"50%",bottom:12,transform:"translateX(-50%)",animation:"float 3s .2s ease-in-out infinite"}}>
-          <PetView petType="horse" level={2} mood={5} hunger={90} size={.62}/>
-        </div>
-        <div style={{position:"absolute",right:"12%",bottom:18,animation:"float 3.7s .45s ease-in-out infinite"}}>
-          <PetView petType="dog" level={2} mood={5} hunger={90} size={.46}/>
-        </div>
-        <div style={{position:"absolute",right:"34%",bottom:8,animation:"float 3.9s .65s ease-in-out infinite"}}>
-          <PetView petType="fox" level={2} mood={5} hunger={90} size={.38}/>
-        </div>
+        {HERO_PET_LAYOUT.map((pet,i)=>(
+          <div key={pet.petType} style={{position:"absolute",left:pet.x+"%",bottom:pet.petType==="horse"?10:17,
+            transform:"translateX(-50%)",zIndex:2+i,animation:"float 3.4s "+pet.delay+" ease-in-out infinite"}}>
+            <PetView petType={pet.petType} level={2} mood={5} hunger={90} size={pet.size}/>
+          </div>
+        ))}
         <div style={{position:"absolute",left:0,right:0,bottom:0,height:46,
           background:"linear-gradient(180deg,rgba(255,255,255,0),rgba(255,255,255,.55))"}}/>
       </div>
@@ -2493,12 +2983,14 @@ function FamilyRoot(){
         const value=localStorage.getItem(k);if(value!==null)localStorage.setItem(k+"_"+id,value);
       });
     }
-    const next={version:1,familyName,familyCreatedAt:now,activePlayerId:id,players:[{id,name:playerName,themeId,storageKey,createdAt:now}]};
+    const next={version:1,familyName,familyCreatedAt:now,activePlayerId:id,players:[{id,name:playerName,themeId,storageKey,createdAt:now,
+      localSaveId:makeLocalSaveId(),futureGoogleUserId:"",loginStatus:"local",cloudSaveStatus:"not_connected"}]};
     commitFamily(next);setActiveId(id);setView("game");
   };
   const addPlayer=({playerName,themeId})=>{
     if(!family||family.players.length>=3)return;
-    const id=makePlayerId(),now=new Date().toISOString(),player={id,name:playerName,themeId,storageKey:"habitKingdom_player_"+id,createdAt:now};
+    const id=makePlayerId(),now=new Date().toISOString(),player={id,name:playerName,themeId,storageKey:"habitKingdom_player_"+id,createdAt:now,
+      localSaveId:makeLocalSaveId(),futureGoogleUserId:"",loginStatus:"local",cloudSaveStatus:"not_connected"};
     const next={...family,activePlayerId:id,players:[...family.players,player]};commitFamily(next);setActiveId(id);setView("game");
   };
   const selectPlayer=(p)=>{const next={...family,activePlayerId:p.id};commitFamily(next);setActiveId(p.id);setView("game");};
@@ -2520,6 +3012,7 @@ function FamilyRoot(){
 function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const saveKey=storageKey||"habitKingdom";
   const playerStorageKey=(base)=>playerId?base+"_"+playerId:base;
+  const [founderGiftEligible]=useState(()=>!!localStorage.getItem(saveKey));
   // SVG 小主人外觀沿用既有欄位：profile.gender / profile.skin 與 owned / equipped；不另建人物資料格式。
   const [profile,setProfile]=useState(null);
   const [points,setPoints]=useState(0);
@@ -2533,6 +3026,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [diary,setDiary]=useState([]);
   const [wishes,setWishes]=useState([]);
   const [bonusTasks,setBonusTasks]=useState([]);
+  const [officialEventProgress,setOfficialEventProgress]=useState({});
   const [achievements,setAchievements]=useState([]);
   const [streak,setStreak]=useState(0);
   const [petMood,setPetMood]=useState(80);
@@ -2559,7 +3053,14 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
 
   const [tab,setTab]=useState("home");
   const [modal,setModal]=useState(null);
+  const [helpTopic,setHelpTopic]=useState(null);
+  const [allDoneCelebrate,setAllDoneCelebrate]=useState(false);
+  const [deskTip,setDeskTip]=useState(null);
+  const [focusMinutes,setFocusMinutes]=useState(20);
+  const [focusEndsAt,setFocusEndsAt]=useState(null);
+  const [focusNow,setFocusNow]=useState(Date.now());
   const [shopTab,setShopTab]=useState("food");
+  const [previewAccessory,setPreviewAccessory]=useState(null);
   const [kidShopTheme,setKidShopTheme]=useState("全部");
   const [closetTab,setClosetTab]=useState("kidTop");
   const [toast,setToast]=useState({msg:"",color:C.butter});
@@ -2568,7 +3069,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [running,setRunning]=useState(false);
   const [eating,setEating]=useState(false);
   const [petAction,setPetAction]=useState("idle");
-  const [petRoomX,setPetRoomX]=useState(50);
+  const [petRoomX,setPetRoomX]=useState(54); // Updated by Claude 2026/06/29 (UI Sprint): was 50 (dead-center); owner now rests at 28%, so pet resting at 54% stands just beside them instead of independently centered
   const [actionText,setActionText]=useState("");
   const [horseX,setHorseX]=useState(48);
   const [feedItem,setFeedItem]=useState(null);
@@ -2590,6 +3091,22 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const actionRef=useRef();
   const parkPetDragRef=useRef(null);
   const parkKidDragRef=useRef(null);
+  const showJit=(topic,force=false)=>{
+    if(!JIT_TUTORIALS[topic])return;
+    const key=playerStorageKey("jit_v"+TUTORIAL_VERSION+"_"+topic+"_seen");
+    if(force||localStorage.getItem(key)!=="true"){
+      localStorage.setItem(key,"true");
+      setHelpTopic(topic);
+    }
+  };
+  const goTab=(next)=>{
+    if(focusEndsAt){
+      setModal("focusExitConfirm");
+      return;
+    }
+    setTab(next);
+    if(["tasks","room","diary","park"].includes(next))showJit(next);
+  };
 
   // persist
   useEffect(()=>{
@@ -2600,6 +3117,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       if(s.equipped)setEquipped(s.equipped);if(s.backpack)setBackpack(s.backpack);
       if(s.hunger!=null)setHunger(s.hunger);if(s.diary)setDiary(s.diary);
       if(s.wishes)setWishes(s.wishes);if(s.bonusTasks)setBonusTasks(s.bonusTasks);
+      if(s.officialEventProgress)setOfficialEventProgress(s.officialEventProgress);
       if(s.achievements)setAchievements(s.achievements);if(s.streak!=null)setStreak(s.streak);
       if(s.petMood!=null)setPetMood(s.petMood);if(s.poops)setPoops(s.poops);
       if(s.neglect)setNeglect(s.neglect);
@@ -2610,8 +3128,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   useEffect(()=>{
     if(!profile)return;
     localStorage.setItem(saveKey,JSON.stringify({
-      profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect,approvalMode}));
-  },[saveKey,profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect,approvalMode]);
+      profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,officialEventProgress,achievements,streak,petMood,poops,neglect,approvalMode}));
+  },[saveKey,profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,officialEventProgress,achievements,streak,petMood,poops,neglect,approvalMode]);
 
   // UI 偏好獨立保存，避免改動既有 habitKingdom 存檔格式。
   // Updated by Claude on 2026/06/23 — removed weather_hk persistence (no longer manual/clicked)
@@ -2688,7 +3206,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     });
   },[profile]);
 
-  // 舊存檔第一次升級時，讓孩子自己建立小主人；不動原本任務與點數
+  // 舊存檔第一次升級時，讓孩子自己建立小主人；不動原本任務與星星
   useEffect(()=>{
     if(profile&&!profile.gender&&modal==null)setModal("avatarSetup");
   },[profile]);
@@ -2696,6 +3214,12 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   useEffect(()=>{
     if(profile&&profile.gender&&neglect.welcomePending&&modal==null)setModal("welcomeBack");
   },[profile,neglect.welcomePending,modal]);
+
+  useEffect(()=>{
+    if(!profile||!profile.gender||modal!=null||!founderGiftEligible)return;
+    const key=playerStorageKey("founderGift_v1_claimed");
+    if(localStorage.getItem(key)!=="true")setModal("founderGift");
+  },[profile,modal,founderGiftEligible]);
 
   // streak check
   useEffect(()=>{
@@ -2712,11 +3236,62 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     const ns=lastS===yStr?streak+1:1;
     setStreak(ns);
     localStorage.setItem(lastStreakKey,today);
-    if(ns===3){toast2("連續3天全部完成！🔥 成就解鎖！","#FF9F3F");unlockAch("a8");}
-    if(ns===7){setPoints(p=>p+100);toast2("連續7天！🎉 獎勵+100⭐","#FFD700");unlockAch("a9");}
+    if(ns===3){toast2("連續3天全部完成！🔥 成就解鎖！","#FF9F3F");unlockAch("a12");}
+    if(ns===7){setPoints(p=>p+100);toast2("連續7天！🎉 獎勵+100⭐","#FFD700");unlockAch("a12");}
     if(ns===5){toast2("連續5天！⭐ 超厲害！","#FF9F3F");}
-    unlockAch("a10");
+    unlockAch("a3");
   },[checked,profile]);
+
+  useEffect(()=>{
+    if(!profile||!tasks.length)return;
+    const today=new Date().toLocaleDateString("zh-TW");
+    const done=tasks.every(h=>checked["kid-"+today+"-"+h.id]||checked["ok-"+today+"-"+h.id]);
+    const key=playerStorageKey("allDoneCelebrate_hk");
+    if(done&&localStorage.getItem(key)!==today){
+      localStorage.setItem(key,today);
+      setAllDoneCelebrate(true);
+      startPetAction("hug","✨ 今天完成所有小約定！",50,1800);
+      setPetMood(m=>Math.min(100,m+8));
+      Audio.approve();
+      setTimeout(()=>setAllDoneCelebrate(false),1800);
+    }
+  },[checked,profile,tasks]);
+
+  useEffect(()=>{
+    if(!profile||modal)return;
+    const ev=getActiveOfficialEvents()[0];
+    if(!ev)return;
+    const key=playerStorageKey("officialEventSeen_"+ev.id);
+    if(localStorage.getItem(key)!=="true")setModal("eventIntro-"+ev.id);
+  },[profile,modal]);
+
+  useEffect(()=>{
+    if(!focusEndsAt)return;
+    const t=setInterval(()=>{
+      const now=Date.now();
+      setFocusNow(now);
+      if(now>=focusEndsAt){
+        clearInterval(t);
+        setFocusEndsAt(null);
+        setModal("focusDone");
+        Audio.achieve();
+      }
+    },1000);
+    return()=>clearInterval(t);
+  },[focusEndsAt]);
+
+  useEffect(()=>{
+    if(!profile)return;
+    OFFICIAL_EVENTS.forEach(ev=>{
+      const ep=ensureEventProgress(officialEventProgress,ev);
+      const allDone=ev.missions.every(m=>(ep[m.id]&&ep[m.id].count||0)>=m.target);
+      if(allDone&&!ep.rewardClaimed){
+        setBackpack(b=>({...b,[ev.reward.foodId]:(b[ev.reward.foodId]||0)+ev.reward.qty}));
+        setOfficialEventProgress(all=>({...all,[ev.id]:{...ep,rewardClaimed:true,completedAt:new Date().toISOString()}}));
+        setModal("eventComplete-"+ev.id);
+      }
+    });
+  },[officialEventProgress,profile]);
 
   // poop - 更可靠的觸發機制
   useEffect(()=>{
@@ -2760,7 +3335,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     if(actionRef.current)clearTimeout(actionRef.current);
     setPetAction(action);setActionText(text||"");
     if(x!=null)setPetRoomX(x);
-    actionRef.current=setTimeout(()=>{setPetAction("idle");setActionText("");setPetRoomX(50);},duration||3800);
+    actionRef.current=setTimeout(()=>{setPetAction("idle");setActionText("");setPetRoomX(54);},duration||3800);
   },[]);
 
   // 房間裡的自主生活：散步、打哈欠、睡覺、看窗與使用已放置家具
@@ -2783,7 +3358,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   },[profile,tab,roomEdit,equipped,neglect.sleeping,startPetAction]);
 
   const saveSnapshot=()=>localStorage.setItem(saveKey,JSON.stringify({
-    profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,achievements,streak,petMood,poops,neglect,approvalMode
+    profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,officialEventProgress,achievements,streak,petMood,poops,neglect,approvalMode
   }));
 
   if(!profile)return <div style={themeVars(themeId)}><Onboarding initialKidName={playerName} onDone={p=>{
@@ -2827,23 +3402,36 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const nxtLv=LEVELS[Math.min(lv.lv,4)];
   const lvProg=lv.lv<5?Math.min(100,((points-lv.min)/(nxtLv.min-lv.min))*100):100;
   const wp=ROOMITEMS.find(i=>i.id===equipped.wp);
-  const roomPos={tl:{top:55,left:28},tr:{top:55,right:28},ml:{bottom:92,left:24},mr:{bottom:92,right:24},bl:{bottom:22,left:38},br:{bottom:22,right:38}};
+  /* Updated by Claude on 2026/06/29 (UI Sprint)
+     Reason: these were fixed px offsets tuned for the old flat-gradient room
+     background is now a simplified empty room made for furniture placement.
+     Wall slots stay on open wall areas; floor slots use bottom/left anchors so
+     large furniture can sit on the floor instead of reading like tiny stickers. */
+  const roomPos={
+    tl:{top:"18%",left:"47%"},
+    tr:{top:"18%",right:"12%"},
+    ml:{bottom:"21%",left:"18%"},
+    mr:{bottom:"21%",right:"18%"},
+    bl:{bottom:"8%",left:"20%"},
+    br:{bottom:"8%",right:"18%"}
+  };
 
   const NAVS=[
     {k:"home",icon:"🏠",l:"首頁"},
     {k:"tasks",icon:"✅",l:"任務"},
     {k:"park",icon:"🌳",l:"公園"},
     {k:"room",icon:"🏡",l:"房間"},
-    {k:"closet",icon:"👕",l:"衣櫃"},
+    {k:"shop",icon:"🛍️",l:"商店"},
   ];
 
   const buy=(item)=>{
     trackSafe("buy_item");
-    if(points<item.price){toast2("點數不夠喔！😢","#e05060");return;}
-    if(item.id.startsWith("f")){setBackpack(b=>({...b,[item.id]:(b[item.id]||0)+1}));}
+    if(item.locked){toast2("即將上架，等待 Founder 提供素材 💛");return;}
+    if(points<item.price){toast2("星星不夠喔！😢","#e05060");return;}
+    if(FOODS.some(f=>f.id===item.id)){setBackpack(b=>({...b,[item.id]:(b[item.id]||0)+1}));}
     else{if(owned.indexOf(item.id)>=0){toast2("已經擁有了！");return;}setOwned(o=>[...o,item.id]);}
     setPoints(p=>p-item.price);toast2("買到了！"+item.emoji+" "+item.label+" 💛");
-    Audio.buy();unlockAch("a11");
+    Audio.buy();unlockAch("a7");
   };
   const equip=(item)=>{
     if(owned.indexOf(item.id)<0)return;
@@ -2927,11 +3515,188 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
 
   // wish cost find
   const activeWish=wishes.filter(w=>w.status==="active").sort((a,b)=>a.pts-b.pts)[0];
+  const previewEvent=getCurrentOrPreviewOfficialEvents()[0];
+  const showRoomToolHint=(key,msg)=>{
+    const tipKey=playerStorageKey("roomToolTip_"+key);
+    if(localStorage.getItem(tipKey)!=="true"){
+      localStorage.setItem(tipKey,"true");
+      toast2(msg,C.yellow);
+    }
+  };
+  const openDeskSuggestion=()=>{
+    showRoomToolHint("desk","不知道先做什麼嗎？\n打開抽屜，\n抽一張今天的小紙條吧！");
+    const today=new Date().toLocaleDateString("zh-TW");
+    const undone=tasks.filter(h=>!checked["kid-"+today+"-"+h.id]&&!checked["ok-"+today+"-"+h.id]);
+    if(undone.length===0){
+      setDeskTip({done:true,label:"今天的習慣都完成了！",icon:"🏆"});
+    }else{
+      const h=undone[Math.floor(Math.random()*undone.length)];
+      setDeskTip({done:false,label:h.label,icon:h.icon||"⭐"});
+    }
+    setModal("deskSuggestion");
+  };
+  const claimFounderGift=()=>{
+    const key=playerStorageKey("founderGift_v1_claimed");
+    if(localStorage.getItem(key)==="true"){setModal(null);return;}
+    const giftIds=[
+      "founder_crown","founder_first_resident_frame",
+      "founder_g_01","founder_g_02","founder_b_01","founder_b_02"
+    ];
+    setOwned(o=>Array.from(new Set([...(o||[]),...giftIds])));
+    setBackpack(b=>({...b,f1:(b.f1||0)+20}));
+    setAchievements(a=>a.indexOf("a_founder_beta")>=0?a:[...a,"a_founder_beta"]);
+    localStorage.setItem(key,"true");
+    Audio.achieve();
+    toast2("第一批小小夥伴禮物已加入收藏！🎁",C.yellow);
+    setModal(null);
+  };
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Nunito',sans-serif",
       paddingBottom:isTablet?84:70,...themeVars(themeId)}}>
       <Toast msg={toast.msg} color={toast.color}/>
+
+      {modal==="deskSuggestion"&&<Overlay onClose={()=>setModal(null)}>
+        <div style={{fontSize:42,textAlign:"center",marginBottom:8}}>{deskTip&&deskTip.done?"🏆":"📚"}</div>
+        {Sh(deskTip&&deskTip.done?"習慣小達人！":"書桌小抽屜")}
+        <div style={{position:"relative",height:150,marginBottom:14}}>
+          <div style={{position:"absolute",left:"50%",bottom:8,transform:"translateX(-50%)",width:230,height:78,
+            borderRadius:"24px 24px 18px 18px",background:"linear-gradient(180deg,#E8C08D,#C98D55)",
+            border:"4px solid rgba(116,75,35,.28)",boxShadow:"0 10px 0 rgba(116,75,35,.12)"}}>
+            <div style={{position:"absolute",left:18,right:18,top:15,height:36,borderRadius:16,
+              background:"linear-gradient(180deg,#F5D5A7,#D99E66)",border:"3px solid rgba(116,75,35,.22)",
+              transform:"translateY(12px)",animation:"drawerOpen .45s ease-out forwards"}}/>
+            <div style={{position:"absolute",left:"50%",top:30,transform:"translateX(-50%)",width:24,height:9,borderRadius:999,
+              background:"#9C6A3E",boxShadow:"inset 0 2px 0 rgba(255,255,255,.25)"}}/>
+          </div>
+          <div style={{position:"absolute",left:"50%",bottom:42,transform:"translateX(-50%) translateY(42px)",
+            width:190,minHeight:84,borderRadius:18,background:"#FFFDF5",border:"3px solid #F0D59A",
+            boxShadow:"0 8px 0 rgba(116,75,35,.10)",padding:"14px 12px",textAlign:"center",
+            animation:"paperOut .55s .12s ease-out forwards"}}>
+            <div style={{fontSize:10,fontWeight:900,color:C.soft,marginBottom:5}}>小紙條</div>
+            <div style={{fontSize:13,fontWeight:900,color:C.brown,lineHeight:1.55}}>
+              {deskTip&&deskTip.done?"今天的習慣都完成了！":<>今天先完成：<br/>{deskTip&&deskTip.icon} {deskTip&&deskTip.label}</>}
+            </div>
+          </div>
+        </div>
+        <div style={{...bub(C.light,20),padding:"14px",textAlign:"center",marginBottom:14,border:"none"}}>
+          {deskTip&&deskTip.done?<>
+            <div style={{fontSize:16,fontWeight:900,color:C.brown,marginBottom:6}}>今天的習慣都完成了！</div>
+            <div style={{fontSize:13,fontWeight:800,color:C.soft}}>你是習慣小達人！</div>
+          </>:<>
+            <div style={{fontSize:13,fontWeight:800,color:C.soft,marginBottom:8}}>今天先完成：</div>
+            <div style={{fontSize:24,fontWeight:900,color:C.brown}}>{deskTip&&deskTip.icon} {deskTip&&deskTip.label}</div>
+          </>}
+        </div>
+        <button className="btn" onClick={()=>setModal(null)}
+          style={{...bub(C.orange,999),width:"100%",padding:"12px 0",fontSize:14,fontWeight:900,color:"#fff",border:"none"}}>
+          好，我知道了
+        </button>
+      </Overlay>}
+
+      {modal==="focus"&&<Overlay onClose={()=>focusEndsAt?setModal("focusExitConfirm"):setModal(null)}>
+        <div style={{fontSize:42,textAlign:"center",marginBottom:8}}>⏳</div>
+        {Sh("專注小沙漏")}
+        <div style={{...bub(C.light,22),padding:"16px 14px",textAlign:"center",border:"none",marginBottom:14}}>
+          <div style={{position:"relative",width:96,height:128,margin:"0 auto 14px"}}>
+            <svg viewBox="0 0 100 136" width="96" height="128">
+              <path d="M25 10 H75 Q70 42 54 63 Q70 84 75 126 H25 Q30 84 46 63 Q30 42 25 10Z" fill="#FFF8DF" stroke="#B98545" strokeWidth="5" strokeLinejoin="round"/>
+              <path d="M34 22 H66 Q62 40 52 54 Q49 58 48 61 Q44 51 38 41 Q35 32 34 22Z" fill="#F6C85F" opacity={focusEndsAt?.9:.45}/>
+              <path d="M50 68 Q58 83 63 116 H37 Q42 83 50 68Z" fill="#F6C85F" opacity={focusEndsAt?.75:.25}/>
+              {focusEndsAt&&<line x1="50" y1="62" x2="50" y2="92" stroke="#D99A34" strokeWidth="3" strokeLinecap="round" style={{animation:"sandFall 1s linear infinite"}}/>}
+              <rect x="20" y="3" width="60" height="10" rx="5" fill="#C28A4B"/>
+              <rect x="20" y="123" width="60" height="10" rx="5" fill="#C28A4B"/>
+            </svg>
+          </div>
+          {focusEndsAt?(()=>{
+            const remain=Math.max(0,focusEndsAt-focusNow);
+            const mm=Math.floor(remain/60000),ss=Math.floor((remain%60000)/1000);
+            return <div style={{fontSize:24,fontWeight:900,color:C.brown,marginBottom:8}}>
+              {mm}:{String(ss).padStart(2,"0")}
+            </div>;
+          })():<>
+            <div style={{fontSize:12,fontWeight:900,color:C.soft,marginBottom:10}}>選一個短短的專注時間</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:7}}>
+              {[5,10,15,20].map(m=><button key={m} className="btn" onClick={()=>setFocusMinutes(m)}
+                style={{...bub(focusMinutes===m?C.yellow:C.card,999),padding:"8px 0",fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>
+                {m}分
+              </button>)}
+            </div>
+          </>}
+        </div>
+        <button className="btn" onClick={()=>{
+          if(focusEndsAt){setFocusEndsAt(null);setModal(null);return;}
+          setFocusNow(Date.now());
+          setFocusEndsAt(Date.now()+focusMinutes*60000);
+          toast2("專注小沙漏開始了 ⏳",C.yellow);
+        }} style={{...bub(focusEndsAt?C.light:C.orange,999),width:"100%",padding:"12px 0",fontSize:14,fontWeight:900,color:focusEndsAt?C.soft:"#fff",border:"none"}}>
+          {focusEndsAt?"先收起沙漏":"開始專注"}
+        </button>
+      </Overlay>}
+
+      {modal==="focusExitConfirm"&&<Overlay onClose={()=>setModal("focus")}>
+        <div style={{fontSize:42,textAlign:"center",marginBottom:8}}>⏳</div>
+        {Sh("是否結束本次專注？")}
+        <div style={{fontSize:13,fontWeight:800,color:C.soft,lineHeight:1.8,textAlign:"center",marginBottom:16}}>
+          如果結束，這次小沙漏會停止倒數。<br/>也可以繼續專注，把這件事做完。
+        </div>
+        <button className="btn" onClick={()=>setModal("focus")}
+          style={{...bub(C.orange,999),width:"100%",padding:"12px 0",fontSize:14,fontWeight:900,color:"#fff",border:"none",marginBottom:9}}>
+          繼續專注
+        </button>
+        <button className="btn" onClick={()=>{setFocusEndsAt(null);setModal(null);toast2("已結束這次專注 ⏳",C.light);}}
+          style={{...bub(C.light,999),width:"100%",padding:"12px 0",fontSize:13,fontWeight:900,color:C.soft,border:"none"}}>
+          結束專注
+        </button>
+      </Overlay>}
+
+      {modal==="focusDone"&&<Overlay onClose={()=>setModal(null)}>
+        <div style={{fontSize:48,textAlign:"center",marginBottom:8}}>✨⏳✨</div>
+        {Sh("專注完成！")}
+        <div style={{fontSize:13,fontWeight:800,color:C.soft,lineHeight:1.8,textAlign:"center",marginBottom:14}}>
+          你完成了一段安靜專注時間。<br/>小小一步也很棒！
+        </div>
+        <button className="btn" onClick={()=>setModal(null)}
+          style={{...bub(C.orange,999),width:"100%",padding:"12px 0",fontSize:14,fontWeight:900,color:"#fff",border:"none"}}>
+          太棒了
+        </button>
+      </Overlay>}
+
+      {modal==="founderGift"&&<Overlay onClose={()=>{}}>
+        <div style={{fontSize:38,textAlign:"center",marginBottom:8}}>📮</div>
+        {Sh("Maggie 阿姨來信")}
+        <div style={{...bub("#FFF8E8",22),padding:"18px 16px",border:"2px solid rgba(245,166,35,.22)",marginBottom:14}}>
+          <div style={{fontSize:18,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:12}}>🎉 歡迎回家！</div>
+          <div style={{fontSize:13,fontWeight:800,color:C.brown,lineHeight:1.9,whiteSpace:"pre-line",textAlign:"center"}}>
+{`謝謝你陪伴《Pet Habit Kingdom》一起慢慢長大。
+
+因為有你們的陪伴，
+Maggie 阿姨才有勇氣，
+把這個小小的作品，
+一步一步變成現在的樣子。
+
+這份禮物，
+送給第一批的小小夥伴們 ❤️`}
+          </div>
+        </div>
+        <div style={{...bub(C.light,20),padding:"14px 14px",marginBottom:14,border:"none"}}>
+          <div style={{fontSize:13,fontWeight:900,color:C.brown,marginBottom:8}}>🎁 獲得：</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.soft,lineHeight:1.8}}>
+            👑 寵物王國皇冠（開國限定款）<br/>
+            👕 限定服裝（男女各兩套）<br/>
+            🖼️ 寵物王國限定相框（開國限定款）<br/>
+            🍎 Apple ×20<br/>
+            💌 Beta 成就徽章
+          </div>
+        </div>
+        <div style={{fontSize:12,fontWeight:800,color:C.soft,lineHeight:1.8,textAlign:"center",marginBottom:14}}>
+          希望你會喜歡這份禮物喔！❤️<br/>── Maggie 阿姨
+        </div>
+        <button className="btn" onClick={claimFounderGift}
+          style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:15,fontWeight:900,color:"#fff",border:"none"}}>
+          開心收下
+        </button>
+      </Overlay>}
 
       {/* ACHIEVEMENT POPUP */}
       {modal&&modal.startsWith("ach-")&&(()=>{
@@ -2970,7 +3735,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
           <div style={{fontSize:11,fontWeight:800,color:C.soft,lineHeight:1.7,marginBottom:16}}>
             房間需要整理，{profile.petName}也想洗個舒服的澡。<br/>先抱一下，再一起慢慢恢復吧！
           </div>
-          <button className="btn" onClick={()=>{setNeglect(n=>({...n,welcomePending:false,sleeping:false}));setModal(null);setTab("room");setTimeout(()=>startPetAction("hug","最喜歡你回來了！🤗",46,4200),250);}}
+          <button className="btn" onClick={()=>{setNeglect(n=>({...n,welcomePending:false,sleeping:false}));setModal(null);goTab("room");setTimeout(()=>startPetAction("hug","最喜歡你回來了！🤗",46,4200),250);}}
             style={{...bub(C.orange),width:"100%",padding:"13px 0",borderRadius:999,fontSize:14,fontWeight:900,color:"#fff",border:"none"}}>🤗 先抱抱牠</button>
         </div>
       </Overlay>}
@@ -2994,10 +3759,13 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       {modal==="parent"&&<ParentPanel profile={profile} checked={checked} setChecked={setChecked}
         points={points} setPoints={setPoints} wishes={wishes} setWishes={setWishes}
         bonusTasks={bonusTasks} setBonusTasks={setBonusTasks}
+        owned={owned} setOwned={setOwned} backpack={backpack} setBackpack={setBackpack}
+        officialEventProgress={officialEventProgress} setOfficialEventProgress={setOfficialEventProgress}
         tasks={tasks} setTasks={setTasks}
         musicOn={musicOn} setMusicOn={setMusicOn}
         storageKey={saveKey} playerId={playerId}
         approvalMode={approvalMode} setApprovalMode={setApprovalMode}
+        isTablet={isTablet} toast2={toast2}
         onClose={()=>setModal(null)}/>}
 
       {/* SHOP MODAL */}
@@ -3024,6 +3792,24 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                 background:shopTab===k?C.yellow:"transparent",
                 boxShadow:shopTab===k?"0 3px 0 rgba(0,0,0,.08)":"none",border:"none"}}>{l}</button>))}
         </div>
+        {shopTab==="pet"&&(()=>{
+          const item=OUTFITS.find(o=>o.id===previewAccessory);
+          const preview={...equipped};
+          if(item)preview[item.slot||item.anchorSlot||"neck"]=item.id;
+          return <div style={{...bub(C.light,20),padding:"12px 14px",marginBottom:12,border:"none",
+            display:"flex",alignItems:"center",gap:12}}>
+            <div style={{width:118,textAlign:"center"}}>
+              <PetView petType={petType} level={lv.lv} hat={preview.hat} neck={preview.neck} back={preview.back} body={preview.body} acc={preview.acc}
+                hunger={hunger} mood={mood} isNight={isNight} size={.58}/>
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:13,fontWeight:900,color:C.brown,marginBottom:4}}>穿戴預覽</div>
+              <div style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.55}}>
+                {item?item.label+" · "+(item.pending?"待 Founder 驗收，可實際試戴":"可購買並裝備"):"點下方配件先看看效果"}
+              </div>
+            </div>
+          </div>;
+        })()}
         {shopTab==="kid"&&<div style={{display:"flex",gap:6,overflowX:"auto",padding:"1px 1px 9px",marginTop:-5}}>
           {["全部","日常","學院風","公園風","睡衣風"].map(t=><button key={t} className="btn" onClick={()=>setKidShopTheme(t)}
             style={{...bub(kidShopTheme===t?C.yellow:C.light,999),padding:"6px 12px",minWidth:"max-content",fontSize:10,fontWeight:900,
@@ -3031,14 +3817,21 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
         </div>}
         <div style={{display:"grid",gridTemplateColumns:isTablet?"repeat(3,1fr)":"1fr 1fr",gap:10}}>
           {(shopTab==="food"?FOODS:shopTab==="toy"?TOYS:shopTab==="pet"?OUTFITS:shopTab==="outfit"?(profile&&profile.gender==="boy"?OUTFIT_CLOTHES_BOY:OUTFIT_CLOTHES_GIRL):shopTab==="kid"?KID_ITEMS:ROOMITEMS.filter(i=>i.asset))
+            .filter(item=>{
+              if(shopTab==="pet")return !item.hidden||owned.indexOf(item.id)>=0;
+              if(shopTab==="outfit")return !item.giftOnly;
+              if(shopTab==="room")return !item.giftOnly;
+              return !item.hidden&&!item.giftOnly;
+            })
             .filter(item=>shopTab!=="kid"||kidShopTheme==="全部"||item.theme===kidShopTheme).map(item=>{
             const isOwn=owned.indexOf(item.id)>=0;
             const isEq=equipped[item.slot||item.type]===item.id;
             const slotInfo=ROOM_SLOTS.find(s=>s.id===item.slot);
             const qty=backpack[item.id]||0,can=points>=item.price;
             return(
-              <div key={item.id} style={{...cardS(isEq?C.yellow:isOwn?C.light:C.card),
-                padding:"13px 10px",textAlign:"center"}}>
+              <div key={item.id} onClick={()=>shopTab==="pet"&&setPreviewAccessory(item.id)}
+                style={{...cardS(isEq?C.yellow:isOwn?C.light:C.card),
+                padding:"13px 10px",textAlign:"center",cursor:shopTab==="pet"?"pointer":"default"}}>
                 {shopTab==="kid"?<KidItemIcon item={item} size={50}/>:shopTab==="pet"?
                   <div style={{height:66,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:5}}>
                     <PetAccessoryArt item={item} size={58}/>
@@ -3069,9 +3862,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                 {shopTab==="toy"&&<div style={{fontSize:10,color:"#9060d0",fontWeight:900,marginBottom:5}}>心情+{item.joy}</div>}
                 {shopTab==="food"?<>
                   {qty>0&&<div style={{fontSize:10,color:C.soft,fontWeight:800,marginBottom:4}}>背包 x{qty}</div>}
+                  <FoodEffectInfo item={item} center/>
                   <button className="btn" onClick={()=>buy(item)}
                     style={{...bub(can?C.orange:C.light),borderRadius:999,padding:"5px 14px",
-                      fontSize:11,fontWeight:900,color:can?"#fff":C.soft,opacity:can?1:.6,border:"none"}}>{item.price}⭐ 購買</button>
+                      fontSize:11,fontWeight:900,color:can?"#fff":C.soft,opacity:can?1:.6,border:"none",marginTop:5}}>{item.price}⭐ 購買</button>
                 </>:shopTab==="toy"?
                   <button className="btn" onClick={()=>isOwn?playToy(item):buy(item)}
                     style={{...bub(isOwn?"#D4B0FF":can?C.orange:C.light),borderRadius:999,
@@ -3082,11 +3876,12 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                   <button className="btn" onClick={()=>equip(item)}
                     style={{...bub(isEq?C.orange:C.light),borderRadius:999,padding:"5px 14px",
                       fontSize:11,fontWeight:900,color:isEq?"#fff":C.soft,border:"none"}}>
-                    {shopTab==="kid"?(isEq?"✓ 穿著中":"試穿"):shopTab==="outfit"?(isEq?"✓ 穿著中":"購買"):shopTab==="pet"?(isEq?"✓ 戴著中":"戴上"):(isEq?"✓ 放置中":"放進房間")}</button>
+                    {shopTab==="kid"?(isEq?"✓ 穿著中":"試穿"):shopTab==="outfit"?(isEq?"✓ 穿著中":"已擁有・穿上"):shopTab==="pet"?(isEq?"✓ 戴著中":"戴上"):(isEq?"✓ 放置中":"放進房間")}</button>
                 :
-                  <button className="btn" onClick={()=>buy(item)}
+                  <button className="btn" onClick={(e)=>{e.stopPropagation();buy(item);}}
                     style={{...bub(can?C.orange:C.light),borderRadius:999,padding:"5px 14px",
-                      fontSize:11,fontWeight:900,color:can?"#fff":C.soft,opacity:can?1:.6,border:"none"}}>{item.price}⭐</button>}
+                      fontSize:11,fontWeight:900,color:can&&!item.locked?"#fff":C.soft,opacity:can&&!item.locked?1:.6,border:"none"}}>
+                    {item.locked?"即將上架":item.pending?"待驗收 "+item.price+"⭐":item.price+"⭐"}</button>}
               </div>);})}
         </div>
         {shopTab==="room"&&<div style={{fontSize:10,color:C.soft,fontWeight:800,
@@ -3095,7 +3890,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
         </div>}
         <button className="btn" onClick={()=>setModal(null)}
           style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,
-            fontSize:13,fontWeight:900,color:C.soft,marginTop:14,border:"none"}}>關閉</button>
+            fontSize:13,fontWeight:900,color:C.soft,marginTop:14,border:"none"}}>離開商店</button>
       </Overlay>}
 
       {/* BACKPACK */}
@@ -3108,27 +3903,23 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               <div key={f.id} style={{...bub(C.light,16),padding:"10px 6px",textAlign:"center",border:"none"}}>
                 <div style={{fontSize:26}}>{f.emoji}</div>
                 <div style={{fontSize:10,fontWeight:900,color:C.brown}}>{f.label}</div>
+                <FoodEffectInfo item={f} center/>
                 <div style={{fontSize:10,color:C.soft,fontWeight:800}}>x{backpack[f.id]}</div>
               </div>))}
           </div>
         </>}
-        {OUTFITS.filter(o=>owned.indexOf(o.id)>=0).length>0&&<>
-          <div style={{fontSize:11,color:C.soft,fontWeight:900,marginBottom:8}}>👗 配件</div>
+        {TOYS.filter(t=>owned.indexOf(t.id)>=0).length>0&&<>
+          <div style={{fontSize:11,color:C.soft,fontWeight:900,marginBottom:8}}>🧸 玩具</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
-            {OUTFITS.filter(o=>owned.indexOf(o.id)>=0).map(o=>{
-              const eq=equipped[o.slot]===o.id;
-              return(
-                <div key={o.id} style={{...bub(eq?C.yellow:C.light,16),padding:"10px 6px",textAlign:"center",cursor:"pointer",border:"none"}}
-                  onClick={()=>setEquipped(e=>({...e,[o.slot]:e[o.slot]===o.id?undefined:o.id}))}>
-                  <div style={{height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <PetAccessoryArt item={o} size={34}/>
-                  </div>
-                  <div style={{fontSize:10,fontWeight:900,color:C.brown}}>{o.label}</div>
-                  {eq&&<div style={{fontSize:9,color:C.soft,fontWeight:900}}>穿戴中</div>}
-                </div>);})}
+            {TOYS.filter(t=>owned.indexOf(t.id)>=0).map(t=><button key={t.id} className="btn" onClick={()=>playToy(t)}
+              style={{...bub(C.light,16),padding:"10px 6px",textAlign:"center",border:"none"}}>
+              <div style={{fontSize:24}}>{t.emoji}</div>
+              <div style={{fontSize:10,fontWeight:900,color:C.brown}}>{t.label}</div>
+            </button>)}
           </div>
         </>}
-        {FOODS.filter(f=>(backpack[f.id]||0)>0).length===0&&OUTFITS.filter(o=>owned.indexOf(o.id)>=0).length===0&&
+        {FOODS.filter(f=>(backpack[f.id]||0)>0).length===0
+          &&TOYS.filter(t=>owned.indexOf(t.id)>=0).length===0&&
           <div style={{textAlign:"center",color:"#c0a080",fontWeight:800,fontSize:13,padding:16}}>背包是空的！去商店逛逛吧</div>}
         <button className="btn" onClick={()=>setModal(null)}
           style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,border:"none"}}>關閉</button>
@@ -3148,6 +3939,16 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       {modal==="closet"&&<Overlay onClose={()=>setModal(null)} wide={isTablet}>
         {(()=>{
           const dressed=!!equipped.outfit;
+          const playerGender=profile.gender||"girl";
+          const closetOutfits=(playerGender==="boy"?OUTFIT_CLOTHES_BOY:OUTFIT_CLOTHES_GIRL)
+            .filter(o=>!o.giftOnly||owned.indexOf(o.id)>=0);
+          const OutfitThumb=({outfit,height})=>{
+            const art=IMG["owner_"+playerGender+"_"+outfit.id];
+            return art?<img src={art} onError={handleImgError} alt={outfit.label} draggable={false}
+                style={{width:"100%",height,objectFit:"contain",userSelect:"none",pointerEvents:"none"}}/>
+              :<div style={{height,borderRadius:12,background:"linear-gradient(135deg,#F3ECE2,#E9DECF)",
+                display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,opacity:.65}}>👚</div>;
+          };
           return <>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
               <div>
@@ -3173,20 +3974,31 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               </div>
 
               <div style={{display:"flex",flexDirection:"column",minWidth:0}}>
-                <div style={{...cardS(C.card),flex:1,padding:isTablet?15:12,display:"flex",flexDirection:"column",
-                  alignItems:"center",justifyContent:"center",textAlign:"center",gap:9,minHeight:isTablet?226:190}}>
-                  <div style={{fontSize:34}}>🧵</div>
-                  <div style={{fontSize:13,fontWeight:900,color:C.brown}}>整套造型包，準備中！</div>
-                  <div style={{fontSize:11,color:C.soft,fontWeight:800,lineHeight:1.7,maxWidth:220}}>
-                    以後可以在這裡一次切換一整套<br/>可愛造型，敬請期待 💌
-                  </div>
-                  <div style={{...bub(C.light,999),padding:"7px 14px",fontSize:10,fontWeight:900,color:C.soft,border:"none",marginTop:4}}>
-                    目前造型：基本造型 🌱
+                <div style={{...cardS(C.card),flex:1,padding:isTablet?15:12,minHeight:isTablet?226:190}}>
+                  <div style={{fontSize:12,fontWeight:900,color:C.soft,marginBottom:9}}>👕 衣櫃收藏</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,maxHeight:isTablet?280:220,overflowY:"auto",paddingRight:2}}>
+                    {closetOutfits.map(o=>{
+                      const ownedOutfit=owned.indexOf(o.id)>=0;
+                      const eq=equipped.outfit===o.id;
+                      return <button key={o.id} className="btn" disabled={!ownedOutfit&&o.locked}
+                        onClick={()=>{
+                          if(ownedOutfit)setEquipped(e=>({...e,outfit:eq?undefined:o.id}));
+                          else if(!o.locked){setShopTab("outfit");setModal("shop");}
+                        }}
+                        style={{...bub(eq?C.yellow:ownedOutfit?C.light:"#F5F1EA",16),padding:"9px 7px",textAlign:"center",
+                          border:"2px solid "+(eq?C.orange:"rgba(116,75,35,.10)"),opacity:(!ownedOutfit&&o.locked)?0.55:1}}>
+                        <OutfitThumb outfit={o} height={74}/>
+                        <div style={{fontSize:9,fontWeight:900,color:C.brown,marginTop:3}}>{o.label}</div>
+                        <div style={{fontSize:8,fontWeight:900,color:eq?"#2a8a2a":C.soft,marginTop:2}}>
+                          {eq?"✓ 穿著中":ownedOutfit?"穿上":o.locked?"即將上架":"購買"}
+                        </div>
+                      </button>;
+                    })}
                   </div>
                 </div>
                 <div style={{marginTop:14}}>
                   <button className="btn" onClick={()=>setModal(null)}
-                    style={{...bub(C.green),width:"100%",padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>完成穿搭 ✓</button>
+                    style={{...bub(C.green),width:"100%",padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>回房間</button>
                 </div>
               </div>
             </div>
@@ -3221,7 +4033,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                 return <button key={dateStr} className="btn" disabled={future} onClick={()=>{
                   if(future)return;setDiaryDate(dateStr);setDMood(entry?entry.mood:3);setDText(entry?entry.text||"":"");setDSaved(!!entry);setModal("diary");
                 }} style={{aspectRatio:"1",borderRadius:15,border:dateStr===today?"3px solid "+C.orange:"2px solid rgba(255,255,255,.8)",
-                  background:entry?moodBg[mi]:future?"#F5F1E8":C.light,opacity:future?.38:1,
+                  background:entry?moodBg[mi]:future?"#F5F1E8":C.light,opacity:future?0.38:1,
                   display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",boxShadow:entry?"0 3px 0 rgba(100,70,30,.10)":"none"}}>
                   <span style={{fontSize:9,fontWeight:900,color:C.soft}}>{d}</span>
                   <span style={{fontSize:isTablet?23:19,lineHeight:1.1}}>{entry?moodEmoji[mi]:"·"}</span>
@@ -3232,6 +4044,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             <div style={{...bub(C.light,16),padding:"9px 12px",marginTop:12,fontSize:10,fontWeight:800,color:C.soft,textAlign:"center",border:"none"}}>
               已收藏 {diary.filter(x=>{const d=new Date(x.date);return d.getFullYear()===y&&d.getMonth()===m;}).length} 天心情 · 點日期查看小日記
             </div>
+            <button className="btn" onClick={()=>setModal(null)}
+              style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,marginTop:12,border:"none"}}>關閉</button>
           </>;
         })()}
       </Overlay>}
@@ -3253,7 +4067,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
         <textarea disabled={dSaved} value={dText} onChange={e=>setDText(e.target.value)}
           placeholder="今天發生了什麼事？想說什麼都可以寫…" maxLength={200}
           style={{width:"100%",minHeight:80,...bub(C.light,16),padding:"10px 12px",
-            fontSize:12,fontWeight:700,color:C.brown,resize:"none",opacity:dSaved?.75:1,border:"none"}}/>
+            fontSize:12,fontWeight:700,color:C.brown,resize:"none",opacity:dSaved?0.75:1,border:"none"}}/>
         {dSaved&&<div style={{...bub(C.yellow,18),padding:"10px 14px",marginTop:10,border:"none"}}>
           <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:3}}>🐾 {profile.petName} 說：</div>
           <div style={{fontSize:12,fontWeight:800,color:C.brown}}>
@@ -3262,14 +4076,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
         </div>}
         {!dSaved
           ?<button className="btn" onClick={()=>{
-            const REPLIES=[profile.petName+"也覺得今天難…明天更好🌱",
-              profile.petName+"聽到了，想給你一個擁抱🤗",
-              profile.petName+"知道你很努力！加油💪",
-              profile.petName+"覺得今天還不錯！繼續⭐",
-              profile.petName+"很開心！你今天很棒🌟",
-              profile.petName+"跟你一樣超開心！最強搭檔🥳",
-              "哇！"+profile.petName+"要去公園慶祝！🎉"];
-            const e={date:diaryDate,mood:dMood,text:dText.trim(),reply:REPLIES[dMood]};
+            const moodKeys=["sad","sad","angry","tired","happy","happy","excited"];
+            const list=EMOTION_REPLIES[moodKeys[dMood]]||EMOTION_REPLIES.happy;
+            const reply=profile.petName+"說：「"+list[Math.floor(Math.random()*list.length)]+"」";
+            const e={date:diaryDate,mood:dMood,text:dText.trim(),reply};
             setDiary(d=>[...d.filter(x=>x.date!==diaryDate),e]);setDSaved(true);
           }} style={{...bub(C.orange),width:"100%",padding:"13px 0",borderRadius:999,
             fontSize:14,fontWeight:900,color:"#fff",marginTop:12,border:"none",
@@ -3278,6 +4088,296 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             <button className="btn" onClick={()=>setDSaved(false)} style={{...bub(C.yellow),padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>✏️ 修改</button>
             <button className="btn" onClick={()=>setModal("calendar")} style={{...bub(C.light),padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.soft,border:"none"}}>回到月曆</button>
           </div>}
+        <button className="btn" onClick={()=>setModal(null)}
+          style={{...bub(C.light),width:"100%",padding:"11px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.soft,marginTop:8,border:"none"}}>關閉</button>
+      </Overlay>}
+
+      {modal&&modal.startsWith("eventIntro-")&&(()=>{
+        const ev=OFFICIAL_EVENTS.find(e=>e.id===modal.replace("eventIntro-",""));
+        if(!ev)return null;
+        return <Overlay onClose={()=>{localStorage.setItem(playerStorageKey("officialEventSeen_"+ev.id),"true");setModal(null);}}>
+          <div style={{textAlign:"center",padding:"6px 0"}}>
+            <div style={{fontSize:52,marginBottom:8}}>🌞</div>
+            <div style={{fontSize:22,fontWeight:900,color:C.brown,marginBottom:8}}>暑假開始啦！</div>
+            <div style={{fontSize:12,fontWeight:800,color:C.soft,lineHeight:1.8,marginBottom:12}}>
+              歡迎來到今年的暑期挑戰！<br/>今年一起完成：
+            </div>
+            <div style={{...bub(C.light,18),padding:"12px 14px",fontSize:13,fontWeight:900,color:C.brown,lineHeight:1.9,border:"none",marginBottom:12}}>
+              📚 閱讀 20 本<br/>⚽ 運動 20 次
+            </div>
+            <div style={{fontSize:13,fontWeight:900,color:C.brown,marginBottom:14}}>完成後可獲得：🍎 ×20</div>
+            <button className="btn" onClick={()=>{
+              localStorage.setItem(playerStorageKey("officialEventSeen_"+ev.id),"true");
+              setModal("events");
+            }} style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:14,fontWeight:900,color:"#fff",border:"none"}}>
+              開始挑戰
+            </button>
+          </div>
+        </Overlay>;
+      })()}
+
+      {modal&&modal.startsWith("eventComplete-")&&(()=>{
+        const ev=OFFICIAL_EVENTS.find(e=>e.id===modal.replace("eventComplete-",""));
+        if(!ev)return null;
+        return <Overlay onClose={()=>setModal(null)}>
+          <div style={{textAlign:"center",padding:"8px 0"}}>
+            <div style={{fontSize:48,marginBottom:8,animation:"bIn .4s"}}>🎉🎉🎉</div>
+            <div style={{fontSize:22,fontWeight:900,color:C.brown,marginBottom:8}}>暑期挑戰完成！</div>
+            <div style={{fontSize:12,fontWeight:800,color:C.soft,lineHeight:1.8,marginBottom:12}}>
+              你和寵物一起完成了今年的暑假挑戰！
+            </div>
+            <div style={{...bub(C.yellow,18),padding:"12px 14px",fontSize:15,fontWeight:900,color:C.brown,border:"none",marginBottom:14}}>
+              {ev.reward.emoji} ×{ev.reward.qty} 已獲得
+            </div>
+            <button className="btn" onClick={()=>setModal(null)}
+              style={{...bub(C.orange,999),width:"100%",padding:"12px 0",fontSize:13,fontWeight:900,color:"#fff",border:"none"}}>太棒了！</button>
+          </div>
+        </Overlay>;
+      })()}
+
+      {modal==="events"&&<Overlay onClose={()=>setModal(null)} wide>
+        <div style={{fontSize:20,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:6}}>🎉 活動挑戰</div>
+        <div style={{fontSize:11,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:14}}>官方活動 · 不影響今日任務主流程</div>
+        {getCurrentOrPreviewOfficialEvents().map(ev=>{
+          const ep=ensureEventProgress(officialEventProgress,ev);
+          const allDone=ev.missions.every(m=>(ep[m.id]&&ep[m.id].count||0)>=m.target);
+          return <div key={ev.id} style={{...bub(C.light,22),padding:14,border:"none",marginBottom:12}}>
+            <div style={{fontSize:18,fontWeight:900,color:C.brown,marginBottom:3}}>{ev.title}</div>
+            <div style={{fontSize:10,fontWeight:800,color:C.soft,marginBottom:10}}>期間：{ev.startDate.slice(5).replace("-","/")}～{ev.endDate.slice(5).replace("-","/")}</div>
+            <div style={{...bub(C.yellow,16),padding:"9px 11px",fontSize:12,fontWeight:900,color:C.brown,marginBottom:12,border:"none"}}>
+              🏅 完成全部挑戰　獎勵：{ev.reward.emoji} ×{ev.reward.qty}
+            </div>
+            {ev.missions.map(m=>{
+              const p=ep[m.id]||{count:0,pending:false};
+              const count=Math.min(p.count||0,m.target),done=count>=m.target;
+              const pct=Math.min(100,count/m.target*100);
+              return <div key={m.id} style={{...bub(done?C.green:p.pending?C.yellow:C.card,18),padding:"12px 13px",marginBottom:10,border:"none"}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:7}}>
+                  <span style={{fontSize:26}}>{m.icon}</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:900,color:C.brown}}>{m.title}</div>
+                    <div style={{fontSize:10,fontWeight:800,color:C.soft}}>目標：{m.target} {m.unit}　進度：{count} / {m.target}</div>
+                  </div>
+                  <span style={{fontSize:10,fontWeight:900,color:done?"#2a8a2a":p.pending?C.brown:C.soft}}>
+                    {done?"已達成":p.pending?"等待家長確認":"可完成"}
+                  </span>
+                </div>
+                <div style={{height:10,background:"rgba(0,0,0,.07)",borderRadius:99,overflow:"hidden",marginBottom:9}}>
+                  <div style={{width:pct+"%",height:"100%",borderRadius:99,background:"linear-gradient(90deg,"+C.butter+","+C.orange+")"}}/>
+                </div>
+                {!done&&<button className="btn" disabled={p.pending} onClick={()=>{
+                  setOfficialEventProgress(all=>{
+                    const current={...(all[ev.id]||{})};
+                    const old=current[m.id]||{count:0,pending:false};
+                    current[m.id]={...old,pending:true};
+                    return {...all,[ev.id]:current};
+                  });
+                  trackSafe("official_event_submit",{eventId:ev.id,missionId:m.id});
+                  toast2("已送出，等待家長確認 💛");
+                }} style={{...bub(p.pending?C.light:C.orange,999),width:"100%",padding:"9px 0",fontSize:12,fontWeight:900,
+                  color:p.pending?C.soft:"#fff",border:"none",opacity:p.pending?0.75:1}}>
+                  {p.pending?"等待家長確認":"✅ 我今天完成了"}
+                </button>}
+              </div>;
+            })}
+            {allDone&&<button className="btn" onClick={()=>{
+              if(ep.rewardClaimed){toast2("獎勵已領取囉！");return;}
+              setBackpack(b=>({...b,[ev.reward.foodId]:(b[ev.reward.foodId]||0)+ev.reward.qty}));
+              setOfficialEventProgress(all=>({...all,[ev.id]:{...ep,rewardClaimed:true}}));
+              toast2("暑期任務完成！獲得 "+ev.reward.emoji+" ×"+ev.reward.qty+" 🎉","#88cc88");
+            }} style={{...bub(ep.rewardClaimed?C.light:C.green,999),width:"100%",padding:"10px 0",fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>
+              {ep.rewardClaimed?"獎勵已領取 ✓":"領取完成獎勵"}
+            </button>}
+          </div>;
+        })}
+        <button className="btn" onClick={()=>setModal(null)}
+          style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,marginTop:4,border:"none"}}>關閉</button>
+      </Overlay>}
+
+      {modal==="life"&&<Overlay onClose={()=>setModal(null)}>
+        <div style={{fontSize:20,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:6}}>🌳 我的生活</div>
+        <div style={{fontSize:11,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:14}}>把每天的小心情和小願望收好</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
+          <button className="btn" onClick={()=>{setModal("calendar");showJit("diary");}}
+            style={{...cardS("#FFE6F0"),padding:"15px 14px",textAlign:"left",border:"none"}}>
+            <div style={{fontSize:27,marginBottom:5}}>📖</div>
+            <div style={{fontSize:15,fontWeight:900,color:C.brown}}>心情日記</div>
+            <div style={{fontSize:11,fontWeight:800,color:C.soft,marginTop:3}}>用月曆收藏每天的心情</div>
+          </button>
+          <button className="btn" onClick={()=>setModal("wish")}
+            style={{...cardS("#F8F0FF"),padding:"15px 14px",textAlign:"left",border:"none"}}>
+            <div style={{fontSize:27,marginBottom:5}}>⭐</div>
+            <div style={{fontSize:15,fontWeight:900,color:C.brown}}>願望清單</div>
+            <div style={{fontSize:11,fontWeight:800,color:C.soft,marginTop:3}}>{activeWish?activeWish.label:"新增一個願望"}</div>
+          </button>
+        </div>
+        <button className="btn" onClick={()=>setModal(null)}
+          style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,marginTop:12,border:"none"}}>關閉</button>
+      </Overlay>}
+
+      {modal==="petAccessoryInfo"&&<Overlay onClose={()=>setModal(null)}>
+        {(()=>{const accessoryIds=["summer_straw_hat","flower_crown","blue_bow_collar","red_bow_collar","founder_crown"];
+          const items=OUTFITS.filter(o=>accessoryIds.includes(o.id)&&owned.indexOf(o.id)>=0);
+          return <>
+            <div style={{fontSize:20,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:6}}>🐾 寵物配件</div>
+            <div style={{fontSize:11,color:C.soft,fontWeight:800,textAlign:"center",lineHeight:1.6,marginBottom:12}}>
+              幫 {profile.petName} 選一個今天的小配件。
+            </div>
+            <div style={{...cardS("linear-gradient(180deg,#FFF9E8,#F0FFF0)"),height:160,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
+              <PetView petType={petType} level={lv.lv} hunger={hunger} mood={mood} isNight={isNight} sleeping={neglect.sleeping}
+                hat={equipped.hat} neck={equipped.neck} back={equipped.back} body={equipped.body} acc={equipped.acc} size={.78}/>
+            </div>
+            {items.length===0
+              ?<div style={{...bub(C.light,18),padding:"14px",fontSize:12,fontWeight:800,color:C.soft,lineHeight:1.7,textAlign:"center",border:"none",marginBottom:12}}>
+                還沒有寵物配件，可以到商店看看。
+              </div>
+              :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:12}}>
+                {items.map(item=>{
+                  const slot=item.slot||item.anchorSlot||"hat";
+                  const isEq=equipped[slot]===item.id;
+                  return <button key={item.id} className="btn" onClick={()=>equip(item)}
+                    style={{...bub(isEq?C.yellow:C.light,16),padding:"10px 8px",textAlign:"center",
+                      border:"2px solid "+(isEq?C.orange:"rgba(116,75,35,.10)")}}>
+                    <div style={{height:54,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:4}}>
+                      <PetAccessoryArt item={item} size={52}/>
+                    </div>
+                    <div style={{fontSize:10,fontWeight:900,color:C.brown,lineHeight:1.25}}>{item.label}</div>
+                    <div style={{fontSize:9,fontWeight:900,color:isEq?"#2a8a2a":C.soft,marginTop:3}}>
+                      {isEq?"✓ 戴著中":"戴上"}
+                    </div>
+                  </button>;
+                })}
+              </div>}
+            {isNight&&<div style={{...bub("#FFF8E8",14),padding:"8px 10px",fontSize:10,fontWeight:800,color:C.soft,textAlign:"center",border:"none",marginBottom:10}}>
+              晚上寵物睡覺時，配件會暫時收起來。
+            </div>}
+            <button className="btn" onClick={()=>setModal(null)}
+              style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,border:"none"}}>回房間</button>
+          </>;
+        })()}
+      </Overlay>}
+
+      {modal==="wish"&&<Overlay onClose={()=>setModal(null)} wide={isTablet}>
+        <div style={{fontSize:20,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:6}}>🌟 願望清單</div>
+        <div style={{fontSize:11,color:C.soft,fontWeight:800,textAlign:"center",lineHeight:1.6,marginBottom:12}}>
+          願望不是馬上完成，而是陪孩子一起努力，慢慢實現。
+        </div>
+        <div style={{...cardS(C.light),padding:"14px",marginBottom:12,display:"flex",alignItems:"center",justifyContent:"space-around"}}>
+          <div style={{textAlign:"center"}}>
+            <StarJar stars={points} max={activeWish?activeWish.pts:500} size={isTablet?1.15:.92}/>
+            <div style={{fontSize:10,color:C.soft,fontWeight:800,marginTop:4}}>目前⭐</div>
+          </div>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:24,fontWeight:900,color:C.brown}}>⭐{points}</div>
+            <div style={{fontSize:11,color:C.soft,fontWeight:800}}>累積星星</div>
+            {activeWish&&<div style={{fontSize:10,color:points>=activeWish.pts?"#2a8a2a":"#d04040",fontWeight:900,marginTop:6}}>
+              目標：{activeWish.label}<br/>
+              {points>=activeWish.pts?"夠了！可以申請！":"還差"+(activeWish.pts-points)+"⭐"}
+            </div>}
+          </div>
+        </div>
+        <div style={{...cardS(C.card),padding:"14px 16px",marginBottom:12}}>
+          <div style={{fontSize:13,fontWeight:900,color:C.brown,marginBottom:10}}>✨ 許一個新願望</div>
+          <div style={{display:"flex",gap:8,marginBottom:10}}>
+            <input style={{...bub(C.light),borderRadius:16,padding:"9px 10px",width:46,fontSize:22,textAlign:"center",border:"none",flexShrink:0}}
+              value={nWEmoji} onChange={e=>setNWEmoji(e.target.value)} maxLength={2}/>
+            <input style={{...bub(C.light),borderRadius:16,padding:"9px 12px",flex:1,fontSize:13,fontWeight:800,color:C.brown,border:"none"}}
+              placeholder="我的願望是…" value={nWLabel} onChange={e=>setNWLabel(e.target.value)} maxLength={20}/>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+            <span style={{fontSize:12,color:C.soft,fontWeight:800}}>我覺得需要：</span>
+            {WISH_STAR_OPTIONS.map(v=><button key={v} className="btn" onClick={()=>setNWPts(v)}
+              style={{...bub(nWPts===v?C.yellow:C.light,999),padding:"5px 9px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>
+              {v}⭐
+            </button>)}
+            <button className="btn" onClick={()=>{
+              if(!nWLabel.trim())return;
+              const safePts=WISH_STAR_OPTIONS.includes(nWPts)?nWPts:100;
+              setWishes(ws=>[...ws,{id:Date.now(),emoji:nWEmoji,label:nWLabel.trim(),kidPts:safePts,pts:safePts,status:"pending"}]);
+              setNWLabel("");setNWEmoji("🌟");setNWPts(100);
+              toast2("願望送給爸媽了！等確認星星 💛");
+            }} style={{...bub(C.orange),marginLeft:"auto",borderRadius:999,padding:"8px 16px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>送出！</button>
+          </div>
+        </div>
+        {wishes.filter(w=>w.status==="active").map(w=>(
+          <div key={w.id} style={{...cardS(C.card),padding:"13px 15px",marginBottom:9,display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:26}}>{w.emoji||"🌟"}</span>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:900,fontSize:13,color:C.brown}}>{w.label}</div>
+              <div style={{marginTop:6,background:"rgba(0,0,0,.07)",borderRadius:99,height:9,overflow:"hidden"}}>
+                <div style={{width:Math.min(100,(points/w.pts*100))+"%",height:"100%",borderRadius:99,background:"linear-gradient(90deg,"+C.butter+","+C.orange+")"}}/>
+              </div>
+              <div style={{fontSize:10,color:points>=w.pts?"#2a8a2a":"#d04040",fontWeight:800,marginTop:3}}>
+                {points}⭐ / {w.pts}⭐ {points>=w.pts?"✓ 夠了！":""}
+              </div>
+            </div>
+            {points>=w.pts&&<button className="btn" onClick={()=>{
+              setWishes(ws=>ws.map(x=>x.id===w.id?{...x,status:"requesting"}:x));
+              toast2("申請送出！等爸媽確認 🌠","#b35cf8");
+            }} style={{...bub(C.orange),borderRadius:999,padding:"8px 13px",fontSize:11,fontWeight:900,color:"#fff",border:"none"}}>申請！</button>}
+          </div>))}
+        {wishes.filter(w=>w.status==="requesting"||w.status==="pending").map(w=>(
+          <div key={w.id} style={{...cardS(C.peach),padding:"12px 15px",marginBottom:8,display:"flex",alignItems:"center",gap:12}}>
+            <span style={{fontSize:24}}>{w.emoji||"🌟"}</span>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:900,fontSize:12,color:C.brown}}>{w.label}</div>
+              <div style={{fontSize:10,color:C.soft,fontWeight:800}}>等爸媽設定星星並陪伴確認…</div>
+            </div>
+            <span style={{fontSize:20}}>⏳</span>
+          </div>))}
+        {wishes.filter(w=>w.status==="done").map(w=>(
+          <div key={w.id} style={{...cardS(C.green),padding:"12px 15px",marginBottom:8,display:"flex",alignItems:"center",gap:12,opacity:.8}}>
+            <span style={{fontSize:24}}>{w.emoji||"🌟"}</span>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:900,fontSize:12,color:C.brown}}>{w.label}</div>
+              <div style={{fontSize:10,color:"#2a8a2a",fontWeight:800}}>願望成真了！🎉</div>
+            </div>
+            <span style={{fontSize:20}}>✅</span>
+          </div>))}
+        {wishes.length===0&&<div style={{textAlign:"center",padding:24}}>
+          <div style={{fontSize:38,marginBottom:8}}>🌟</div>
+          <div style={{fontSize:14,fontWeight:900,color:C.brown,marginBottom:6}}>還沒有願望</div>
+          <div style={{fontSize:11,color:C.soft,fontWeight:800}}>許一個願望，努力存星星吧！</div>
+        </div>}
+        <button className="btn" onClick={()=>setModal(null)}
+          style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,marginTop:10,border:"none"}}>回房間</button>
+      </Overlay>}
+
+      {helpTopic&&<Overlay onClose={()=>setHelpTopic(null)}>
+        {helpTopic==="index"
+          ?<>
+            <div style={{fontSize:19,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:5}}>📖 教學小幫手</div>
+            <div style={{fontSize:11,color:C.soft,fontWeight:800,textAlign:"center",marginBottom:14}}>想複習哪個功能？</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              {Object.keys(JIT_TUTORIALS).map(k=>{
+                const h=JIT_TUTORIALS[k];
+                return <button key={k} className="btn" onClick={()=>setHelpTopic(k)}
+                  style={{...bub(C.light,18),padding:"12px 10px",border:"none",textAlign:"left"}}>
+                  <div style={{fontSize:22,marginBottom:4}}>{h.icon}</div>
+                  <div style={{fontSize:12,fontWeight:900,color:C.brown}}>{h.title}</div>
+                </button>;
+              })}
+            </div>
+          </>
+          :(()=>{
+            const h=JIT_TUTORIALS[helpTopic];
+            if(!h)return null;
+            return <>
+              <div style={{fontSize:38,textAlign:"center",marginBottom:6}}>{h.icon}</div>
+              <div style={{fontSize:20,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:12}}>{h.title}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:9,marginBottom:14}}>
+                {h.steps.map((s,i)=><div key={s} style={{display:"flex",gap:9,alignItems:"flex-start",
+                  ...bub(C.light,16),padding:"10px 12px",border:"none"}}>
+                  <span style={{...bub(C.yellow,999),width:24,height:24,display:"inline-flex",alignItems:"center",justifyContent:"center",
+                    fontSize:11,fontWeight:900,color:C.brown,border:"none",flexShrink:0}}>{i+1}</span>
+                  <span style={{fontSize:12,fontWeight:800,color:C.brown,lineHeight:1.55}}>{s}</span>
+                </div>)}
+              </div>
+              <button className="btn" onClick={()=>setHelpTopic(null)}
+                style={{...bub(C.orange),width:"100%",padding:"12px 0",borderRadius:999,
+                  fontSize:13,fontWeight:900,color:"#fff",border:"none"}}>我知道了</button>
+            </>;
+          })()}
       </Overlay>}
 
       {/* CHANGE PET */}
@@ -3299,12 +4399,12 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             return(
               <button key={p.id} className="btn" onClick={()=>{
                 if(isCur){toast2("這已經是目前的寵物！");return;}
-                if(points<500){toast2("點數不夠！需要500⭐","#e05060");return;}
+                if(points<500){toast2("星星不夠！需要500⭐","#e05060");return;}
                 setPoints(p2=>p2-500);setEquipped(e=>({kidTop:e.kidTop,kidHat:e.kidHat,kidAcc:e.kidAcc}));
                 setProfile(p2=>({...p2,petType:p.id}));setModal(null);
                 toast2("換成功！新夥伴 "+p.emoji+" 來了🌟","#b35cf8");
               }} style={{...bub(isCur?C.yellow:C.light,20),padding:"14px 10px",textAlign:"center",
-                border:"none",opacity:isCur?.6:1}}>
+                border:"none",opacity:isCur?0.6:1}}>
                 <div style={{animation:"float 3s infinite",marginBottom:6}}>
                   <PetView petType={p.id} level={1} mood={4} hunger={80} size={.42}/>
                 </div>
@@ -3321,14 +4421,14 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       <div style={{background:C.yellow,borderBottom:"3px solid rgba(200,140,0,.12)",
         padding:isTablet?"18px 22px 14px":"13px 14px 11px",
         display:"flex",justifyContent:"space-between",alignItems:"center",
-        boxShadow:"0 4px 0 rgba(200,140,0,.1)"}}>
+        boxShadow:"0 4px 0 rgba(200,140,0,.1)",position:"relative",zIndex:1600}}>
         <div>
           <div style={{fontSize:fs(19),fontWeight:900,color:C.brown}}>嗨，{profile.kidName}！🌸</div>
           <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,marginTop:1}}>
             {new Date().toLocaleDateString("zh-TW",{month:"long",day:"numeric",weekday:"long"})}
           </div>
         </div>
-        <div style={{display:"flex",gap:isTablet?7:4,alignItems:"center"}}>
+        <div style={{display:"flex",gap:isTablet?8:6,alignItems:"center",position:"relative",zIndex:1601}}>
           <div style={{...bub(C.yellow),borderRadius:999,padding:isTablet?"10px 20px":"8px 10px",
             fontSize:isTablet?22:18,fontWeight:900,color:C.brown,
             boxShadow:"0 5px 0 rgba(180,120,0,.18)"}}>
@@ -3339,12 +4439,37 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:isTablet?20:17}}>👥</button>}
           <button className="btn" onClick={()=>setModal("pack")}
             style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>🎒</button>
-          <button className="btn" onClick={()=>setModal("shop")}
-            style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>🛍️</button>
-          <button className="btn" onClick={()=>setModal("parent")}
-            style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>🔐</button>
+          <button className="btn" onClick={()=>{
+            const next=!musicOn;setMusicOn(next);
+            if(next){Audio.startMusic(true);toast2("🎵 音樂開啟！");}
+            else{Audio.stopMusic();toast2("🔇 音樂關閉");}
+          }} aria-label="音樂開關"
+            style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>{musicOn?"🎵":"🔇"}</button>
+          <button className="btn" onClick={()=>setHelpTopic("index")} aria-label="教學"
+            style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>?</button>
+          <button className="btn" aria-label="開啟家長控制台" title="家長控制台" onClick={(e)=>{
+            e.preventDefault();e.stopPropagation();
+            console.log("parent button clicked");
+            toast2("正在開啟家長控制台");
+            setModal("parent");
+            setTimeout(()=>console.log("parent modal requested"),0);
+            setTimeout(()=>setModal(m=>{
+              if(m!=="parent")console.log("parent modal retry",m);
+              return m==="parent"?m:"parent";
+            }),800);
+          }}
+            style={{...bub("#fff"),borderRadius:999,width:48,height:48,minWidth:48,minHeight:48,
+              display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:22,
+              position:"relative",zIndex:9999,touchAction:"manipulation",border:"2px solid rgba(116,75,35,.14)"}}>🔐</button>
         </div>
       </div>
+
+      {allDoneCelebrate&&<div style={{position:"fixed",left:"50%",top:"22%",transform:"translateX(-50%)",zIndex:3000,
+        ...bub(C.yellow,24),padding:"14px 18px",fontSize:16,fontWeight:900,color:C.brown,textAlign:"center",
+        animation:"bIn .35s ease-out",border:"none",boxShadow:"0 10px 28px rgba(80,50,20,.16)"}}>
+        <div style={{fontSize:30,marginBottom:4}}>✨💛⭐</div>
+        今天完成所有小約定！
+      </div>}
 
       {/* ══════════ CLOSET ══════════ */}
       {tab==="closet"&&<ClosetPage profile={profile} points={points} isTablet={isTablet}
@@ -3371,7 +4496,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                   borderRadius:14,padding:"5px 9px",fontSize:9,fontWeight:900,color:C.brown,
                   whiteSpace:"nowrap",zIndex:5,border:"none"}}>{speech}</div>}
                 <div className={petAction!=="idle"?"pet-action-"+petAction:""}>
-                  <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
+                  <PetView petType={petType} level={lv.lv} hat={equipped.hat} neck={equipped.neck} back={equipped.back} body={equipped.body} acc={equipped.acc}
                     hunger={hunger} mood={mood} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?1.02:.79}/>
                 </div>
                 {neglect.dirty&&<><span style={{position:"absolute",left:22,top:48,fontSize:10,zIndex:6,opacity:.7}}>🟤</span><span style={{position:"absolute",right:18,top:68,fontSize:8,zIndex:6,opacity:.65}}>🟤</span></>}
@@ -3381,9 +4506,9 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             <div style={{flex:1,minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:isTablet?10:7,flexWrap:"wrap"}}>
                 <span style={{fontSize:fs(15),fontWeight:900,color:C.brown}}>{profile.petName}</span>
-                <span style={{...bub(C.yellow),borderRadius:999,padding:"2px 8px",fontSize:fs(10),fontWeight:900,color:C.brown}}>Lv.{lv.lv}</span>
-                <span style={{...bub(lv.lv>=5?"#D4B0FF":lv.lv>=3?C.green:C.blue),borderRadius:999,
-                  padding:"2px 8px",fontSize:fs(10),fontWeight:900,color:C.brown}}>{lv.emoji}{lv.stage}</span>
+                {DEVELOPER_MODE&&<span style={{...bub(C.yellow),borderRadius:999,padding:"2px 8px",fontSize:fs(10),fontWeight:900,color:C.brown}}>Lv.{lv.lv}</span>}
+                {DEVELOPER_MODE&&<span style={{...bub(lv.lv>=5?"#D4B0FF":lv.lv>=3?C.green:C.blue),borderRadius:999,
+                  padding:"2px 8px",fontSize:fs(10),fontWeight:900,color:C.brown}}>{lv.emoji}{lv.stage}</span>}
                 {streak>=3&&<span style={{...bub(C.peach),borderRadius:999,padding:"2px 8px",
                   fontSize:fs(10),fontWeight:900,color:C.brown}}>🔥{streak}天</span>}
               </div>
@@ -3399,7 +4524,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                     <div style={{width:b.v+"%",height:"100%",borderRadius:99,background:b.c,transition:"width .5s"}}/>
                   </div>
                 </div>))}
-              {lv.lv<5&&<div style={{marginBottom:isTablet?8:5}}>
+              {DEVELOPER_MODE&&lv.lv<5&&<div style={{marginBottom:isTablet?8:5}}>
                 <div style={{display:"flex",justifyContent:"space-between",
                   fontSize:fs(10),color:C.soft,fontWeight:800,marginBottom:3}}>
                   <span>⬆️ 升級</span><span>{Math.round(lvProg)}%</span></div>
@@ -3416,7 +4541,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             </div>
           </div>
 
-          {(neglect.roomMess||neglect.needsBath)&&<button className="btn" onClick={()=>setTab(neglect.roomMess?"room":"park")}
+          {(neglect.roomMess||neglect.needsBath)&&<button className="btn" onClick={()=>goTab(neglect.roomMess?"room":"park")}
             style={{...cardS(neglect.level>=7?"#FFE1D6":neglect.level>=5?"#FFF0D5":"#FFF6D5"),padding:"11px 14px",width:"100%",
               display:"flex",alignItems:"center",gap:10,textAlign:"left",border:"none"}}>
             <span style={{fontSize:25}}>{neglect.roomMess?(neglect.level===3?"🍂":"🧹"):"🛁"}</span>
@@ -3428,7 +4553,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
           {/* WEEKEND BANNER */}
           {isWeekend&&<div style={{...cardS("linear-gradient(135deg,#FFF3C0,#FFE566)"),
             padding:"12px 16px",display:"flex",alignItems:"center",gap:12,cursor:"pointer"}}
-            onClick={()=>setTab("tasks")}>
+            onClick={()=>goTab("tasks")}>
             <span style={{fontSize:28}}>🎉</span>
             <div style={{flex:1}}>
               <div style={{fontSize:fs(13),fontWeight:900,color:C.brown}}>週末冒險來了！</div>
@@ -3440,7 +4565,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
           </div>}
 
           {/* TASK PROGRESS - quick */}
-          <button className="btn" onClick={()=>setTab("tasks")} style={{
+          <button className="btn" onClick={()=>goTab("tasks")} style={{
             ...cardS(C.card),padding:isTablet?"16px 20px":"12px 15px",
             textAlign:"left",border:"none",width:"100%",display:"block"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -3458,16 +4583,17 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
           {/* QUICK ACTIONS */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:isTablet?14:10}}>
             {[
-              {icon:"🌳",label:"帶出去玩",sub:"公園奔跑餵食",bg:"#F0FFF0",fn:()=>setTab("park")},
-              {icon:"🏡",label:"寵物房間",sub:"摸摸牠、清大便",bg:"#FFF8E0",fn:()=>setTab("room")},
-              {icon:"🌠",label:"我的願望",sub:activeWish?activeWish.label:"新增一個願望",bg:"#F8F0FF",fn:()=>setTab("wish")},
-              {icon:"📔",label:"我的日記",sub:"用月曆收藏每天的心情",bg:"#FFE6F0",fn:()=>setModal("calendar")},
-            ].map(a=>(
+              {icon:"🌳",label:"帶出去玩",sub:"公園奔跑餵食",bg:"#F0FFF0",fn:()=>goTab("park")},
+              {icon:"🏡",label:"寵物房間",sub:"摸摸牠、清大便",bg:"#FFF8E0",fn:()=>goTab("room")},
+              {icon:"🌞",label:"特別任務",sub:previewEvent?"暑假特別任務":"期間限定活動",bg:"#FFF4D8",fn:()=>{showJit("events");setModal("events");},hide:!previewEvent&&!DEVELOPER_MODE},
+              {icon:"🌳",label:"我的生活",sub:"日記與願望清單",bg:"#F8F0FF",fn:()=>setModal("life")},
+            ].filter(a=>!a.hide).map(a=>(
               <button key={a.label} className="btn" onClick={a.fn} style={{
                 ...cardS(a.bg),padding:isTablet?"16px 14px":"12px 12px",textAlign:"left",border:"none",width:"100%"}}>
                 <div style={{fontSize:isTablet?28:23,marginBottom:isTablet?7:5}}>{a.icon}</div>
                 <div style={{fontSize:fs(13),fontWeight:900,color:C.brown}}>{a.label}</div>
                 <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,marginTop:2}}>{a.sub}</div>
+                {a.detail&&<div style={{fontSize:fs(9),color:C.soft,fontWeight:900,marginTop:5,lineHeight:1.35}}>{a.detail}</div>}
               </button>))}
           </div>
 
@@ -3520,7 +4646,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               }}/>
             </div>
             <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,textAlign:"center"}}>
-              {approvalMode==="trust"?"信任模式：打勾後星星立刻存入罐子！⭐":"核准模式：完成後等爸媽核准，星星存入罐子！⭐"}
+              {approvalMode==="trust"?"信任模式：打勾後星星立刻存入！⭐":"陪伴模式：完成後等爸媽陪伴確認，星星就會存入！⭐"}
             </div>
           </div>
 
@@ -3537,7 +4663,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                       setPoints(p=>p+h.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"trust"});toast2("完成！星星已存入 🌟","#88cc88");Audio.approve();
                     }else{
                       setChecked(c=>({...c,[kk]:now}));
-                      if(now){toast2("記錄完成！等爸媽核准 💛");Audio.check();}
+                      if(now){toast2("記錄完成！等爸媽陪伴確認 💛");Audio.check();}
                     }}}
                   style={{...bub(appr?C.yellow:kDone?C.light:C.card),
                     display:"flex",alignItems:"center",gap:isTablet?14:10,
@@ -3551,7 +4677,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                     {h.icon}
                   </div>
                   <span style={{flex:1,fontSize:fs(13),fontWeight:900,color:C.brown}}>{h.label}</span>
-                  {appr&&<span style={{fontSize:fs(10),color:C.brown,fontWeight:900}}>✓核准</span>}
+                  {appr&&<span style={{fontSize:fs(10),color:C.brown,fontWeight:900}}>✓已確認</span>}
                   <span style={{...bub(appr?C.orange:C.peach),borderRadius:999,
                     padding:isTablet?"4px 12px":"3px 9px",fontSize:fs(11),fontWeight:900,color:C.brown,border:"none"}}>
                     +{h.pts}⭐
@@ -3575,7 +4701,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               <button key={t.id} className="btn"
                 onClick={()=>{if(t.done||t.ok)return;
                   setBonusTasks(ts=>ts.map(b=>b.id===t.id?{...b,done:true}:b));
-                  toast2("完成！等爸媽來核准 🌟","#88cc88");}}
+                  toast2("完成！等爸媽陪伴確認 🌟","#88cc88");}}
                 style={{...bub(t.done?C.green:C.card),display:"flex",alignItems:"center",gap:12,
                   width:"100%",padding:"13px 14px",marginBottom:8,borderRadius:22,textAlign:"left"}}>
                 <div style={{...bub(t.done?C.butter:C.light),width:42,height:42,borderRadius:999,
@@ -3597,7 +4723,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             <div style={{fontSize:fs(13),fontWeight:900,color:C.brown,marginBottom:3}}>
               太棒了！完成 {approved} 件任務 🎉
             </div>
-            <div style={{fontSize:fs(10),color:C.soft,fontWeight:800}}>{approvalMode==="trust"?"星星已經存入罐子囉！":"等待爸媽 🔐 核准，星星就會存入罐子！"}</div>
+            <div style={{fontSize:fs(10),color:C.soft,fontWeight:800}}>{approvalMode==="trust"?"星星已經存入囉！":"等待爸媽 💛 陪伴確認，星星就會存入！"}</div>
           </div>}
 
           {/* WEEKEND TASKS */}
@@ -3607,7 +4733,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               <span style={{fontSize:24}}>🎉</span>
               <div>
                 <div style={{fontSize:fs(15),fontWeight:900,color:C.brown}}>週末特別任務</div>
-                <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,marginTop:2}}>完成後等爸媽核准，賺更多星星！</div>
+                <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,marginTop:2}}>完成後等爸媽陪伴確認，賺更多星星！</div>
               </div>
             </div>
             {[...WEEKEND_TASKS,...bonusTasks.filter(t=>t.isWeekend&&!t.ok)].map(t=>{
@@ -3624,7 +4750,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                       setPoints(p=>p+t.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:t.id,taskLabel:t.label,mode:"trust_weekend"});toast2("週末任務完成！星星已存入 🌟","#88cc88");Audio.approve();
                     }else{
                       setChecked(c=>({...c,[kk]:now}));
-                      if(now){toast2("週末任務記錄完成！等爸媽核准 🎉","#FFB830");Audio.check();}
+                      if(now){toast2("週末小約定記錄完成！等爸媽陪伴確認 🎉","#FFB830");Audio.check();}
                     }}}
                   style={{...bub(appr?C.yellow:kDone?C.light:C.card),
                     display:"flex",alignItems:"center",gap:isTablet?14:10,
@@ -3639,7 +4765,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                     {t.icon}
                   </div>
                   <span style={{flex:1,fontSize:fs(13),fontWeight:900,color:C.brown}}>{t.label}</span>
-                  {appr&&<span style={{fontSize:fs(10),color:C.brown,fontWeight:900}}>✓核准</span>}
+                  {appr&&<span style={{fontSize:fs(10),color:C.brown,fontWeight:900}}>✓已確認</span>}
                   <span style={{...bub(appr?C.orange:"#FFE566"),borderRadius:999,
                     padding:isTablet?"4px 12px":"3px 9px",fontSize:fs(11),fontWeight:900,color:C.brown,border:"none"}}>
                     +{t.pts}⭐
@@ -3659,6 +4785,23 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       {/* ══════════ PARK ══════════ */}
       {tab==="park"&&(
         <div style={{display:"flex",flexDirection:"column",maxWidth:isTablet?720:480,margin:"0 auto"}}>
+          <div style={{...cardS(C.card),padding:"10px 14px",margin:isTablet?"14px 22px 0":"10px 14px 0",
+            display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,alignItems:"center"}}>
+            {[
+              {l:"💛 寵物心情",v:petMood,c:petMood>60?"linear-gradient(90deg,#FFB3C6,"+C.butter+")":petMood>30?C.orange:"#ff6060"},
+              {l:"🍽️ 飢餓",v:hunger,c:hunger>50?"#88dd88":hunger>25?C.orange:"#ff6060"},
+            ].map(b=><div key={b.l}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.soft,fontWeight:800,marginBottom:3}}>
+                <span>{b.l}</span><span>{b.v}%</span>
+              </div>
+              <div style={{background:"rgba(0,0,0,.07)",borderRadius:99,height:10,overflow:"hidden"}}>
+                <div style={{width:b.v+"%",height:"100%",borderRadius:99,background:b.c,transition:"width .5s"}}/>
+              </div>
+            </div>)}
+            <div style={{gridColumn:"1 / -1",fontSize:10,fontWeight:900,color:C.soft}}>
+              狀態：{hunger<30?"有點餓，記得餵食":petMood<35?"需要陪伴一下":"適合散步玩耍"}
+            </div>
+          </div>
           {/* Updated by Claude on 2026/06/23
               Reason: Replaced weather click-cycle background (sunny/cloudy/rainbow) with
               automatic day/night scene based on isNight (real device time, 19:00 cutoff).
@@ -3700,10 +4843,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             {[15,30,55,72,88].map((l,i)=>(
               <div key={i} style={{position:"absolute",bottom:"17%",left:l+"%",
                 fontSize:isTablet?20:16,animation:"gWave "+(1.5+i*.2)+"s ease-in-out infinite",
-                animationDelay:i*.15+"s",opacity:isNight?.6:1}}>🌿</div>))}
+                animationDelay:i*.15+"s",opacity:isNight?0.6:1}}>🌿</div>))}
             {flowers.map(f=>(
               f.visible&&<div key={f.id} style={{position:"absolute",bottom:"15%",left:f.x+"%",
-                fontSize:isTablet?22:17,cursor:"pointer",opacity:isNight?.7:1}}
+                fontSize:isTablet?22:17,cursor:"pointer",opacity:isNight?0.7:1}}
                 onClick={()=>pickFlower(f.id)}>{f.emoji}</div>))}
             {ballVisible&&<div style={{position:"absolute",bottom:"24%",left:ballX+"%",
               fontSize:22,transition:"left 1.5s ease-in-out"}}>🎾</div>}
@@ -3719,8 +4862,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               onPointerCancel={()=>{parkPetDragRef.current=null;}}>
               {feedItem&&<div style={{position:"absolute",top:-28,left:"50%",transform:"translateX(-50%)",
                 fontSize:22,animation:"bIn .3s"}}>{feedItem.emoji}</div>}
-              <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
-                hunger={hunger} mood={mood} running={running} eating={eating} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?.98:.78}/>
+              <PetView petType={petType} level={lv.lv} hat={equipped.hat} neck={equipped.neck} back={equipped.back} body={equipped.body} acc={equipped.acc}
+                hunger={hunger} mood={mood} running={running} eating={eating} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?0.98:0.78}/>
               {neglect.dirty&&<><span style={{position:"absolute",left:28,top:58,fontSize:12,zIndex:8,opacity:.72}}>🟤</span><span style={{position:"absolute",right:24,top:86,fontSize:9,zIndex:8,opacity:.65}}>🟤</span></>}
             </div>
             <div style={{position:"absolute",bottom:"12%",left:isTablet?"18%":"13%",zIndex:5,
@@ -3733,7 +4876,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               <ActiveKid gender={profile.gender||"girl"} outfitId={equipped.outfit} size={isTablet?1.22:1.08}/>
               {ballVisible&&<span style={{position:"absolute",top:43,right:-12,fontSize:18}}>✨</span>}
             </div>
-            <div style={{position:"absolute",top:10,left:12}}>
+            <div style={{display:"none",position:"absolute",top:10,left:12}}>
               <div style={{...bub("rgba(255,255,255,.75)"),borderRadius:999,
                 padding:"5px 10px",display:"inline-flex",alignItems:"center",gap:6,border:"none"}}>
                 <span style={{fontSize:13}}>🍽️</span>
@@ -3749,7 +4892,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               ...bub("#fff"),borderRadius:14,padding:"5px 10px",fontSize:11,fontWeight:900,
               marginLeft:parkPetPan,color:"#e05060",whiteSpace:"nowrap",border:"none"}}>{HMSG[0]}</div>}
             <div style={{position:"absolute",bottom:8,right:14,fontSize:9,
-              color:"rgba(70,75,35,.72)",fontWeight:900,background:"rgba(255,255,255,.55)",borderRadius:999,padding:"3px 8px"}}>點花送花🌸 點天氣換天氣</div>
+              color:"rgba(70,75,35,.72)",fontWeight:900,background:"rgba(255,255,255,.55)",borderRadius:999,padding:"3px 8px"}}>點花送花🌸 拖曳小主人與寵物</div>
           </div>
           <div style={{padding:isTablet?"10px 22px 0":"8px 14px 0",
             display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
@@ -3761,7 +4904,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                 fontSize:fs(12),fontWeight:900,color:C.brown,border:"none"}}>🎾 丟球</button>
             <button className="btn" onClick={bathPet} disabled={bathing}
               style={{padding:"12px 0",borderRadius:999,...bub(bathing?"#A5D6E8":C.peach),
-                fontSize:fs(12),fontWeight:900,color:C.brown,border:"none",opacity:bathing?.7:1}}>
+                fontSize:fs(12),fontWeight:900,color:C.brown,border:"none",opacity:bathing?0.7:1}}>
               {bathing?"🛁洗中":"🛁洗澡"}</button>
           </div>
           <div style={{padding:isTablet?"8px 22px 0":"7px 14px 0"}}>
@@ -3788,6 +4931,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                     style={{...bub(C.light),borderRadius:14,padding:"9px 5px",textAlign:"center",border:"none"}}>
                     <div style={{fontSize:22}}>{f.emoji}</div>
                     <div style={{fontSize:9,fontWeight:900,color:C.brown}}>{f.label}</div>
+                    <FoodEffectInfo item={f} center/>
                     <div style={{fontSize:9,color:C.soft,fontWeight:800}}>x{backpack[f.id]}</div>
                   </button>))}
               </div>}
@@ -3798,21 +4942,23 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       {tab==="room"&&(
         <div style={{padding:isTablet?"14px 22px 0":"10px 14px 0",
           maxWidth:isTablet?720:480,margin:"0 auto"}}>
-          {/* mood bar */}
           <div style={{...cardS(C.card),padding:"10px 14px",marginBottom:10,
-            display:"flex",alignItems:"center",gap:10}}>
-            <span style={{fontSize:22}}>{"😭😢😕😐🙂😄🥳"[Math.min(6,Math.round(petMood/100*6))]}</span>
-            <div style={{flex:1}}>
-              <div style={{display:"flex",justifyContent:"space-between",
-                fontSize:10,color:C.soft,fontWeight:800,marginBottom:3}}>
-                <span>寵物心情</span><span>{petMood}%</span></div>
-              <div style={{background:"rgba(0,0,0,.07)",borderRadius:99,height:10,overflow:"hidden"}}>
-                <div style={{width:petMood+"%",height:"100%",borderRadius:99,
-                  background:petMood>60?"linear-gradient(90deg,#FFB3C6,"+C.butter+")":petMood>30?C.orange:"#ff6060",
-                  transition:"width .5s"}}/>
+            display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,alignItems:"center"}}>
+            {[
+              {l:"💛 寵物心情",v:petMood,c:petMood>60?"linear-gradient(90deg,#FFB3C6,"+C.butter+")":petMood>30?C.orange:"#ff6060"},
+              {l:"🍽️ 飢餓",v:hunger,c:hunger>50?"#88dd88":hunger>25?C.orange:"#ff6060"},
+            ].map(b=><div key={b.l}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.soft,fontWeight:800,marginBottom:3}}>
+                <span>{b.l}</span><span>{b.v}%</span>
               </div>
+              <div style={{background:"rgba(0,0,0,.07)",borderRadius:99,height:10,overflow:"hidden"}}>
+                <div style={{width:b.v+"%",height:"100%",borderRadius:99,background:b.c,transition:"width .5s"}}/>
+              </div>
+            </div>)}
+            <div style={{gridColumn:"1 / -1",display:"flex",justifyContent:"space-between",fontSize:10,fontWeight:900,color:C.soft}}>
+              <span>狀態：{poops.length>0?"房間需要清理":neglect.needsBath?"寵物想洗澡":"房間很舒服"}</span>
+              {poops.length>0&&<span>💩×{poops.length}</span>}
             </div>
-            {poops.length>0&&<span style={{fontSize:isTablet?22:18}}>💩×{poops.length}</span>}
           </div>
 
           {/* room scene - position based */}
@@ -3836,7 +4982,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               </div>
               <button className="btn" onClick={()=>setRoomEdit(v=>!v)} style={{...bub(roomEdit?C.orange:"rgba(255,255,255,.9)",999),
                 padding:"6px 12px",fontSize:10,fontWeight:900,color:roomEdit?"#fff":C.brown,border:"none"}}>
-                {roomEdit?"✓ 完成佈置":"🛠️ 佈置房間"}
+                {roomEdit?"✓ 完成編輯":"✏️ 編輯房間"}
               </button>
             </div>
 
@@ -3848,8 +4994,16 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               <div style={{position:"absolute",top:"50%",left:0,right:0,height:3,background:"#E4B86E"}}/>
             </div>
 
+            {/* Updated by Claude on 2026/06/29 (UI Sprint) — Render layer check against
+               required order Room→WallFurniture→FloorFurniture→Owner→Pet→PetAccessories→
+               Effects→UI: tl/tr (wall, slot.id[0]==="t") = z4, ml/mr/bl/br (floor) = z8,
+               owner = z9, pet = z10, pet accessories (hat/neck/back/body) are rendered
+               inside PetView's own relative-positioned wrapper at internal z3–6 so they
+               layer correctly against the pet sprite without competing with this outer
+               sequence, poop/sleep effects = z15, top bar = z20, mess-cleanup button = z25.
+               This was already correct — no values changed here, just confirming/recording it. */}
             {ROOM_SLOTS.map(slot=>{
-              const item=ROOMITEMS.find(r=>r.id===equipped[slot.id]);
+              const item=ROOMITEMS.find(r=>!r.locked&&r.id===equipped[slot.id]);
               if(!item&&!roomEdit)return null;
               return <button key={slot.id} className="btn" onClick={()=>{
                 if(roomEdit&&item)setEquipped(e=>({...e,[slot.id]:undefined}));
@@ -3857,23 +5011,32 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                   if(fa){startPetAction(fa.action,fa.text,fa.x,4500);Audio.pat();}
                   else toast2(item.emoji+" "+item.label+"，房間變得更可愛了！");}
               }} style={{position:"absolute",...roomPos[slot.id],zIndex:slot.id[0]==="t"?4:8,
-                width:item?64:54,height:item?64:54,borderRadius:17,border:roomEdit?"2px dashed rgba(116,75,35,.35)":"none",
+                width:item&&item.asset?(isTablet?112:92):(item?64:54),height:item&&item.asset?(isTablet?112:92):(item?64:54),borderRadius:17,border:roomEdit?"2px dashed rgba(116,75,35,.35)":"none",
                 background:roomEdit?"rgba(255,255,255,.42)":"transparent",boxShadow:"none",
                 display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                {item?<><RoomItemArt item={item} size={item.asset?(isTablet?86:74):(isTablet?42:36)}
+                {item?<><RoomItemArt item={item} size={item.asset?(isTablet?(item.roomSize||112):(item.roomSize?Math.round(item.roomSize*.86):96)):(isTablet?42:36)}
                     style={item.asset?{transform:"scale("+(item.scale||1)+")"}:undefined}/>
                   {roomEdit&&<span style={{fontSize:7,fontWeight:900,color:C.brown,background:"rgba(255,255,255,.78)",borderRadius:8,padding:"1px 4px"}}>{item.label}</span>}</>
                   :<span style={{fontSize:8,color:C.soft,fontWeight:900}}>{slot.label}</span>}
               </button>;
             })}
 
+            {/* Updated by Claude on 2026/06/29 (UI Sprint)
+                Reason: owner was positioned with a fixed-px left edge (74px) while
+                pet used a %-based center point (translateX(-50%)) — two different
+                anchor systems for two characters meant to read as "standing
+                together". Switched owner onto the same %+translateX(-50%) center
+                anchor and matched its bottom value to the pet's, so both feet sit
+                on the same floor line and the gap between them stays proportional
+                across mobile/tablet rather than being whatever px happened to land
+                where on a given screen width. */}
             <button className="btn" aria-label="和寵物抱抱" onClick={()=>{startPetAction("hug","最喜歡和你抱抱了！🤗",46,3800);setPetMood(m=>Math.min(100,m+6));Audio.pat();}}
-              style={{position:"absolute",left:petAction==="hug"?(isTablet?190:98):(isTablet?150:74),bottom:34,zIndex:9,
+              style={{position:"absolute",left:petAction==="hug"?"38%":"28%",bottom:"9%",transform:"translateX(-50%)",zIndex:9,
                 animation:"float 3.5s ease-in-out infinite",transition:"left .7s ease",background:"transparent",border:"none",boxShadow:"none",padding:0}}>
               <ActiveKid gender={profile.gender||"girl"} outfitId={equipped.outfit} size={isTablet?1.16:1.02}/>
               {petAction==="hug"&&<span style={{position:"absolute",top:22,right:-13,fontSize:18,animation:"spkl .8s infinite"}}>💛</span>}
             </button>
-            <button className="btn" onClick={patPet} aria-label={"摸摸"+profile.petName} style={{position:"absolute",left:petRoomX+"%",bottom:31,
+            <button className="btn" onClick={patPet} aria-label={"摸摸"+profile.petName} style={{position:"absolute",left:petRoomX+"%",bottom:"9%",
               transform:"translateX(-50%)",transition:"left 2.3s ease-in-out",zIndex:10,background:"transparent",border:"none",boxShadow:"none",padding:0}}>
               {speech&&<div style={{...bub(C.card),position:"absolute",top:-37,left:"50%",transform:"translateX(-50%)",borderRadius:14,
                 padding:"6px 10px",fontSize:10,fontWeight:900,color:C.brown,whiteSpace:"nowrap",zIndex:12,border:"none"}}>{speech}</div>}
@@ -3882,8 +5045,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               {PET_ACTION_EMOJI[petAction]&&<span style={{position:"absolute",right:-8,top:5,fontSize:22,zIndex:12,animation:"bIn .4s"}}>{PET_ACTION_EMOJI[petAction]}</span>}
               {neglect.dirty&&<><span style={{position:"absolute",left:25,top:58,fontSize:13,zIndex:15,opacity:.72}}>🟤</span><span style={{position:"absolute",right:24,top:83,fontSize:10,zIndex:15,opacity:.65}}>🟤</span></>}
               <div className={neglect.sleeping?"pet-action-sleep":petAction!=="idle"&&petAction!=="walk"?"pet-action-"+petAction:""}>
-                <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc} hunger={hunger} mood={mood}
-                  running={petAction==="walk"} eating={toyPlaying!==null} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?.92:.72}/>
+                <PetView petType={petType} level={lv.lv} hunger={hunger} mood={mood}
+                  running={petAction==="walk"} eating={toyPlaying!==null} isNight={isNight} sleeping={neglect.sleeping}
+                  hat={equipped.hat} neck={equipped.neck} back={equipped.back} body={equipped.body} acc={equipped.acc}
+                  size={isTablet?0.92:0.72}/>
               </div>
               {neglect.sleeping&&<span style={{position:"absolute",right:-5,top:0,fontSize:24,zIndex:15,animation:"float 1.8s infinite"}}>💤</span>}
             </button>
@@ -3898,6 +5063,67 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               fontSize:9,fontWeight:900,color:neglect.cost?"#fff":C.brown,border:"none"}}>
               {neglect.level===3?"🍂 收拾落葉（免費）":"🧹 清理灰塵 "+neglect.cost+"⭐"}
             </button>:<div style={{position:"absolute",right:12,bottom:9,fontSize:8,fontWeight:900,color:"rgba(80,45,15,.55)"}}>點寵物摸摸牠 💛</div>}
+          </div>
+
+          <div style={{marginBottom:10}}>
+            <button className="btn" onClick={()=>setShowFood(f=>!f)}
+              style={{width:"100%",padding:isTablet?"12px 0":"11px 0",borderRadius:999,...bub(C.yellow),
+                fontSize:isTablet?14:13,fontWeight:900,color:C.brown,border:"none",position:"relative"}}>
+              🍎 餵食
+              {FOODS.filter(f=>(backpack[f.id]||0)>0).reduce((a,f)=>a+(backpack[f.id]||0),0)>0&&
+                <span style={{...bub(C.orange),position:"absolute",top:-4,right:-4,
+                  borderRadius:999,width:18,height:18,fontSize:10,fontWeight:900,color:"#fff",
+                  display:"flex",alignItems:"center",justifyContent:"center",border:"none"}}>
+                  {FOODS.filter(f=>(backpack[f.id]||0)>0).reduce((a,f)=>a+(backpack[f.id]||0),0)}
+                </span>}
+            </button>
+            {showFood&&<div style={{...cardS(C.card),padding:12,marginTop:8,animation:"bIn .3s"}}>
+              {FOODS.filter(f=>(backpack[f.id]||0)>0).length===0
+                ?<div style={{textAlign:"center",color:"#c0a080",fontWeight:800,fontSize:12,padding:8}}>
+                  目前沒有食物，可以到商店買一點給寵物 💛
+                </div>
+                :<div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                  {FOODS.filter(f=>(backpack[f.id]||0)>0).map(f=>(
+                    <button key={f.id} className="btn" onClick={()=>{feedPet(f);setShowFood(false);}}
+                    style={{...bub(C.light),borderRadius:14,padding:"9px 5px",textAlign:"center",border:"none"}}>
+                      <div style={{fontSize:22}}>{f.emoji}</div>
+                      <div style={{fontSize:9,fontWeight:900,color:C.brown}}>{f.label}</div>
+                      <FoodEffectInfo item={f} center/>
+                      <div style={{fontSize:9,color:C.soft,fontWeight:800}}>x{backpack[f.id]}</div>
+                    </button>))}
+                </div>}
+            </div>}
+          </div>
+
+          <div style={{marginBottom:10}}>
+            {[
+              {title:"生活工具",items:[
+                {icon:"📚",label:"書桌",sub:"抽紙條",fn:()=>{showJit("desk");openDeskSuggestion();}},
+                {icon:"⏳",label:"專注",sub:"選時間",fn:()=>{showJit("focus");showRoomToolHint("focus","選一段時間，陪自己完成一件事情。");setModal("focus");}},
+                {icon:"📔",label:"日記",sub:"寫心情",fn:()=>{setModal("calendar");showJit("diary");}},
+                {icon:"🌟",label:"願望",sub:"看願望",fn:()=>{showJit("wish");setModal("wish");}},
+              ]},
+              {title:"收藏管理",items:[
+                {icon:"👕",label:"衣櫃",sub:"換衣服",fn:()=>setModal("closet")},
+                {icon:"🐾",label:"寵物配件",sub:"選配件",fn:()=>setModal("petAccessoryInfo")},
+                {icon:"🎒",label:"背包",sub:"食物玩具",fn:()=>setModal("pack")},
+              ]},
+            ].map(section=>(
+              <div key={section.title} style={{marginBottom:10}}>
+                <div style={{fontSize:10,fontWeight:900,color:C.soft,margin:"0 0 6px 3px"}}>{section.title}</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat("+section.items.length+",1fr)",gap:8}}>
+                  {section.items.map(a=>(
+                    <button key={a.label} className="btn" onClick={a.fn}
+                      style={{...bub(C.card,18),padding:isTablet?"11px 6px":"9px 4px",textAlign:"center",
+                        border:"2px solid rgba(116,75,35,.10)",boxShadow:"0 3px 0 rgba(116,75,35,.06)"}}>
+                      <div style={{fontSize:isTablet?24:21,marginBottom:3}}>{a.icon}</div>
+                      <div style={{fontSize:isTablet?12:10,fontWeight:900,color:C.brown}}>{a.label}</div>
+                      <div style={{fontSize:isTablet?9:7,fontWeight:800,color:C.soft,marginTop:2,lineHeight:1.25}}>{a.sub}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
           <div style={{...cardS((wp&&wp.bg)||"linear-gradient(135deg,#FFFDE8,#FFF0C0)"),
@@ -3952,8 +5178,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                       width:0,height:0,borderLeft:"7px solid transparent",
                       borderRight:"7px solid transparent",borderTop:"7px solid #fff"}}/>
                   </div>}
-                  <PetView petType={petType} level={lv.lv} hat={equipped.hat} acc={equipped.acc}
-                    hunger={hunger} mood={mood} eating={toyPlaying!==null} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?.72:.58}/>
+                  <PetView petType={petType} level={lv.lv} hat={equipped.hat} neck={equipped.neck} back={equipped.back} body={equipped.body} acc={equipped.acc}
+                    hunger={hunger} mood={mood} eating={toyPlaying!==null} isNight={isNight} sleeping={neglect.sleeping} size={isTablet?0.72:0.58}/>
                 </div>
                 {toyPlaying&&<div style={{fontSize:24,animation:"float .5s infinite"}}>
                   {(TOYS.find(t=>t.id===toyPlaying)||{}).emoji}
@@ -4002,7 +5228,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             </div>)}
 
           {/* 換裝配件 */}
-          {OUTFITS.filter(o=>owned.indexOf(o.id)>=0).length>0&&(
+          {false&&OUTFITS.filter(o=>owned.indexOf(o.id)>=0).length>0&&(
             <div style={{...cardS(C.card),padding:12,marginBottom:10}}>
               <div style={{fontSize:11,color:C.soft,fontWeight:900,marginBottom:8}}>👗 換裝配件</div>
               <div style={{display:"flex",gap:7,flexWrap:"wrap"}}>
@@ -4021,7 +5247,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             </div>)}
 
           {/* 我的裝飾儲藏間 */}
-          {ROOMITEMS.filter(i=>owned.indexOf(i.id)>=0).length>0&&(
+          {roomEdit&&ROOMITEMS.filter(i=>!i.locked&&owned.indexOf(i.id)>=0).length>0&&(
             <div style={{...cardS(C.card),padding:12,marginBottom:10}}>
               {/* header */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
@@ -4034,10 +5260,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
               </div>
 
               {/* 壁紙區 */}
-              {ROOMITEMS.filter(i=>i.type==="wp"&&owned.indexOf(i.id)>=0).length>0&&<>
+              {ROOMITEMS.filter(i=>!i.locked&&i.type==="wp"&&owned.indexOf(i.id)>=0).length>0&&<>
                 <div style={{fontSize:10,color:C.soft,fontWeight:900,marginBottom:7}}>🖼️ 壁紙</div>
                 <div style={{display:"flex",gap:7,flexWrap:"wrap",marginBottom:12}}>
-                  {ROOMITEMS.filter(i=>i.type==="wp"&&owned.indexOf(i.id)>=0).map(d=>{
+                  {ROOMITEMS.filter(i=>!i.locked&&i.type==="wp"&&owned.indexOf(i.id)>=0).map(d=>{
                     const isEq=equipped.wp===d.id;
                     return(
                       <button key={d.id} className="btn"
@@ -4056,9 +5282,9 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
 
               {/* 位置裝飾區 - 按slot分組 */}
               {ROOM_SLOTS.map(slot=>{
-                const slotItems=ROOMITEMS.filter(r=>r.type==="dc"&&r.slot===slot.id&&owned.indexOf(r.id)>=0);
+                const slotItems=ROOMITEMS.filter(r=>!r.locked&&r.type==="dc"&&r.slot===slot.id&&owned.indexOf(r.id)>=0);
                 if(slotItems.length===0)return null;
-                const placed=ROOMITEMS.find(r=>r.id===equipped[slot.id]);
+                const placed=ROOMITEMS.find(r=>!r.locked&&r.id===equipped[slot.id]);
                 return(
                   <div key={slot.id} style={{marginBottom:12}}>
                     <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:7}}>
@@ -4097,16 +5323,11 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
             </div>)}
 
           {/* 還沒有任何裝飾 */}
-          {ROOMITEMS.filter(i=>owned.indexOf(i.id)>=0).length===0&&(
+          {roomEdit&&ROOMITEMS.filter(i=>!i.locked&&owned.indexOf(i.id)>=0).length===0&&(
             <div style={{...cardS(C.light),padding:"18px 14px",textAlign:"center",marginBottom:10}}>
               <div style={{fontSize:32,marginBottom:8}}>🏠</div>
               <div style={{fontSize:13,fontWeight:900,color:C.brown,marginBottom:4}}>還沒有裝飾</div>
-              <div style={{fontSize:11,color:C.soft,fontWeight:800,marginBottom:12}}>去商店買裝飾來佈置房間吧！</div>
-              <button className="btn" onClick={()=>setModal("shop")}
-                style={{...bub(C.orange),borderRadius:999,padding:"9px 22px",
-                  fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>
-                去商店 🛍️
-              </button>
+              <div style={{fontSize:11,color:C.soft,fontWeight:800}}>可以從底部「商店」購買裝飾後再回來佈置。</div>
             </div>)}
         </div>
       )}
@@ -4145,19 +5366,19 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                 fontSize:fs(13),fontWeight:800,color:C.brown,border:"none"}}
                 placeholder="我的願望是…" value={nWLabel} onChange={e=>setNWLabel(e.target.value)} maxLength={20}/>
             </div>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
               <span style={{fontSize:fs(12),color:C.soft,fontWeight:800}}>我覺得需要：</span>
-              <input type="number" inputMode="numeric" min="10" max="2000" value={nWPts}
-                onChange={e=>setNWPts(Number(e.target.value))}
-                style={{width:70,...bub(C.light),borderRadius:12,padding:"5px 8px",
-                  fontSize:fs(14),fontWeight:900,color:C.brown,border:"none",textAlign:"center"}}/>
-              <span style={{fontSize:fs(12),color:C.soft,fontWeight:800}}>⭐</span>
+              {WISH_STAR_OPTIONS.map(v=><button key={v} className="btn" onClick={()=>setNWPts(v)}
+                style={{...bub(nWPts===v?C.yellow:C.light,999),padding:"5px 9px",fontSize:fs(11),fontWeight:900,color:C.brown,border:"none"}}>
+                {v}⭐
+              </button>)}
               <button className="btn" onClick={()=>{
                 if(!nWLabel.trim())return;
+                const safePts=WISH_STAR_OPTIONS.includes(nWPts)?nWPts:100;
                 setWishes(ws=>[...ws,{id:Date.now(),emoji:nWEmoji,label:nWLabel.trim(),
-                  kidPts:nWPts,pts:nWPts,status:"pending"}]);
+                  kidPts:safePts,pts:safePts,status:"pending"}]);
                 setNWLabel("");setNWEmoji("🌟");setNWPts(100);
-                toast2("願望送給爸媽了！等確認點數 💛");
+                toast2("願望送給爸媽了！等確認星星 💛");
               }} style={{...bub(C.orange),marginLeft:"auto",borderRadius:999,
                 padding:"8px 16px",fontSize:fs(12),fontWeight:900,color:"#fff",border:"none",
                 boxShadow:"0 4px 0 rgba(180,80,0,.2)"}}>送出！</button>
@@ -4204,7 +5425,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
                 <span style={{fontSize:24}}>{w.emoji||"🌟"}</span>
                 <div style={{flex:1}}>
                   <div style={{fontWeight:900,fontSize:fs(12),color:C.brown}}>{w.label}</div>
-                  <div style={{fontSize:fs(10),color:C.soft,fontWeight:800}}>等爸媽設定點數並核准…</div>
+                  <div style={{fontSize:fs(10),color:C.soft,fontWeight:800}}>等爸媽設定星星並陪伴確認…</div>
                 </div>
                 <span style={{fontSize:20}}>⏳</span>
               </div>))}
@@ -4244,16 +5465,19 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
         paddingBottom:"env(safe-area-inset-bottom,8px)",gap:4,
         height:isTablet?84:70,alignItems:"center"}}>
         {NAVS.map(n=>(
-          <button key={n.k} className="btn" onClick={()=>setTab(n.k)}
+          <button key={n.k} className="btn" onClick={()=>{
+            if(n.k==="shop"){showJit("shop");setShopTab("food");setModal("shop");return;}
+            goTab(n.k);
+          }}
             style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",
               justifyContent:"center",gap:2,
               padding:isTablet?"10px 0":"7px 0",
-              ...bub(tab===n.k?C.yellow:"transparent"),
-              borderRadius:(tab===n.k||(n.k==="calendar"&&modal==="calendar"))?999:0,
-              boxShadow:(tab===n.k||(n.k==="calendar"&&modal==="calendar"))?"0 4px 0 rgba(0,0,0,.08)":"none",
+              ...bub((tab===n.k||(n.k==="shop"&&modal==="shop"))?C.yellow:"transparent"),
+              borderRadius:(tab===n.k||(n.k==="shop"&&modal==="shop")||(n.k==="calendar"&&modal==="calendar"))?999:0,
+              boxShadow:(tab===n.k||(n.k==="shop"&&modal==="shop")||(n.k==="calendar"&&modal==="calendar"))?"0 4px 0 rgba(0,0,0,.08)":"none",
               border:"none",color:C.brown,
               fontSize:isTablet?12:9,fontWeight:900,
-              margin:(tab===n.k||(n.k==="calendar"&&modal==="calendar"))?"2px 2px":"0",
+              margin:(tab===n.k||(n.k==="shop"&&modal==="shop")||(n.k==="calendar"&&modal==="calendar"))?"2px 2px":"0",
               minHeight:isTablet?60:48}}>
             <span style={{fontSize:isTablet?26:20}}>{n.icon}</span>
             {n.l}
