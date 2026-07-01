@@ -1738,6 +1738,23 @@ function hasLocalGameData(storageKey){
     return !!raw;
   }catch(e){return false;}
 }
+async function importPetHabitBackupFile(file,setMessage){
+  try{
+    const payload=JSON.parse(await file.text());
+    const saved=payload&&payload.localStorage;
+    if(!saved||typeof saved!=="object"||!Object.keys(saved).some(isPetHabitSaveKey))throw new Error("invalid backup");
+    if(!window.confirm("匯入會覆蓋目前資料，是否確認？"))return false;
+    getPetHabitSaveKeys().forEach(key=>localStorage.removeItem(key));
+    Object.keys(saved).filter(isPetHabitSaveKey).forEach(key=>{
+      if(typeof saved[key]==="string")localStorage.setItem(key,saved[key]);
+    });
+    window.location.reload();
+    return true;
+  }catch(err){
+    if(setMessage)setMessage("❌ 無法匯入：這不是有效的 Pet Habit 備份檔");
+    return false;
+  }
+}
 function ImportLocalDataModal({onImport,onSkip}){
   return <Overlay onClose={onSkip}>
     <div style={{fontSize:40,textAlign:"center",marginBottom:8}}>📦</div>
@@ -2164,9 +2181,9 @@ function EventApproveControl({eventId,mission,setOfficialEventProgress}){
     </button>
   </div>;
 }
-function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,owned,setOwned,backpack,setBackpack,officialEventProgress,setOfficialEventProgress,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,isTablet,toast2,onClose}){
+function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,owned,setOwned,backpack,setBackpack,officialEventProgress,setOfficialEventProgress,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,isTablet,toast2,onClose,initialTab}){
   const [authed,setAuthed]=useState(false);
-  const [ptab,setPtab]=useState("tasks");
+  const [ptab,setPtab]=useState(initialTab||"tasks");
   const [nTask,setNTask]=useState(""),nPts=useRef(20);
   const [rst,setRst]=useState(false);
   const [hEditIdx,setHEditIdx]=useState(null);
@@ -2202,15 +2219,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
     const file=e.target.files&&e.target.files[0];
     e.target.value="";
     if(!file)return;
-    try{
-      const payload=JSON.parse(await file.text());
-      const saved=payload&&payload.localStorage;
-      if(!saved||typeof saved!=="object"||!Object.keys(saved).some(isPetHabitSaveKey))throw new Error("invalid backup");
-      if(!window.confirm("匯入會覆蓋目前資料，是否確認？"))return;
-      getPetHabitSaveKeys().forEach(key=>localStorage.removeItem(key));
-      Object.keys(saved).filter(isPetHabitSaveKey).forEach(key=>{if(typeof saved[key]==="string")localStorage.setItem(key,saved[key]);});
-      window.location.reload();
-    }catch(err){setBackupMsg("❌ 無法匯入：這不是有效的 Pet Habit 備份檔");}
+    importPetHabitBackupFile(file,setBackupMsg);
   };
   const redeemGiftCode=()=>{
     const code=giftCode.trim().toUpperCase();
@@ -2850,6 +2859,14 @@ function FamilySetup({legacy,defaultName,addMode,onDone,onCancel}){
   const [playerName,setPlayerName]=useState(defaultName||legacyProfile.kidName||"");
   const [themeId,setThemeId]=useState("butter");
   const [err,setErr]=useState("");
+  const [importMsg,setImportMsg]=useState("");
+  const importInputRef=useRef(null);
+  const importBackupFromStart=async(e)=>{
+    const file=e.target.files&&e.target.files[0];
+    e.target.value="";
+    if(!file)return;
+    importPetHabitBackupFile(file,setImportMsg);
+  };
   return <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:18,
     background:"linear-gradient(160deg,#FFF9EA,#F8F1FF,#EAF7EF)",...themeVars(themeId)}}>
     <div style={{...cardS(C.card),width:"100%",maxWidth:470,padding:"25px 20px"}}>
@@ -2857,6 +2874,27 @@ function FamilySetup({legacy,defaultName,addMode,onDone,onCancel}){
         <div style={{fontSize:22,fontWeight:900,color:"var(--theme-dark)"}}>{legacy?"歡迎全家一起成長":addMode?"新增小主人":"建立你的家庭"}</div>
         <div style={{fontSize:11,fontWeight:800,color:C.soft,marginTop:5}}>{legacy?"原本的任務、星星、寵物與衣櫃都會保留":addMode?"每位小主人都有自己的任務、寵物與房間":"先建立第一位小主人，之後最多可新增至 3 位"}</div>
       </div>
+      {!legacy&&!addMode&&<div style={{...bub("#FFF8E8",20),padding:"13px 13px",marginBottom:13,border:"2px solid rgba(245,166,35,.18)"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8}}>
+          <div style={{...bub(C.light,16),padding:"10px 11px",border:"none"}}>
+            <div style={{fontSize:12,fontWeight:900,color:C.brown,marginBottom:3}}>① 第一次來玩</div>
+            <div style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.5}}>建立新的家庭與小主人。</div>
+          </div>
+          <div style={{...bub(C.card,16),padding:"11px 11px",border:"none"}}>
+            <div style={{fontSize:12,fontWeight:900,color:C.brown,marginBottom:5}}>② 已經玩過</div>
+            <div style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.7,marginBottom:9}}>
+              如果你之前已經在瀏覽器玩過，加入主畫面後看起來像重新開始，<br/>
+              可以從這裡匯入備份資料。這樣才不會造成寶貝的資料遺失喔～
+            </div>
+            <button className="btn" onClick={()=>importInputRef.current&&importInputRef.current.click()}
+              style={{...bub(C.yellow),width:"100%",padding:"10px 0",borderRadius:999,fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>
+              ⬆️ 匯入備份
+            </button>
+            <input ref={importInputRef} type="file" accept=".json,application/json" onChange={importBackupFromStart} style={{display:"none"}}/>
+            {importMsg&&<div style={{fontSize:10,fontWeight:900,color:"#C23B3B",textAlign:"center",marginTop:8}}>{importMsg}</div>}
+          </div>
+        </div>
+      </div>}
       {!addMode&&<div style={{...bub(C.light,17),padding:"10px 13px",marginBottom:9,border:"none"}}>
         <div style={{fontSize:10,fontWeight:900,color:C.soft,marginBottom:3}}>家庭名稱</div>
         <input value={familyName} onChange={e=>setFamilyName(e.target.value)} maxLength={18} placeholder="我的家庭"
@@ -2879,7 +2917,7 @@ function FamilySetup({legacy,defaultName,addMode,onDone,onCancel}){
         if(!playerName.trim()){setErr("請輸入小主人名字");return;}
         onDone({familyName:familyName.trim()||"我的家庭",playerName:playerName.trim(),themeId});
       }} style={{...bub(C.orange),width:"100%",padding:"13px 0",borderRadius:999,color:"#fff",fontSize:14,fontWeight:900,border:"none"}}>
-        {legacy?"保留資料並繼續":addMode?"新增小主人":"建立小主人"}
+        {legacy?"保留資料並繼續":addMode?"新增小主人":"建立新家庭"}
       </button>
       {onCancel&&<button className="btn" onClick={onCancel} style={{width:"100%",padding:"10px 0",marginTop:7,background:"transparent",color:C.soft,fontSize:11}}>取消</button>}
     </div>
@@ -3053,6 +3091,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
 
   const [tab,setTab]=useState("home");
   const [modal,setModal]=useState(null);
+  const [parentInitialTab,setParentInitialTab]=useState("tasks");
   const [helpTopic,setHelpTopic]=useState(null);
   const [allDoneCelebrate,setAllDoneCelebrate]=useState(false);
   const [deskTip,setDeskTip]=useState(null);
@@ -3103,15 +3142,16 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     try{localStorage.setItem("petHabitInstallHintShown","true");}catch(e){}
     setModal(null);
   };
+  const openParentBackupFromInstallHint=()=>{
+    setParentInitialTab("reset");
+    setModal("parent");
+  };
   const maybeShowInstallHint=()=>{
     try{
       if(localStorage.getItem("petHabitInstallHintShown")==="true")return;
       const standalone=window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches;
       const iosStandalone=window.navigator&&window.navigator.standalone===true;
-      if(standalone||iosStandalone){
-        localStorage.setItem("petHabitInstallHintShown","true");
-        return;
-      }
+      if(standalone||iosStandalone)return;
       setTimeout(()=>setModal(m=>m||"installHint"),450);
     }catch(e){}
   };
@@ -3715,35 +3755,40 @@ Maggie 阿姨才有勇氣，
         </button>
       </Overlay>}
 
-      {modal==="installHint"&&<Overlay onClose={acknowledgeInstallHint}>
+      {modal==="installHint"&&<Overlay onClose={()=>setModal(null)}>
         <div style={{padding:22,textAlign:"center"}}>
-          <div style={{fontSize:42,marginBottom:8}}>??</div>
-          <h2 style={{margin:"0 0 8px",color:C.brown}}>?????</h2>
+          <div style={{fontSize:42,marginBottom:8}}>📱</div>
+          <h2 style={{margin:"0 0 8px",color:C.brown}}>想把遊戲加到主畫面嗎？</h2>
           <p style={{fontSize:14,lineHeight:1.8,color:C.soft,fontWeight:800,whiteSpace:"pre-line"}}>
-            ???????????????{"\n"}
-            ???? App ???????????????
+            如果你已經開始玩了，{"\n"}
+            請先到「家長控制台 → 資料備份」匯出備份。{"\n\n"}
+            加入主畫面後，{"\n"}
+            如果看到重新開始，{"\n"}
+            可以在開頭畫面選擇「匯入備份」。
           </p>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginTop:16}}>
-            <button className="btn" onClick={acknowledgeInstallHint}
-              style={{...bub(C.light),padding:"13px 0",borderRadius:999,color:C.brown,border:"none"}}>???</button>
+          <div style={{display:"grid",gridTemplateColumns:"1fr",gap:9,marginTop:16}}>
+            <button className="btn" onClick={openParentBackupFromInstallHint}
+              style={{...bub(C.orange),padding:"13px 0",borderRadius:999,color:"#fff",border:"none"}}>先去備份</button>
             <button className="btn" onClick={()=>setModal("installGuide")}
-              style={{...bub(C.yellow),padding:"13px 0",borderRadius:999,color:C.brown,border:"none"}}>????</button>
+              style={{...bub(C.yellow),padding:"13px 0",borderRadius:999,color:C.brown,border:"none"}}>查看加入教學</button>
+            <button className="btn" onClick={()=>setModal(null)}
+              style={{...bub(C.light),padding:"12px 0",borderRadius:999,color:C.soft,border:"none"}}>稍後再說</button>
           </div>
         </div>
       </Overlay>}
-      {modal==="installGuide"&&<Overlay onClose={acknowledgeInstallHint}>
+      {modal==="installGuide"&&<Overlay onClose={()=>setModal(null)}>
         <div style={{padding:22,textAlign:"center"}}>
-          <div style={{fontSize:42,marginBottom:8}}>??</div>
-          <h2 style={{margin:"0 0 10px",color:C.brown}}>???????</h2>
+          <div style={{fontSize:42,marginBottom:8}}>🏠</div>
+          <h2 style={{margin:"0 0 10px",color:C.brown}}>加入主畫面教學</h2>
           <div style={{...cardS(C.light),padding:14,textAlign:"left",fontSize:13,lineHeight:1.8,color:C.soft,fontWeight:900}}>
             <div style={{color:C.brown,marginBottom:4}}>iPhone / iPad</div>
-            <div>Safari ? ?? ? ?????</div>
+            <div>Safari → 分享 → 加入主畫面</div>
             <div style={{height:10}}/>
             <div style={{color:C.brown,marginBottom:4}}>Android</div>
-            <div>Chrome ? ?? App / ?????</div>
+            <div>Chrome → 安裝 App / 加入主畫面</div>
           </div>
           <button className="btn" onClick={acknowledgeInstallHint}
-            style={{...bub(C.yellow),padding:"13px 0",borderRadius:999,color:C.brown,border:"none",width:"100%",marginTop:16}}>???</button>
+            style={{...bub(C.yellow),padding:"13px 0",borderRadius:999,color:C.brown,border:"none",width:"100%",marginTop:16}}>知道了</button>
         </div>
       </Overlay>}
 
@@ -3815,7 +3860,8 @@ Maggie 阿姨才有勇氣，
         storageKey={saveKey} playerId={playerId}
         approvalMode={approvalMode} setApprovalMode={setApprovalMode}
         isTablet={isTablet} toast2={toast2}
-        onClose={()=>setModal(null)}/>}
+        initialTab={parentInitialTab}
+        onClose={()=>{setParentInitialTab("tasks");setModal(null);}}/>}
 
       {/* SHOP MODAL */}
       {modal==="shop"&&<Overlay onClose={()=>setModal(null)} wide>
@@ -5014,6 +5060,15 @@ Maggie 阿姨才有勇氣，
           <div style={{...cardS((wp&&wp.bg)||"linear-gradient(180deg,#FFF8D8,#FFE7B3)"),
             height:isTablet?390:330,marginBottom:10,position:"relative",overflow:"hidden",border:"3px solid rgba(180,120,50,.14)",
             backgroundImage:"url("+IMG.room_bedroom_sunny+")",backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat"}}>
+            {isNight&&<>
+              <div style={{position:"absolute",inset:0,zIndex:1,pointerEvents:"none",
+                background:"linear-gradient(180deg,rgba(20,38,82,.24),rgba(34,44,92,.18) 48%,rgba(255,205,118,.10))",
+                mixBlendMode:"multiply"}}/>
+              <div style={{position:"absolute",left:"10%",right:"8%",bottom:"5%",height:"42%",zIndex:2,pointerEvents:"none",
+                background:"radial-gradient(ellipse at center,rgba(255,214,126,.24),rgba(255,214,126,.08) 45%,rgba(255,214,126,0) 72%)"}}/>
+              <div style={{position:"absolute",left:"7%",top:"9%",width:"22%",height:"20%",zIndex:2,pointerEvents:"none",
+                borderRadius:"45%",background:"rgba(62,93,150,.18)",filter:"blur(10px)"}}/>
+            </>}
             <div style={{display:"none",position:"absolute",inset:"0 0 36%",background:"linear-gradient(120deg,rgba(255,255,255,.22),transparent 60%)"}}/>
             <div style={{display:"none",position:"absolute",left:0,right:0,bottom:0,height:"36%",borderTop:"4px solid rgba(135,83,35,.18)",
               background:"repeating-linear-gradient(90deg,#DFAE72 0,#DFAE72 42px,#D49B60 43px,#D49B60 46px)"}}/>
@@ -5064,7 +5119,7 @@ Maggie 阿姨才有勇氣，
                 background:roomEdit?"rgba(255,255,255,.42)":"transparent",boxShadow:"none",
                 display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
                 {item?<><RoomItemArt item={item} size={item.asset?(isTablet?(item.roomSize||112):(item.roomSize?Math.round(item.roomSize*.86):96)):(isTablet?42:36)}
-                    style={item.asset?{transform:"scale("+(item.scale||1)+")"}:undefined}/>
+                    style={item.asset?{transform:"scale("+(item.scale||1)+")",filter:isNight?"brightness(.84) saturate(.92)":"none"}:{filter:isNight?"brightness(.84) saturate(.92)":"none"}}/>
                   {roomEdit&&<span style={{fontSize:7,fontWeight:900,color:C.brown,background:"rgba(255,255,255,.78)",borderRadius:8,padding:"1px 4px"}}>{item.label}</span>}</>
                   :<span style={{fontSize:8,color:C.soft,fontWeight:900}}>{slot.label}</span>}
               </button>;

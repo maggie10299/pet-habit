@@ -1,4 +1,4 @@
-const CACHE_NAME = "pet-habit-v1-0-0-hotfix-install-icon-20260701-2";
+const CACHE_NAME = "pet-habit-v1-0-0-hotfix-pwa-import-night-20260701-3";
 
 const CORE_ASSETS = [
   "./",
