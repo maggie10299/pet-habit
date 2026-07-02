@@ -1,4 +1,4 @@
-const CACHE_NAME = "pet-habit-v1-0-0-hotfix-pwa-import-night-20260701-3";
+const CACHE_NAME = "pet-habit-v1-0-1-hotfix-outing-school-20260702-1";
 
 const CORE_ASSETS = [
   "./",
@@ -11,6 +11,7 @@ const CORE_ASSETS = [
   "./assets/rooms/bedroom/empty_furniture_room_v1.png",
   "./assets/rooms/park/day.webp",
   "./assets/rooms/park/night.webp",
+  "./assets/rooms/school/day.png",
   "./assets/pet-accessories/founder/founder_crown.png",
   "./assets/furniture/founder/first_resident_frame.png",
   "./assets/owner/boy/founder_b_01.png",

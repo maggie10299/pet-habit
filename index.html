@@ -500,7 +500,7 @@ const JIT_TUTORIALS={
   room:{icon:"🏡",title:"寵物房間",steps:["可以摸摸寵物、餵食、清理房間。","買到的家具會出現在房間裡。","之後也會加入更多互動裝飾。"]},
   diary:{icon:"📔",title:"心情日記",steps:["每天選一個心情，也可以寫一句小日記。","月曆會留下每天的心情圖案。","寵物會回一句陪伴你的話。"]},
   parent:{icon:"💛",title:"家長模式",steps:["爸媽可以開家庭會議、調整小約定。","也可以匯出 JSON 備份，避免資料遺失。","開發檢查資訊只會在 Developer Mode 顯示。"]},
-  park:{icon:"🌳",title:"公園散步",steps:["可以帶寵物與小主人到公園玩。","人物和寵物可以分開拖移。","這裡是孩子放鬆的小天地。"]},
+  park:{icon:"🌈",title:"出去玩",steps:["可以帶寵物與小主人到不同地方玩。","人物和寵物可以分開拖移。","今天一起創造快樂回憶。"]},
   desk:{icon:"📚",title:"書桌",steps:["有些孩子不知道先做哪一件事。","抽一張小紙條，先完成今天的一個小約定。"]},
   focus:{icon:"⏳",title:"專注",steps:["孩子對時間還沒有概念。","透過沙漏，一步一步完成眼前的小任務。"]},
   wish:{icon:"🌟",title:"願望",steps:["願望不是馬上完成。","而是陪孩子一起努力，慢慢實現。"]},
@@ -541,10 +541,12 @@ const themeVars=(id)=>{const t=getTheme(id);return {
 
 /* ═══════════════ V1.2 FAMILY DATA HELPERS ═══════════════ */
 const FAMILY_KEY="petHabitFamily_v1";
+const SCHOOL_SCENE_GIFT_KEY="petHabitGift_schoolScene_20260701_claimed";
 const isPetHabitSaveKey=(key)=>key==="habitKingdom"||key==="lastLogin_hk"||key==="lastStreak_hk"||
   key==="musicOn_hk"||key==="weather_hk"||key==="parkPetPan_hk"||key==="parkKidPan_hk"||key===FAMILY_KEY||
   key.startsWith("habitKingdom_player_")||key.startsWith("lastLogin_hk_")||key.startsWith("lastStreak_hk_")||
   key.startsWith("musicOn_hk_")||key.startsWith("weather_hk_")||key.startsWith("parkPetPan_hk_")||key.startsWith("parkKidPan_hk_")||
+  key.startsWith("outingScene_hk_")||key==="outingScene_hk"||key===SCHOOL_SCENE_GIFT_KEY||
   key.startsWith("founderGift_v1_claimed")||key.startsWith("petHabitRedeemedCodes_");
 const getPetHabitSaveKeys=()=>Object.keys(localStorage).filter(isPetHabitSaveKey);
 const readFamily=()=>{try{const f=JSON.parse(localStorage.getItem(FAMILY_KEY)||"null");return f&&Array.isArray(f.players)&&f.players.length>0&&f.players.length<=3?f:null;}catch(e){return null;}};
@@ -1191,6 +1193,7 @@ const IMG={
   fox_lonely:"assets/pets/fox/lonely.webp",
   park_night:"assets/rooms/park/night.webp",
   park_day:"assets/rooms/park/day.webp",
+  school_day:"assets/rooms/school/day.png",
   room_bedroom_sunny:"assets/rooms/bedroom/empty_furniture_room_v1.png",
 };
 /* Updated by Claude on 2026/06/24
@@ -3078,6 +3081,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
      purely an ambiance toggle and must not affect character/button readability. */
   const [isNight,setIsNight]=useState(()=>new Date().getHours()>=19);
   const [bathing,setBathing]=useState(false);
+  const [schoolGiftClaimed,setSchoolGiftClaimed]=useState(()=>localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)==="true");
+  const [outingScene,setOutingScene]=useState(()=>localStorage.getItem(playerStorageKey("outingScene_hk"))||"park");
   const [parkPetPan,setParkPetPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkPetPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
   const [parkKidPan,setParkKidPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkKidPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
   const [roomEdit,setRoomEdit]=useState(false);
@@ -3155,13 +3160,15 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       setTimeout(()=>setModal(m=>m||"installHint"),450);
     }catch(e){}
   };
+  const schoolUnlocked=schoolGiftClaimed||localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)==="true";
+  const activeOutingScene=schoolUnlocked?outingScene:"park";
   const goTab=(next)=>{
     if(focusEndsAt){
       setModal("focusExitConfirm");
       return;
     }
     setTab(next);
-    if(["tasks","room","diary","park"].includes(next))showJit(next);
+    if(["tasks","room","diary","park"].includes(next))showJit(next==="park"?"park":next);
   };
 
   // persist
@@ -3194,9 +3201,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       localStorage.setItem(playerStorageKey("musicOn_hk"),String(musicOn));
       localStorage.setItem(playerStorageKey("parkPetPan_hk"),String(parkPetPan));
       localStorage.setItem(playerStorageKey("parkKidPan_hk"),String(parkKidPan));
+      localStorage.setItem(playerStorageKey("outingScene_hk"),activeOutingScene);
     },200);
     return()=>clearTimeout(id);
-  },[musicOn,parkPetPan,parkKidPan]);
+  },[musicOn,parkPetPan,parkKidPan,activeOutingScene]);
 
   /* Updated by Claude on 2026/06/23
      Reason: Auto day/night park background. Checks real device time every minute so the
@@ -3276,6 +3284,13 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     const key=playerStorageKey("founderGift_v1_claimed");
     if(localStorage.getItem(key)!=="true")setModal("founderGift");
   },[profile,modal,founderGiftEligible]);
+
+  useEffect(()=>{
+    if(!profile||modal!=null||schoolGiftClaimed)return;
+    if(founderGiftEligible&&localStorage.getItem(playerStorageKey("founderGift_v1_claimed"))!=="true")return;
+    if(localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)==="true"){setSchoolGiftClaimed(true);return;}
+    setModal("schoolSceneGift");
+  },[profile,modal,schoolGiftClaimed,founderGiftEligible]);
 
   // streak check
   useEffect(()=>{
@@ -3475,7 +3490,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const NAVS=[
     {k:"home",icon:"🏠",l:"首頁"},
     {k:"tasks",icon:"✅",l:"任務"},
-    {k:"park",icon:"🌳",l:"公園"},
+    {k:"park",icon:"🌈",l:"出去玩"},
     {k:"room",icon:"🏡",l:"房間"},
     {k:"shop",icon:"🛍️",l:"商店"},
   ];
@@ -3573,6 +3588,17 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   // wish cost find
   const activeWish=wishes.filter(w=>w.status==="active").sort((a,b)=>a.pts-b.pts)[0];
   const previewEvent=getCurrentOrPreviewOfficialEvents()[0];
+  const OUTING_SCENES=[
+    {id:"park",label:"公園",emoji:"🌳",place:"公園"},
+    {id:"school",label:"校園",emoji:"🏫",place:"校園",locked:!schoolUnlocked},
+  ];
+  const currentOuting=OUTING_SCENES.find(s=>s.id===activeOutingScene)||OUTING_SCENES[0];
+  const switchOutingScene=(dir)=>{
+    const unlocked=OUTING_SCENES.filter(s=>!s.locked);
+    const idx=Math.max(0,unlocked.findIndex(s=>s.id===activeOutingScene));
+    const next=unlocked[(idx+dir+unlocked.length)%unlocked.length]||unlocked[0];
+    setOutingScene(next.id);
+  };
   const showRoomToolHint=(key,msg)=>{
     const tipKey=playerStorageKey("roomToolTip_"+key);
     if(localStorage.getItem(tipKey)!=="true"){
@@ -3607,10 +3633,18 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     toast2("第一批小小夥伴禮物已加入收藏！🎁",C.yellow);
     setModal(null);
   };
+  const claimSchoolSceneGift=()=>{
+    localStorage.setItem(SCHOOL_SCENE_GIFT_KEY,"true");
+    setSchoolGiftClaimed(true);
+    setOutingScene("school");
+    Audio.achieve();
+    toast2("已加入：🌈 出去玩",C.yellow);
+    setModal(null);
+  };
 
   return(
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Nunito',sans-serif",
-      paddingBottom:isTablet?84:70,...themeVars(themeId)}}>
+      paddingBottom:isTablet?108:94,...themeVars(themeId)}}>
       <Toast msg={toast.msg} color={toast.color}/>
 
       {modal==="deskSuggestion"&&<Overlay onClose={()=>setModal(null)}>
@@ -3750,6 +3784,29 @@ Maggie 阿姨才有勇氣，
           希望你會喜歡這份禮物喔！❤️<br/>── Maggie 阿姨
         </div>
         <button className="btn" onClick={claimFounderGift}
+          style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:15,fontWeight:900,color:"#fff",border:"none"}}>
+          開心收下
+        </button>
+      </Overlay>}
+
+      {modal==="schoolSceneGift"&&<Overlay onClose={()=>{}}>
+        <div style={{fontSize:40,textAlign:"center",marginBottom:8}}>📮</div>
+        {Sh("Maggie 阿姨送禮")}
+        <div style={{...bub("#FFF8E8",22),padding:"18px 16px",border:"2px solid rgba(245,166,35,.22)",marginBottom:14,textAlign:"center"}}>
+          <div style={{fontSize:18,fontWeight:900,color:C.brown,marginBottom:10}}>我偷偷學會了新的送禮方式！</div>
+          <div style={{fontSize:13,fontWeight:800,color:C.brown,lineHeight:1.8}}>
+            想再送你一份小禮物❤️
+          </div>
+        </div>
+        <div style={{...bub(C.light,20),padding:"16px 14px",marginBottom:14,border:"none",textAlign:"center"}}>
+          <div style={{fontSize:34,marginBottom:8}}>🏫</div>
+          <div style={{fontSize:14,fontWeight:900,color:C.brown,marginBottom:6}}>禮物：校園場景</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.soft,lineHeight:1.8}}>
+            新的地方準備好了！<br/>
+            以後可以到「出去玩」看看校園囉～
+          </div>
+        </div>
+        <button className="btn" onClick={claimSchoolSceneGift}
           style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:15,fontWeight:900,color:"#fff",border:"none"}}>
           開心收下
         </button>
@@ -4532,8 +4589,6 @@ Maggie 阿姨才有勇氣，
           {onSwitch&&<button className="btn" onClick={()=>{saveSnapshot();onSwitch();}} aria-label="切換小主人"
             style={{...bub("#fff"),borderRadius:999,width:isTablet?44:32,height:isTablet?44:32,
               display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:isTablet?20:17}}>👥</button>}
-          <button className="btn" onClick={()=>setModal("pack")}
-            style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>🎒</button>
           <button className="btn" onClick={()=>{
             const next=!musicOn;setMusicOn(next);
             if(next){Audio.startMusic(true);toast2("🎵 音樂開啟！");}
@@ -4678,7 +4733,7 @@ Maggie 阿姨才有勇氣，
           {/* QUICK ACTIONS */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:isTablet?14:10}}>
             {[
-              {icon:"🌳",label:"帶出去玩",sub:"公園奔跑餵食",bg:"#F0FFF0",fn:()=>goTab("park")},
+              {icon:"🌈",label:"帶出去玩",sub:"和寵物走走",bg:"#F0FFF0",fn:()=>goTab("park")},
               {icon:"🏡",label:"寵物房間",sub:"摸摸牠、清大便",bg:"#FFF8E0",fn:()=>goTab("room")},
               {icon:"🌞",label:"特別任務",sub:previewEvent?"暑假特別任務":"期間限定活動",bg:"#FFF4D8",fn:()=>{showJit("events");setModal("events");},hide:!previewEvent&&!DEVELOPER_MODE},
               {icon:"🌳",label:"我的生活",sub:"日記與願望清單",bg:"#F8F0FF",fn:()=>setModal("life")},
@@ -4911,8 +4966,8 @@ Maggie 阿姨才有勇氣，
               unaffected by this change. */}
           <div style={{position:"relative",height:isTablet?390:330,overflow:"hidden",
             margin:isTablet?"14px 22px 0":"10px 14px 0",borderRadius:24,
-            backgroundColor:isNight?"#1B2A52":"#8ED5F4",
-            backgroundImage:"url("+(isNight?IMG.park_night:IMG.park_day)+")",
+            backgroundColor:activeOutingScene==="school"?(isNight?"#273659":"#BFE7FF"):(isNight?"#1B2A52":"#8ED5F4"),
+            backgroundImage:"url("+(activeOutingScene==="school"?IMG.school_day:(isNight?IMG.park_night:IMG.park_day))+")",
             backgroundSize:"cover",backgroundPosition:"center bottom",
             border:"3px solid rgba(80,130,70,.14)",boxShadow:"0 7px 0 rgba(70,120,55,.12)",userSelect:"none",
             transition:"background 1.2s ease"}}>
@@ -4925,8 +4980,19 @@ Maggie 阿姨才有勇氣，
                 artwork), grass tufts and flowers (these are the clickable interactive
                 game elements via pickFlower, not just decoration), and all pet/kid
                 drag + ball/bath interactions — fully unaffected by this change. */}
-            <div style={{position:"absolute",left:12,top:12,...bub("rgba(255,255,255,.78)",999),padding:"5px 11px",
-              fontSize:10,fontWeight:900,color:C.brown,border:"none",zIndex:8}}>🌳 今天一起去公園</div>
+            {activeOutingScene==="school"&&isNight&&<div style={{position:"absolute",inset:0,background:"rgba(26,43,84,.22)",zIndex:1,pointerEvents:"none"}}/>}
+            <div style={{position:"absolute",left:12,top:12,...bub("rgba(255,255,255,.82)",999),padding:"6px 12px",
+              fontSize:10,fontWeight:900,color:C.brown,border:"none",zIndex:8}}>🌈 今天一起出去玩！</div>
+            <div style={{position:"absolute",left:12,top:44,...bub("rgba(255,255,255,.72)",999),padding:"4px 10px",
+              fontSize:9,fontWeight:900,color:C.soft,border:"none",zIndex:8}}>📍 今天地點：{currentOuting.place}</div>
+            <div style={{position:"absolute",top:11,left:"50%",transform:"translateX(-50%)",zIndex:9,
+              display:"flex",alignItems:"center",gap:7,...bub("rgba(255,255,255,.82)",999),padding:"4px 8px",border:"none"}}>
+              <button className="btn" onClick={()=>switchOutingScene(-1)} disabled={OUTING_SCENES.filter(s=>!s.locked).length<2}
+                style={{border:"none",background:"transparent",fontSize:14,fontWeight:900,color:C.brown,opacity:(OUTING_SCENES.filter(s=>!s.locked).length<2)?0.35:1}}>◀︎</button>
+              <span style={{fontSize:10,fontWeight:900,color:C.brown,minWidth:34,textAlign:"center"}}>{currentOuting.label}</span>
+              <button className="btn" onClick={()=>switchOutingScene(1)} disabled={OUTING_SCENES.filter(s=>!s.locked).length<2}
+                style={{border:"none",background:"transparent",fontSize:14,fontWeight:900,color:C.brown,opacity:(OUTING_SCENES.filter(s=>!s.locked).length<2)?0.35:1}}>▶︎</button>
+            </div>
             <div style={{position:"absolute",top:48,left:"50%",transform:"translateX(-50%)",zIndex:9,
               ...bub("rgba(255,255,255,.72)",999),padding:"3px 9px",fontSize:9,fontWeight:900,color:C.soft,border:"none",pointerEvents:"none"}}>
               ↔ 小主人與寵物可分開拖曳
@@ -4987,7 +5053,7 @@ Maggie 阿姨才有勇氣，
               ...bub("#fff"),borderRadius:14,padding:"5px 10px",fontSize:11,fontWeight:900,
               marginLeft:parkPetPan,color:"#e05060",whiteSpace:"nowrap",border:"none"}}>{HMSG[0]}</div>}
             <div style={{position:"absolute",bottom:8,right:14,fontSize:9,
-              color:"rgba(70,75,35,.72)",fontWeight:900,background:"rgba(255,255,255,.55)",borderRadius:999,padding:"3px 8px"}}>點花送花🌸 拖曳小主人與寵物</div>
+              color:"rgba(70,75,35,.72)",fontWeight:900,background:"rgba(255,255,255,.58)",borderRadius:999,padding:"3px 8px"}}>🌸 點一下送給寵物　🤗 點一下抱抱寵物</div>
           </div>
           <div style={{padding:isTablet?"10px 22px 0":"8px 14px 0",
             display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
@@ -5562,11 +5628,11 @@ Maggie 阿姨才有勇氣，
       )}
 
       {/* ══════════ NAV ══════════ */}
-      <div style={{position:"fixed",bottom:0,left:0,right:0,maxWidth:768,margin:"0 auto",
+      <div style={{position:"fixed",bottom:"calc(env(safe-area-inset-bottom, 0px) + 12px)",left:0,right:0,maxWidth:768,margin:"0 auto",
         background:"rgba(255,251,240,.97)",backdropFilter:"blur(14px)",
         borderTop:"2px solid rgba(255,210,140,.28)",
         display:"flex",padding:isTablet?"6px 16px":"4px 8px",
-        paddingBottom:"env(safe-area-inset-bottom,8px)",gap:4,
+        paddingBottom:isTablet?6:5,gap:4,
         height:isTablet?84:70,alignItems:"center"}}>
         {NAVS.map(n=>(
           <button key={n.k} className="btn" onClick={()=>{
