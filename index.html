@@ -45,6 +45,9 @@ body{
 @keyframes drawerOpen{0%{transform:translateY(0)}100%{transform:translateY(18px)}}
 @keyframes paperOut{0%{transform:translateX(-50%) translateY(42px);opacity:0}100%{transform:translateX(-50%) translateY(0);opacity:1}}
 @keyframes sandFall{0%{stroke-dasharray:0 34;opacity:.2}50%{stroke-dasharray:18 16;opacity:1}100%{stroke-dasharray:0 34;opacity:.25}}
+@keyframes giftBounce{0%,100%{transform:translateY(0) rotate(-1deg)}45%{transform:translateY(-10px) rotate(2deg)}70%{transform:translateY(2px) rotate(-1deg)}}
+@keyframes giftLid{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-12px) rotate(-5deg)}}
+@keyframes sparkleFloat{0%{opacity:.15;transform:translateY(8px) scale(.65) rotate(0)}50%{opacity:1;transform:translateY(-7px) scale(1.15) rotate(12deg)}100%{opacity:.25;transform:translateY(4px) scale(.8) rotate(-8deg)}}
 .kid-eye{transform-box:fill-box;transform-origin:center;animation:kidBlink 4.8s infinite;}
 @keyframes ponyBlink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.08)}}
 @keyframes ponyEar{0%,82%,100%{transform:rotate(0)}88%{transform:rotate(-9deg)}93%{transform:rotate(7deg)}}
@@ -542,11 +545,12 @@ const themeVars=(id)=>{const t=getTheme(id);return {
 /* ═══════════════ V1.2 FAMILY DATA HELPERS ═══════════════ */
 const FAMILY_KEY="petHabitFamily_v1";
 const SCHOOL_SCENE_GIFT_KEY="petHabitGift_schoolScene_20260701_claimed";
+const SCHOOL_SCENE_CEREMONY_KEY="petHabitGift_schoolScene_20260701_ceremonySeen";
 const isPetHabitSaveKey=(key)=>key==="habitKingdom"||key==="lastLogin_hk"||key==="lastStreak_hk"||
   key==="musicOn_hk"||key==="weather_hk"||key==="parkPetPan_hk"||key==="parkKidPan_hk"||key===FAMILY_KEY||
   key.startsWith("habitKingdom_player_")||key.startsWith("lastLogin_hk_")||key.startsWith("lastStreak_hk_")||
   key.startsWith("musicOn_hk_")||key.startsWith("weather_hk_")||key.startsWith("parkPetPan_hk_")||key.startsWith("parkKidPan_hk_")||
-  key.startsWith("outingScene_hk_")||key==="outingScene_hk"||key===SCHOOL_SCENE_GIFT_KEY||
+  key.startsWith("outingScene_hk_")||key==="outingScene_hk"||key===SCHOOL_SCENE_GIFT_KEY||key===SCHOOL_SCENE_CEREMONY_KEY||
   key.startsWith("founderGift_v1_claimed")||key.startsWith("petHabitRedeemedCodes_");
 const getPetHabitSaveKeys=()=>Object.keys(localStorage).filter(isPetHabitSaveKey);
 const readFamily=()=>{try{const f=JSON.parse(localStorage.getItem(FAMILY_KEY)||"null");return f&&Array.isArray(f.players)&&f.players.length>0&&f.players.length<=3?f:null;}catch(e){return null;}};
@@ -3082,6 +3086,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [isNight,setIsNight]=useState(()=>new Date().getHours()>=19);
   const [bathing,setBathing]=useState(false);
   const [schoolGiftClaimed,setSchoolGiftClaimed]=useState(()=>localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)==="true");
+  const [schoolGiftCeremonyStep,setSchoolGiftCeremonyStep]=useState("letter");
   const [outingScene,setOutingScene]=useState(()=>localStorage.getItem(playerStorageKey("outingScene_hk"))||"park");
   const [parkPetPan,setParkPetPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkPetPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
   const [parkKidPan,setParkKidPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkKidPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
@@ -3286,11 +3291,13 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   },[profile,modal,founderGiftEligible]);
 
   useEffect(()=>{
-    if(!profile||modal!=null||schoolGiftClaimed)return;
+    if(!profile||modal!=null)return;
+    if(localStorage.getItem(SCHOOL_SCENE_CEREMONY_KEY)==="true")return;
     if(founderGiftEligible&&localStorage.getItem(playerStorageKey("founderGift_v1_claimed"))!=="true")return;
-    if(localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)==="true"){setSchoolGiftClaimed(true);return;}
+    if(localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)==="true")setSchoolGiftClaimed(true);
+    setSchoolGiftCeremonyStep("letter");
     setModal("schoolSceneGift");
-  },[profile,modal,schoolGiftClaimed,founderGiftEligible]);
+  },[profile,modal,founderGiftEligible]);
 
   // streak check
   useEffect(()=>{
@@ -3634,12 +3641,18 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     setModal(null);
   };
   const claimSchoolSceneGift=()=>{
-    localStorage.setItem(SCHOOL_SCENE_GIFT_KEY,"true");
+    if(localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)!=="true")localStorage.setItem(SCHOOL_SCENE_GIFT_KEY,"true");
+    localStorage.setItem(SCHOOL_SCENE_CEREMONY_KEY,"true");
     setSchoolGiftClaimed(true);
     setOutingScene("school");
     Audio.achieve();
-    toast2("已加入：🌈 出去玩",C.yellow);
+    setSchoolGiftCeremonyStep("done");
+    toast2("🎉 已加入：🌈 出去玩",C.yellow);
+  };
+  const goSeeSchoolScene=()=>{
     setModal(null);
+    setOutingScene("school");
+    setTab("park");
   };
 
   return(
@@ -3790,26 +3803,86 @@ Maggie 阿姨才有勇氣，
       </Overlay>}
 
       {modal==="schoolSceneGift"&&<Overlay onClose={()=>{}}>
-        <div style={{fontSize:40,textAlign:"center",marginBottom:8}}>📮</div>
-        {Sh("Maggie 阿姨送禮")}
-        <div style={{...bub("#FFF8E8",22),padding:"18px 16px",border:"2px solid rgba(245,166,35,.22)",marginBottom:14,textAlign:"center"}}>
-          <div style={{fontSize:18,fontWeight:900,color:C.brown,marginBottom:10}}>我偷偷學會了新的送禮方式！</div>
-          <div style={{fontSize:13,fontWeight:800,color:C.brown,lineHeight:1.8}}>
-            想再送你一份小禮物❤️
-          </div>
-        </div>
-        <div style={{...bub(C.light,20),padding:"16px 14px",marginBottom:14,border:"none",textAlign:"center"}}>
-          <div style={{fontSize:34,marginBottom:8}}>🏫</div>
-          <div style={{fontSize:14,fontWeight:900,color:C.brown,marginBottom:6}}>禮物：校園場景</div>
-          <div style={{fontSize:12,fontWeight:800,color:C.soft,lineHeight:1.8}}>
-            新的地方準備好了！<br/>
-            以後可以到「出去玩」看看校園囉～
-          </div>
-        </div>
-        <button className="btn" onClick={claimSchoolSceneGift}
-          style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:15,fontWeight:900,color:"#fff",border:"none"}}>
-          開心收下
-        </button>
+        {(()=>{
+          const alreadyClaimed=localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)==="true";
+          const sparkles=<>
+            <span style={{position:"absolute",left:"12%",top:"22%",fontSize:24,animation:"sparkleFloat 1.8s ease-in-out infinite"}}>✨</span>
+            <span style={{position:"absolute",right:"15%",top:"30%",fontSize:20,animation:"sparkleFloat 2.2s .25s ease-in-out infinite"}}>✨</span>
+            <span style={{position:"absolute",left:"23%",bottom:"18%",fontSize:18,animation:"sparkleFloat 2s .4s ease-in-out infinite"}}>✨</span>
+            <span style={{position:"absolute",right:"24%",bottom:"16%",fontSize:22,animation:"sparkleFloat 2.4s .15s ease-in-out infinite"}}>✨</span>
+          </>;
+          if(schoolGiftCeremonyStep==="letter")return <>
+            <div style={{fontSize:40,textAlign:"center",marginBottom:8}}>📮</div>
+            {Sh("Maggie 阿姨來信")}
+            <div style={{...bub("#FFF8E8",22),padding:"20px 16px",border:"2px solid rgba(245,166,35,.22)",marginBottom:16,textAlign:"center"}}>
+              <div style={{fontSize:18,fontWeight:900,color:C.brown,marginBottom:12}}>我偷偷學會了新的送禮方式！</div>
+              <div style={{fontSize:13,fontWeight:800,color:C.brown,lineHeight:1.8}}>
+                {alreadyClaimed?"想再讓你看看這份禮物❤️":"想再送你一份小禮物❤️"}
+              </div>
+            </div>
+            <button className="btn" onClick={()=>setSchoolGiftCeremonyStep("box")}
+              style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:15,fontWeight:900,color:"#fff",border:"none"}}>
+              好呀！
+            </button>
+          </>;
+          if(schoolGiftCeremonyStep==="box")return <>
+            <div style={{position:"relative",height:230,marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {sparkles}
+              <div style={{position:"relative",width:150,height:135,animation:"giftBounce 1.6s ease-in-out infinite"}}>
+                <div style={{position:"absolute",left:13,right:13,top:22,height:34,borderRadius:"18px 18px 10px 10px",
+                  background:"linear-gradient(180deg,#FF8DA0,#EF6F87)",border:"4px solid rgba(116,75,35,.22)",animation:"giftLid 1.6s ease-in-out infinite"}}/>
+                <div style={{position:"absolute",left:22,right:22,bottom:0,height:90,borderRadius:"16px 16px 22px 22px",
+                  background:"linear-gradient(180deg,#FFC54D,#F5A623)",border:"4px solid rgba(116,75,35,.25)",boxShadow:"0 12px 0 rgba(116,75,35,.12)"}}/>
+                <div style={{position:"absolute",left:"50%",top:18,bottom:2,width:22,transform:"translateX(-50%)",borderRadius:999,
+                  background:"linear-gradient(180deg,#FFF6BC,#FFE066)",boxShadow:"inset 0 2px 0 rgba(255,255,255,.45)"}}/>
+                <div style={{position:"absolute",left:12,right:12,top:57,height:20,borderRadius:999,
+                  background:"linear-gradient(90deg,#FFF6BC,#FFE066,#FFF6BC)"}}/>
+                <div style={{position:"absolute",left:"50%",top:0,transform:"translateX(-50%)",fontSize:42}}>🎀</div>
+              </div>
+            </div>
+            {Sh("準備好了嗎？")}
+            <div style={{fontSize:13,fontWeight:800,color:C.soft,lineHeight:1.8,textAlign:"center",marginBottom:16}}>
+              我要打開禮物囉！
+            </div>
+            <button className="btn" onClick={()=>{Audio.achieve();setSchoolGiftCeremonyStep("reveal");}}
+              style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:15,fontWeight:900,color:"#fff",border:"none"}}>
+              打開禮物
+            </button>
+          </>;
+          if(schoolGiftCeremonyStep==="reveal")return <>
+            <div style={{position:"relative",marginBottom:14}}>
+              {sparkles}
+              <div style={{...bub(C.light,24),padding:"12px",border:"none",overflow:"hidden",boxShadow:"0 10px 24px rgba(116,75,35,.10)"}}>
+                <div style={{height:150,borderRadius:20,backgroundImage:"url("+IMG.school_day+")",
+                  backgroundSize:"cover",backgroundPosition:"center",border:"3px solid rgba(245,166,35,.18)",marginBottom:10}}/>
+                <div style={{fontSize:32,textAlign:"center",marginBottom:4}}>🏫</div>
+                <div style={{fontSize:16,fontWeight:900,color:C.brown,textAlign:"center"}}>校園場景</div>
+              </div>
+            </div>
+            {Sh("新的地方準備好了！")}
+            <div style={{fontSize:13,fontWeight:800,color:C.soft,lineHeight:1.8,textAlign:"center",marginBottom:16}}>
+              以後可以到「出去玩」看看校園囉～
+            </div>
+            <button className="btn" onClick={claimSchoolSceneGift}
+              style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:15,fontWeight:900,color:"#fff",border:"none"}}>
+              開心收下
+            </button>
+          </>;
+          return <>
+            <div style={{fontSize:46,textAlign:"center",marginBottom:8}}>🎉</div>
+            {Sh("已加入：🌈 出去玩")}
+            <div style={{...bub(C.light,22),padding:"15px 14px",border:"none",textAlign:"center",marginBottom:16}}>
+              <div style={{fontSize:34,marginBottom:8}}>🏫</div>
+              <div style={{fontSize:13,fontWeight:800,color:C.soft,lineHeight:1.8}}>
+                校園已經準備好了。<br/>現在就帶寵物去看看吧！
+              </div>
+            </div>
+            <button className="btn" onClick={goSeeSchoolScene}
+              style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:15,fontWeight:900,color:"#fff",border:"none"}}>
+              去看看
+            </button>
+          </>;
+        })()}
       </Overlay>}
 
       {modal==="installHint"&&<Overlay onClose={()=>setModal(null)}>

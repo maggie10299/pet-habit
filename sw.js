@@ -1,4 +1,4 @@
-const CACHE_NAME = "pet-habit-v1-0-1-hotfix-outing-school-20260702-1";
+const CACHE_NAME = "pet-habit-v1-0-1-hotfix-school-gift-ceremony-20260702-2";
 
 const CORE_ASSETS = [
   "./",
