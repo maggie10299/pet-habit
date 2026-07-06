@@ -1,4 +1,4 @@
-const CACHE_NAME = "pet-habit-v1-0-1-hotfix-analytics-module-v1-20260706-1";
+const CACHE_NAME = "pet-habit-v1-0-1-hotfix-analytics-request-20260706-2";
 
 const CORE_ASSETS = [
   "./",
@@ -40,6 +40,9 @@ self.addEventListener("activate", event => {
 
 self.addEventListener("fetch", event => {
   const request = event.request;
+  let url;
+  try{url = new URL(request.url);}catch(e){url = null;}
+  if (url && (url.hostname === "script.google.com" || url.hostname.endsWith(".googleusercontent.com"))) return;
   if (request.method !== "GET") return;
 
   if (request.mode === "navigate") {

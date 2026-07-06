@@ -104,6 +104,7 @@
       global.fetch(config.endpoint,{
         method:"POST",
         mode:"no-cors",
+        cache:"no-store",
         headers:{"Content-Type":"text/plain;charset=utf-8"},
         body:JSON.stringify(payload),
         keepalive:true
