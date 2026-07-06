@@ -1,8 +1,9 @@
-const CACHE_NAME = "pet-habit-v1-0-1-hotfix-school-gift-ceremony-20260702-2";
+const CACHE_NAME = "pet-habit-v1-0-1-hotfix-analytics-module-v1-20260706-1";
 
 const CORE_ASSETS = [
   "./",
   "./index.html",
+  "./maggie-analytics.js",
   "./manifest.webmanifest",
   "./assets/icons/favicon.png",
   "./assets/icons/apple-touch-icon.png",

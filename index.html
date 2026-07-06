@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8"/>
@@ -84,71 +84,11 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 <body>
 <div id="root"></div>
 
+<script src="maggie-analytics.js"></script>
 <script>
-/* Maggie Lab Analytics V2 */
-(function(){
-const ANALYTICS_ENDPOINT="https://script.google.com/macros/s/AKfycbwFuPv3IoIuv0ZcxRsQNVLO3K2J6WKkqqkK3CUox318AxB9bVrBoZl2L8NmWRQMsS4/exec";
 const PRODUCT="pet_habit";
 const VERSION="v1.0.0";
-const SOURCE_KEY="maggie_first_source";
-const FIRST_VISIT_KEY="maggie_first_visit";
-function resolveSource(){
- const q=new URLSearchParams(location.search).get("source");
- if(q&&["website","threads","facebook","direct"].indexOf(q)>=0)return q;
- if(q)return "unknown";
- return document.referrer?"unknown":"direct";
-}
-function getFirstSource(){
- let source=localStorage.getItem(SOURCE_KEY);
- if(!source){
-  source=resolveSource();
-  localStorage.setItem(SOURCE_KEY,source);
- }
- return source;
-}
-function getFirstVisit(){
- let first=localStorage.getItem(FIRST_VISIT_KEY);
- if(!first){
-  first=new Date().toISOString();
-  localStorage.setItem(FIRST_VISIT_KEY,first);
- }
- return first;
-}
-function getDeviceId(){
- let id=localStorage.getItem("maggie_device_id");
- if(!id){
-  id="dev_"+Date.now()+"_"+Math.random().toString(36).substring(2,10);
-  localStorage.setItem("maggie_device_id",id);
- }
- return id;
-}
-window.trackGameEvent=function(event,params={}){
- if(!event)return;
- fetch(ANALYTICS_ENDPOINT,{
-  method:"POST",
-  mode:"no-cors",
-  headers:{"Content-Type":"text/plain;charset=utf-8"},
-  body:JSON.stringify({
-   product:PRODUCT,
-   timestamp:new Date().toISOString(),
-   event:event,
-   deviceId:getDeviceId(),
-   version:VERSION,
-   firstVisit:getFirstVisit(),
-   familyId:params.familyId||"",
-   childId:params.childId||"",
-   platform:navigator.platform||"",
-   browser:navigator.userAgent||"",
-   payload:params,
-   pet:params.pet||"",
-   task:params.task||"",
-   source:getFirstSource()
-  }),
-  keepalive:true
- }).catch(function(){});
-};
-window.getMaggieLabStats=async()=>await (await fetch(ANALYTICS_ENDPOINT)).json();
-})();
+window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-v1"});
 </script>
 <script>
 if("serviceWorker" in navigator){
@@ -211,7 +151,7 @@ const trackSafe=(event,params={})=>{
   }
 };
 
-trackSafe("visit_game");
+trackSafe("view_product");
 
 
 /* ═══════════════ DESIGN TOKENS ═══════════════ */
@@ -1872,7 +1812,7 @@ function Onboarding({onDone,initialKidName}){
     if(step===5){
       if(pin.length<4)return setErr("請設定至少4位數字密碼！");
       if(pin!==pin2)return setErr("兩次密碼不一樣喔！");
-      window.trackGameEvent&&window.trackGameEvent("create_character",{pet:petType,gender:gender,taskCount:tasks.length});
+      trackSafe("create_character",{pet:petType,gender:gender,taskCount:tasks.length});
       onDone({kidName:kidName.trim(),petName:petName.trim()||"剛出生的小寶寶",pin,petType,tasks,gender,approvalMode,
         /* Updated by Claude on 2026/06/23 — new players pick from the new 4-pet roster
            during normal onboarding, so they should never see the PetReselect screen.
@@ -1970,7 +1910,7 @@ function Onboarding({onDone,initialKidName}){
               ))}
             </div>}
           </div>
-          <button className="btn" onClick={()=>{window.trackGameEvent&&window.trackGameEvent("start_game");next();}} style={{
+          <button className="btn" onClick={next} style={{
             ...bub(C.orange),width:"100%",padding:"15px 0",borderRadius:999,
             fontSize:16,fontWeight:900,color:"#fff",boxShadow:"0 6px 0 rgba(180,80,0,.2)"}}>
             🌟 開始我的冒險
@@ -2339,9 +2279,9 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
               {approved
                 ?<span style={{fontSize:18}}>✅</span>
                 :kidDone
-                ?<button className="btn" onClick={()=>{setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_approval"});Audio.approve();}}
+                ?<button className="btn" onClick={()=>{setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);trackSafe("complete_task",{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_approval"});Audio.approve();}}
                   style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>確認</button>
-                :<button className="btn" onClick={()=>{setChecked(c=>({...c,[kidKey]:true,[okKey]:true}));setPoints(p=>p+h.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_assist"});Audio.approve();}}
+                :<button className="btn" onClick={()=>{setChecked(c=>({...c,[kidKey]:true,[okKey]:true}));setPoints(p=>p+h.pts);trackSafe("complete_task",{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_assist"});Audio.approve();}}
                   style={{...bub(C.green),borderRadius:999,padding:"6px 12px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>代為確認</button>}
             </div>);})}
         {isWeekend&&<>
@@ -2369,13 +2309,13 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
               {approved?<span style={{fontSize:18}}>✅</span>:kidDone
                 ?<button className="btn" onClick={()=>{
                     setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);
-                    window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_approval_weekend"});
+                    trackSafe("complete_task",{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_approval_weekend"});
                     if(h.isWeekend)setBonusTasks(ts=>ts.map(t=>t.id===h.id?{...t,ok:true}:t));
                     Audio.weekend();
                   }} style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>確認</button>
                 :<button className="btn" onClick={()=>{
                     setChecked(c=>({...c,[kidKey]:true,[okKey]:true}));setPoints(p=>p+h.pts);
-                    window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"parent_assist_weekend"});
+                    trackSafe("complete_task",{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_assist_weekend"});
                     if(h.isWeekend)setBonusTasks(ts=>ts.map(t=>t.id===h.id?{...t,ok:true}:t));
                     Audio.weekend();
                   }} style={{...bub(C.green),borderRadius:999,padding:"6px 12px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>代為確認</button>}
@@ -3327,6 +3267,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     const key=playerStorageKey("allDoneCelebrate_hk");
     if(done&&localStorage.getItem(key)!==today){
       localStorage.setItem(key,today);
+      trackSafe("finish_daily",{pet:profile.petType,task:"daily"});
+      trackSafe("complete_product",{pet:profile.petType,task:"daily"});
       setAllDoneCelebrate(true);
       startPetAction("hug","✨ 今天完成所有小約定！",50,1800);
       setPetMood(m=>Math.min(100,m+8));
@@ -3399,6 +3341,21 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     if(tRef.current)clearTimeout(tRef.current);
     tRef.current=setTimeout(()=>setToast({msg:"",color:C.butter}),2800);
   },[]);
+
+  const trackPetHabitEvent=useCallback((event,params={})=>{
+    trackSafe(event,{
+      pet:(profile&&profile.petType)||"horse",
+      familyId:"local",
+      childId:playerId||"",
+      ...params
+    });
+  },[profile,playerId]);
+
+  useEffect(()=>{
+    if(!profile)return;
+    trackPetHabitEvent("start_product");
+    if(window.MaggieAnalytics&&window.MaggieAnalytics.trackReturnOnce)window.MaggieAnalytics.trackReturnOnce();
+  },[profile]);
 
   const unlockAch=useCallback((id)=>{
     setAchievements(prev=>{
@@ -3553,11 +3510,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     setTimeout(()=>setRunning(false),2000);
   };
   const feedPet=(item)=>{
-    trackSafe("feed_pet");
     const bp={...backpack};if(!bp[item.id]||bp[item.id]<=0)return;
     bp[item.id]--;setBackpack(bp);setFeedItem(item);setEating(true);
     setHunger(h=>Math.min(100,h+item.hunger));
-    window.trackGameEvent&&window.trackGameEvent("feed_pet",{pet:profile.petType,food:item.id,foodLabel:item.label});
+    trackPetHabitEvent("feed_pet",{food:item.id,foodLabel:item.label});
     Audio.feed();
     maybeShowInstallHint();
     setTimeout(()=>{setEating(false);setFeedItem(null);},1500);
@@ -4883,7 +4839,7 @@ Maggie 阿姨才有勇氣，
                     const now=!kDone;
                     if(now&&approvalMode==="trust"){
                       setChecked(c=>({...c,[kk]:true,[ka]:true}));
-                      setPoints(p=>p+h.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"trust"});toast2("完成！星星已存入 🌟","#88cc88");Audio.approve();
+                      setPoints(p=>p+h.pts);trackPetHabitEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"trust"});toast2("完成！星星已存入 🌟","#88cc88");Audio.approve();
                     }else{
                       setChecked(c=>({...c,[kk]:now}));
                       if(now){toast2("記錄完成！等爸媽陪伴確認 💛");Audio.check();}
@@ -4970,7 +4926,7 @@ Maggie 阿姨才有勇氣，
                     const now=!kDone;
                     if(now&&approvalMode==="trust"){
                       setChecked(c=>({...c,[kk]:true,[ka]:true}));
-                      setPoints(p=>p+t.pts);window.trackGameEvent&&window.trackGameEvent("complete_task",{task:t.id,taskLabel:t.label,mode:"trust_weekend"});toast2("週末任務完成！星星已存入 🌟","#88cc88");Audio.approve();
+                      setPoints(p=>p+t.pts);trackPetHabitEvent("complete_task",{task:t.id,taskLabel:t.label,mode:"trust_weekend"});toast2("週末任務完成！星星已存入 🌟","#88cc88");Audio.approve();
                     }else{
                       setChecked(c=>({...c,[kk]:now}));
                       if(now){toast2("週末小約定記錄完成！等爸媽陪伴確認 🎉","#FFB830");Audio.check();}
@@ -5735,3 +5691,5 @@ root.render(React.createElement(FamilyRoot));
 </body>
 </html>
 </html>
+
+
