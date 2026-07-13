@@ -84,12 +84,42 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 <body>
 <div id="root"></div>
 
+<script src="./src/analytics/traffic-source.js"></script>
+<script src="./src/analytics/google-sheet-schema.js"></script>
 <script src="maggie-analytics.js"></script>
 <script>
 const PRODUCT="pet_habit";
-const VERSION="v1.0.0";
-window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-v1"});
+const VERSION="v1.1-foundation-dev";
+window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-v1.1-foundation-dev"});
 </script>
+<script>
+// Staging-only public Supabase config. Do not copy this block to outputs/ or release/.
+// Cloud Save remains disabled until Maggie manually approves Migration, RLS, and RPC.
+window.SUPABASE_URL="https://qzhgbzicnhztortqtnuw.supabase.co";
+window.SUPABASE_PUBLISHABLE_KEY="sb_publishable_bLyjC-mv1CXtP4xbvUfg2Q_x7FEET3H";
+window.APP_ENV="staging";
+window.FEATURE_CLOUD_SAVE=false;
+window.FEATURE_ADVENTURE=false;
+</script>
+<script src="./src/core/result.js"></script>
+<script src="./src/config/environment.js"></script>
+<script src="./src/core/feature-flags.js"></script>
+<script src="./src/platform/web-platform-adapter.js"></script>
+<script src="./src/analytics/analytics-manager.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="./src/data/repository.js"></script>
+<script src="./src/data/local-repository.js"></script>
+<script src="./src/data/pending-operations.js"></script>
+<script src="./src/data/mock-cloud-repository.js"></script>
+<script src="./src/data/supabase-cloud-repository.js"></script>
+<script src="./src/auth/supabase-auth-manager.js"></script>
+<script src="./src/core/conflict-manager.js"></script>
+<script src="./src/core/cloud-mapping-manager.js"></script>
+<script src="./src/core/cloud-migration-manager.js"></script>
+<script src="./src/core/save-manager.js"></script>
+<script src="./src/core/sync-manager.js"></script>
+<script src="./src/core/app-boot.js"></script>
+<script src="./src/platform-foundation-init.js"></script>
 <script>
 if("serviceWorker" in navigator){
   window.addEventListener("load",function(){
@@ -100,48 +130,127 @@ if("serviceWorker" in navigator){
 
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
-const APP_VERSION="v1.0.0";
-const APP_ENV="local-v1";
+const APP_VERSION="v1.1-foundation-dev";
 const APP_SCHEMA_VERSION=2;
+const SAVE_PROTECTION_VERSION=1;
+const SAVE_SNAPSHOT_PREFIX="petHabitSafeSnapshot_";
+const SAVE_RESTORE_POINTER_KEY="petHabitLatestSafeSnapshot";
+const GOOGLE_CLIENT_ID="1062294435800-gq20r09217187ja98c1liqctsqvq5gal.apps.googleusercontent.com";
+const TODO_GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID;
+const TODO_ADVENTURE_CAMP_ASSET="TODO_ADVENTURE_CAMP_ASSET";
+const TODO_PET_ACCESSORY_MAPPING="TODO_PET_ACCESSORY_MAPPING";
 const DEVELOPER_MODE=new URLSearchParams(location.search).get("dev")==="1"||localStorage.getItem("petHabitDeveloperMode")==="true";
+const FEATURE_FLAGS={
+  adventure:false,
+  cloudSave:false,
+  googleLogin:true
+};
+if(window.PetHabitPlatform){
+  window.PetHabitPlatform.FeatureFlags={...window.PetHabitPlatform.FeatureFlags,...FEATURE_FLAGS};
+}
+const isFeatureEnabled=(name)=>name==="adventure"?(!!(FEATURE_FLAGS&&FEATURE_FLAGS[name])||DEVELOPER_MODE):!!(FEATURE_FLAGS&&FEATURE_FLAGS[name]);
 const makeLocalSaveId=()=>"local_"+Date.now()+"_"+Math.random().toString(36).slice(2,10);
+const safeParseJSON=(raw,fallback=null)=>{try{return raw?JSON.parse(raw):fallback;}catch(e){return fallback;}};
+const isPetHabitBackupMetadataKey=(key)=>key===SAVE_RESTORE_POINTER_KEY||
+  key==="petHabitLastMigrationSnapshot"||key==="petHabitLastRestoreAt"||
+  key==="petHabitMigrationError"||key==="petHabitRestoreError"||
+  key.startsWith(SAVE_SNAPSHOT_PREFIX);
+const isPetHabitOfficialSaveKey=(key)=>key==="habitKingdom"||key==="lastLogin_hk"||key==="lastStreak_hk"||
+  key==="musicOn_hk"||key==="weather_hk"||key==="parkPetPan_hk"||key==="parkKidPan_hk"||
+  key==="outingScene_hk"||key==="petHabitFamily_v1"||
+  key.startsWith("habitKingdom_player_")||key.startsWith("lastLogin_hk_")||key.startsWith("lastStreak_hk_")||
+  key.startsWith("musicOn_hk_")||key.startsWith("weather_hk_")||key.startsWith("parkPetPan_hk_")||
+  key.startsWith("parkKidPan_hk_")||key.startsWith("outingScene_hk_")||
+  key.startsWith("founderGift_v1_claimed")||key.startsWith("petHabitRedeemedCodes_")||
+  key.startsWith("petHabitRewardLedger_")||key.startsWith("roomDecorPos_hk")||
+  key.startsWith("petHabitAdventureKeys_")||key.startsWith("petHabitAdventureKeyGrant_")||
+  key.startsWith("petHabitGoogleLocalBinding_")||
+  key==="petHabitGift_schoolScene_20260701_claimed"||key==="petHabitGift_schoolScene_20260701_ceremonySeen";
+const cleanupSaveSnapshots=()=>{
+  const snaps=Object.keys(localStorage).filter(k=>k.startsWith(SAVE_SNAPSHOT_PREFIX)).map(k=>{
+    const snap=safeParseJSON(localStorage.getItem(k),null);
+    return {key:k,createdAt:snap&&snap.createdAt?snap.createdAt:k.replace(SAVE_SNAPSHOT_PREFIX,"")};
+  }).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+  snaps.slice(5).forEach(s=>localStorage.removeItem(s.key));
+  if(snaps[0]&&localStorage.getItem(snaps[0].key)!==null)localStorage.setItem(SAVE_RESTORE_POINTER_KEY,snaps[0].key);
+  else localStorage.removeItem(SAVE_RESTORE_POINTER_KEY);
+};
 const backupLocalStorageSnapshot=(reason)=>{
   try{
-    const key="petHabitMigrationBackup_"+new Date().toISOString();
-    const snapshot={reason,createdAt:new Date().toISOString(),localStorage:{}};
-    Object.keys(localStorage).forEach(k=>{snapshot.localStorage[k]=localStorage.getItem(k);});
+    const key=SAVE_SNAPSHOT_PREFIX+new Date().toISOString();
+    const snapshot={version:SAVE_PROTECTION_VERSION,reason,createdAt:new Date().toISOString(),localStorage:{}};
+    Object.keys(localStorage).forEach(k=>{
+      if(isPetHabitOfficialSaveKey(k)&&!isPetHabitBackupMetadataKey(k))snapshot.localStorage[k]=localStorage.getItem(k);
+    });
     localStorage.setItem(key,JSON.stringify(snapshot));
+    localStorage.setItem(SAVE_RESTORE_POINTER_KEY,key);
+    cleanupSaveSnapshots();
     return key;
   }catch(e){return null;}
 };
+const restoreLatestSafeSnapshot=()=>{
+  try{
+    const targetKey=localStorage.getItem(SAVE_RESTORE_POINTER_KEY);
+    backupLocalStorageSnapshot("restore-before");
+    const snap=safeParseJSON(targetKey&&localStorage.getItem(targetKey),null);
+    if(!snap||!snap.localStorage)return false;
+    Object.keys(snap.localStorage).forEach(k=>{
+      if(!isPetHabitOfficialSaveKey(k)||isPetHabitBackupMetadataKey(k))return;
+      if(snap.localStorage[k]===null||snap.localStorage[k]===undefined)localStorage.removeItem(k);
+      else localStorage.setItem(k,snap.localStorage[k]);
+    });
+    Object.keys(localStorage).forEach(k=>{
+      if(isPetHabitOfficialSaveKey(k)&&!isPetHabitBackupMetadataKey(k)&&!Object.prototype.hasOwnProperty.call(snap.localStorage,k)){
+        localStorage.removeItem(k);
+      }
+    });
+    localStorage.setItem("petHabitLastRestoreAt",new Date().toISOString());
+    setTimeout(()=>location.reload(),120);
+    return true;
+  }catch(e){
+    localStorage.setItem("petHabitRestoreError",String(e&&e.message||e));
+    return false;
+  }
+};
+window.petHabitRestoreLatestSafeSnapshot=restoreLatestSafeSnapshot;
 const migrateSaveDataSafely=()=>{
   try{
     const flag="petHabitSchemaVersion";
     const current=Number(localStorage.getItem(flag)||"0");
     if(current>=APP_SCHEMA_VERSION)return true;
-    backupLocalStorageSnapshot("schema-"+current+"-to-"+APP_SCHEMA_VERSION);
+    const snapshotKey=backupLocalStorageSnapshot("schema-"+current+"-to-"+APP_SCHEMA_VERSION);
     const familyRaw=localStorage.getItem("petHabitFamily_v1");
+    const writes=[];
     if(familyRaw){
-      const family=JSON.parse(familyRaw);
+      const family=safeParseJSON(familyRaw,null);
       if(family&&Array.isArray(family.players)){
-        family.players=family.players.map(p=>({
+        const migratedFamily={...family,players:family.players.map(p=>({
           ...p,
           localSaveId:p.localSaveId||makeLocalSaveId(),
           futureGoogleUserId:p.futureGoogleUserId||"",
           loginStatus:p.loginStatus||"local",
           cloudSaveStatus:p.cloudSaveStatus||"not_connected"
-        }));
-        localStorage.setItem("petHabitFamily_v1",JSON.stringify(family));
+        }))};
+        const validPlayers=Array.isArray(migratedFamily.players)&&migratedFamily.players.length>0&&migratedFamily.players.every((p,idx)=>{
+          const old=family.players[idx]||{};
+          return p&&p.id===old.id&&p.storageKey===old.storageKey&&p.storageKey&&safeParseJSON(localStorage.getItem(p.storageKey)||"{}",{})!==null;
+        });
+        if(!validPlayers)throw new Error("Migration validation failed: invalid family players");
+        writes.push(["petHabitFamily_v1",JSON.stringify(migratedFamily)]);
       }
     }
+    const mainRaw=localStorage.getItem("habitKingdom");
+    if(mainRaw&&safeParseJSON(mainRaw,null)===null)throw new Error("Migration validation failed: habitKingdom is not valid JSON");
+    writes.forEach(([k,v])=>localStorage.setItem(k,v));
     localStorage.setItem(flag,String(APP_SCHEMA_VERSION));
+    localStorage.setItem("petHabitLastMigrationSnapshot",snapshotKey||"");
     return true;
   }catch(e){
     localStorage.setItem("petHabitMigrationError",String(e&&e.message||e));
     return false;
   }
 };
-migrateSaveDataSafely();
+window.__PET_HABIT_BOOT_STATUS={migrationOk:migrateSaveDataSafely(),schemaVersion:APP_SCHEMA_VERSION};
 
 const trackSafe=(event,params={})=>{
   try{
@@ -149,6 +258,48 @@ const trackSafe=(event,params={})=>{
   }catch(e){
     console.warn("[MaggieLab Analytics] trackSafe error",e);
   }
+};
+const loadGoogleIdentityScript=()=>{
+  if(window.google&&window.google.accounts&&window.google.accounts.id)return Promise.resolve();
+  if(window.__petHabitGoogleScriptPromise)return window.__petHabitGoogleScriptPromise;
+  window.__petHabitGoogleScriptPromise=new Promise((resolve,reject)=>{
+    const existing=document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+    if(existing){
+      existing.addEventListener("load",()=>resolve(),{once:true});
+      existing.addEventListener("error",()=>reject(new Error("Google Identity script failed")),{once:true});
+      return;
+    }
+    const s=document.createElement("script");
+    s.src="https://accounts.google.com/gsi/client";
+    s.async=true;
+    s.defer=true;
+    s.onload=()=>resolve();
+    s.onerror=()=>reject(new Error("Google Identity script failed"));
+    document.head.appendChild(s);
+  });
+  return window.__petHabitGoogleScriptPromise;
+};
+const decodeGoogleCredential=(credential)=>{
+  try{
+    const payload=credential.split(".")[1]||"";
+    let normalized=payload.replace(/-/g,"+").replace(/_/g,"/");
+    normalized+=Array((4-normalized.length%4)%4+1).join("=");
+    const json=decodeURIComponent(Array.prototype.map.call(atob(normalized),c=>"%"+("00"+c.charCodeAt(0).toString(16)).slice(-2)).join(""));
+    return JSON.parse(json);
+  }catch(e){return null;}
+};
+const googleBindingKey=(localSaveId)=>"petHabitGoogleLocalBinding_"+(localSaveId||"unknown");
+const rewardLedgerKeyFor=(playerId)=>"petHabitRewardLedger_"+(playerId||"solo");
+const readRewardLedger=(playerId)=>{
+  const data=safeParseJSON(localStorage.getItem(rewardLedgerKeyFor(playerId)),[]);
+  return Array.isArray(data)?data:[];
+};
+const markRewardGranted=(playerId,rewardId)=>{
+  const ledger=readRewardLedger(playerId);
+  if(ledger.indexOf(rewardId)>=0)return false;
+  ledger.push(rewardId);
+  localStorage.setItem(rewardLedgerKeyFor(playerId),JSON.stringify(ledger));
+  return true;
 };
 
 trackSafe("view_product");
@@ -178,7 +329,7 @@ const DEFAULT_TASKS=[
 ];
 
 const WEEKEND_TASKS=[
-  {id:"w1",icon:"🏃",label:"和家人出去走走",pts:20},
+  {id:"w1",icon:"🏃",label:"運動 30 分鐘",pts:20},
   {id:"w2",icon:"🧹",label:"幫忙打掃家裡",pts:30},
 ];
 
@@ -486,12 +637,7 @@ const themeVars=(id)=>{const t=getTheme(id);return {
 const FAMILY_KEY="petHabitFamily_v1";
 const SCHOOL_SCENE_GIFT_KEY="petHabitGift_schoolScene_20260701_claimed";
 const SCHOOL_SCENE_CEREMONY_KEY="petHabitGift_schoolScene_20260701_ceremonySeen";
-const isPetHabitSaveKey=(key)=>key==="habitKingdom"||key==="lastLogin_hk"||key==="lastStreak_hk"||
-  key==="musicOn_hk"||key==="weather_hk"||key==="parkPetPan_hk"||key==="parkKidPan_hk"||key===FAMILY_KEY||
-  key.startsWith("habitKingdom_player_")||key.startsWith("lastLogin_hk_")||key.startsWith("lastStreak_hk_")||
-  key.startsWith("musicOn_hk_")||key.startsWith("weather_hk_")||key.startsWith("parkPetPan_hk_")||key.startsWith("parkKidPan_hk_")||
-  key.startsWith("outingScene_hk_")||key==="outingScene_hk"||key===SCHOOL_SCENE_GIFT_KEY||key===SCHOOL_SCENE_CEREMONY_KEY||
-  key.startsWith("founderGift_v1_claimed")||key.startsWith("petHabitRedeemedCodes_");
+const isPetHabitSaveKey=(key)=>isPetHabitOfficialSaveKey(key);
 const getPetHabitSaveKeys=()=>Object.keys(localStorage).filter(isPetHabitSaveKey);
 const readFamily=()=>{try{const f=JSON.parse(localStorage.getItem(FAMILY_KEY)||"null");return f&&Array.isArray(f.players)&&f.players.length>0&&f.players.length<=3?f:null;}catch(e){return null;}};
 const saveFamily=(family)=>localStorage.setItem(FAMILY_KEY,JSON.stringify(family));
@@ -510,6 +656,118 @@ const ensureEventProgress=(progress,ev)=>{
 };
 const makePlayerId=()=>"p"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 const familyDay=(createdAt)=>Math.max(1,Math.floor((Date.now()-new Date(createdAt||Date.now()).getTime())/86400000)+1);
+
+/* ═══════════════ V1.1 SCENE REGISTRY / ADVENTURE FOUNDATION ═══════════════ */
+const isAdventureOpenNow=(date=new Date())=>{
+  if(!isFeatureEnabled("adventure"))return false;
+  const mins=date.getHours()*60+date.getMinutes();
+  return mins>=5*60&&mins<20*60+30;
+};
+const adventureRestMessage=()=>"今天探險結束囉！\n大家都回帳篷休息了，明天再一起出發吧！";
+const ADVENTURE_KEY_MAX=5;
+const ADVENTURE_KEY_TTL_DAYS=3;
+const ymd=(date=new Date())=>{
+  const d=new Date(date);
+  return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+};
+const addDaysISO=(date,days)=>{
+  const d=new Date(date);
+  d.setDate(d.getDate()+days);
+  return d.toISOString();
+};
+const AdventureKeyManager={
+  key:(playerId)=>"petHabitAdventureKeys_"+(playerId||"solo"),
+  grantKey:(grantId)=>"petHabitAdventureKeyGrant_"+grantId,
+  normalize:(keys,now=new Date())=>{
+    const t=now.getTime();
+    return (Array.isArray(keys)?keys:[])
+      .filter(k=>k&&k.id&&k.expiresAt&&new Date(k.expiresAt).getTime()>t)
+      .sort((a,b)=>new Date(a.expiresAt)-new Date(b.expiresAt))
+      .slice(0,ADVENTURE_KEY_MAX);
+  },
+  read:(playerId)=>{
+    const keys=safeParseJSON(localStorage.getItem(AdventureKeyManager.key(playerId)),[]);
+    const before=Array.isArray(keys)?keys:[];
+    const normalized=AdventureKeyManager.normalize(keys);
+    const expiredCount=before.length-normalized.length;
+    localStorage.setItem(AdventureKeyManager.key(playerId),JSON.stringify(normalized));
+    if(isFeatureEnabled("adventure")&&expiredCount>0)trackSafe("adventure_key_expired",{expired_count:expiredCount,remaining_count:normalized.length});
+    return normalized;
+  },
+  grant:(playerId,source,grantId,date=new Date())=>{
+    if(!isFeatureEnabled("adventure")){
+      const keys=AdventureKeyManager.read(playerId);
+      return {granted:false,reason:"feature_disabled",keys};
+    }
+    const finalGrantId=grantId||source+":"+(playerId||"solo")+":"+ymd(date);
+    if(localStorage.getItem(AdventureKeyManager.grantKey(finalGrantId))==="true"){
+      const keys=AdventureKeyManager.read(playerId);
+      trackSafe("adventure_key_earned",{source,grant_id:finalGrantId,key_count:keys.length,expires_at:"",result:"skipped_duplicate"});
+      return {granted:false,reason:"duplicate",keys};
+    }
+    const keys=AdventureKeyManager.read(playerId);
+    if(keys.length>=ADVENTURE_KEY_MAX){
+      localStorage.setItem(AdventureKeyManager.grantKey(finalGrantId),"true");
+      trackSafe("adventure_key_earned",{source,grant_id:finalGrantId,key_count:keys.length,expires_at:"",result:"skipped_full"});
+      return {granted:false,reason:"full",keys};
+    }
+    const key={id:"key_"+Date.now()+"_"+Math.random().toString(36).slice(2,7),earnedAt:new Date(date).toISOString(),expiresAt:addDaysISO(date,ADVENTURE_KEY_TTL_DAYS),source,grantId:finalGrantId};
+    const next=AdventureKeyManager.normalize([...keys,key],date);
+    localStorage.setItem(AdventureKeyManager.key(playerId),JSON.stringify(next));
+    localStorage.setItem(AdventureKeyManager.grantKey(finalGrantId),"true");
+    trackSafe("adventure_key_earned",{source,grant_id:finalGrantId,key_count:next.length,expires_at:key.expiresAt,result:"granted"});
+    return {granted:true,key,keys:next};
+  },
+  consume:(playerId)=>{
+    const keys=AdventureKeyManager.read(playerId);
+    if(!keys.length)return {consumed:false,keys};
+    const [used,...rest]=keys;
+    localStorage.setItem(AdventureKeyManager.key(playerId),JSON.stringify(rest));
+    return {consumed:true,key:used,keys:rest};
+  }
+};
+const SCENE_REGISTRY={
+  park:{id:"park",label:"公園",emoji:"🌳",place:"公園",type:"outing",assetKey:"park_day",defaultUnlocked:true},
+  school:{id:"school",label:"校園",emoji:"🏫",place:"校園",type:"outing",assetKey:"school_day",unlockKey:SCHOOL_SCENE_GIFT_KEY},
+  adventure_camp:{
+    id:"adventure_camp",
+    label:"探險營地",
+    emoji:"⛺",
+    place:"探險營地",
+    type:"adventure",
+    assetKey:TODO_ADVENTURE_CAMP_ASSET,
+    defaultUnlocked:true,
+    closesAt:"20:30"
+  }
+};
+const isSceneUnlocked=(scene)=>{
+  if(!scene)return false;
+  if(scene.type==="adventure"&&!isFeatureEnabled("adventure"))return false;
+  if(scene.defaultUnlocked)return true;
+  return scene.unlockKey?localStorage.getItem(scene.unlockKey)==="true":false;
+};
+const getPlayableScenes=()=>Object.values(SCENE_REGISTRY).filter(s=>isSceneUnlocked(s));
+
+/* ═══════════════ V1.1 PET STANDARD / ACCESSORY CONTRACT ═══════════════ */
+const PET_STANDARD={
+  supportedPets:["horse","cat","dog","fox"],
+  states:["normal","happy","lonely","sleep"],
+  accessorySlots:["hat","neck","back","body"],
+  mappingTodo:TODO_PET_ACCESSORY_MAPPING,
+  hideAccessoriesWhen:["sleep","sleeping"]
+};
+const PET_ANCHOR_PILOT={
+  petType:"dog",
+  scenes:["room","park","school","adventure_camp"],
+  items:{
+    head:"summer_straw_hat",
+    neck:"star_scarf",
+    body:"orange_checker_skirt_pending",
+    back:"adventure_backpack_pending"
+  },
+  status:"pilot-data-only",
+  note:"V1.1 first pass validates whether dog anchors can represent all four accessory slots before expanding to horse/cat/fox."
+};
 
 /* ═══════════════ SVG ANIMALS ═══════════════ */
 function HorseLegacy({mood,level,hat,acc,hunger,running,eating,size}){
@@ -2202,6 +2460,24 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
     });
     setHabitErr("");
   };
+  const grantStarsOnce=(rewardId,pts,eventName,params)=>{
+    if(markRewardGranted(playerId,rewardId)){
+      setPoints(p=>p+pts);
+      if(eventName)trackSafe(eventName,params||{});
+      return true;
+    }
+    if(toast2)toast2("這個獎勵已經發過囉，不會重複發星星 🌟",C.yellow);
+    return false;
+  };
+  const approveHabitOnce=(kidKey,okKey,pts,trackParams)=>{
+    setChecked(c=>({...c,[kidKey]:true,[okKey]:true}));
+    grantStarsOnce(okKey,pts,"complete_task",trackParams);
+    Audio.approve();
+  };
+  const cancelHabitApproval=(okKey)=>{
+    setChecked(c=>({...c,[okKey]:false}));
+    if(toast2)toast2("已取消確認；重新確認時不會重複發星星。",C.yellow);
+  };
 
   if(!authed&&!profile.pin)return(
     <Overlay onClose={onClose}>
@@ -2277,11 +2553,12 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
               </div>
               <span style={{...bub(C.peach),borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:900,color:C.brown}}>+{h.pts}⭐</span>
               {approved
-                ?<span style={{fontSize:18}}>✅</span>
+                ?<button className="btn" onClick={()=>cancelHabitApproval(okKey)}
+                  style={{...bub(C.card),borderRadius:999,padding:"6px 10px",fontSize:11,fontWeight:900,color:C.soft,border:"none"}}>取消</button>
                 :kidDone
-                ?<button className="btn" onClick={()=>{setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);trackSafe("complete_task",{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_approval"});Audio.approve();}}
+                ?<button className="btn" onClick={()=>approveHabitOnce(kidKey,okKey,h.pts,{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_approval"})}
                   style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>確認</button>
-                :<button className="btn" onClick={()=>{setChecked(c=>({...c,[kidKey]:true,[okKey]:true}));setPoints(p=>p+h.pts);trackSafe("complete_task",{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_assist"});Audio.approve();}}
+                :<button className="btn" onClick={()=>approveHabitOnce(kidKey,okKey,h.pts,{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_assist"})}
                   style={{...bub(C.green),borderRadius:999,padding:"6px 12px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>代為確認</button>}
             </div>);})}
         {isWeekend&&<>
@@ -2306,16 +2583,15 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                 </div>
               </div>
               <span style={{...bub(C.peach),borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:900,color:C.brown}}>+{h.pts}⭐</span>
-              {approved?<span style={{fontSize:18}}>✅</span>:kidDone
+              {approved?<button className="btn" onClick={()=>cancelHabitApproval(okKey)}
+                style={{...bub(C.card),borderRadius:999,padding:"6px 10px",fontSize:11,fontWeight:900,color:C.soft,border:"none"}}>取消</button>:kidDone
                 ?<button className="btn" onClick={()=>{
-                    setChecked(c=>({...c,[okKey]:true}));setPoints(p=>p+h.pts);
-                    trackSafe("complete_task",{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_approval_weekend"});
+                    approveHabitOnce(kidKey,okKey,h.pts,{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_approval_weekend"});
                     if(h.isWeekend)setBonusTasks(ts=>ts.map(t=>t.id===h.id?{...t,ok:true}:t));
                     Audio.weekend();
                   }} style={{...bub(C.orange),borderRadius:999,padding:"6px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>確認</button>
                 :<button className="btn" onClick={()=>{
-                    setChecked(c=>({...c,[kidKey]:true,[okKey]:true}));setPoints(p=>p+h.pts);
-                    trackSafe("complete_task",{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_assist_weekend"});
+                    approveHabitOnce(kidKey,okKey,h.pts,{pet:profile.petType,task:h.id,taskLabel:h.label,mode:"parent_assist_weekend"});
                     if(h.isWeekend)setBonusTasks(ts=>ts.map(t=>t.id===h.id?{...t,ok:true}:t));
                     Audio.weekend();
                   }} style={{...bub(C.green),borderRadius:999,padding:"6px 12px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>代為確認</button>}
@@ -2498,8 +2774,9 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
             ...bub(t.ok?C.yellow:t.done?C.green:C.light,18),padding:"12px 14px",marginBottom:8,border:"none"}}>
             <span style={{flex:1,fontWeight:800,fontSize:13,color:C.brown}}>{t.label}</span>
             <span style={{...bub(C.peach),borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:900,color:C.brown}}>+{t.pts}⭐</span>
-            {t.ok?<span style={{fontSize:11,color:C.brown,fontWeight:900}}>✓</span>
-              :t.done?<button className="btn" onClick={()=>{setBonusTasks(ts=>ts.map(b=>b.id===t.id?{...b,ok:true}:b));setPoints(p=>p+t.pts);}}
+            {t.ok?<button className="btn" onClick={()=>setBonusTasks(ts=>ts.map(b=>b.id===t.id?{...b,ok:false}:b))}
+                style={{...bub(C.card),borderRadius:999,padding:"5px 10px",fontSize:11,fontWeight:900,color:C.soft,border:"none"}}>取消</button>
+              :t.done?<button className="btn" onClick={()=>{setBonusTasks(ts=>ts.map(b=>b.id===t.id?{...b,ok:true}:b));grantStarsOnce("bonus-"+t.id,t.pts,"complete_task",{pet:profile.petType,task:t.id,taskLabel:t.label,mode:"parent_bonus"});}}
                 style={{...bub(C.orange),borderRadius:999,padding:"5px 12px",fontSize:11,fontWeight:900,color:"#fff",border:"none"}}>確認</button>
               :<span style={{fontSize:11,color:"#c0a080",fontWeight:800}}>等待中</span>}
             <button className="btn" onClick={()=>setBonusTasks(ts=>ts.filter(b=>b.id!==t.id))}
@@ -3028,9 +3305,13 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [schoolGiftClaimed,setSchoolGiftClaimed]=useState(()=>localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)==="true");
   const [schoolGiftCeremonyStep,setSchoolGiftCeremonyStep]=useState("letter");
   const [outingScene,setOutingScene]=useState(()=>localStorage.getItem(playerStorageKey("outingScene_hk"))||"park");
+  const [adventureKeys,setAdventureKeys]=useState(()=>AdventureKeyManager.read(playerId));
   const [parkPetPan,setParkPetPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkPetPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
   const [parkKidPan,setParkKidPan]=useState(()=>{const n=Number(localStorage.getItem(playerStorageKey("parkKidPan_hk")));return Number.isFinite(n)?Math.max(-120,Math.min(120,n)):0;});
   const [roomEdit,setRoomEdit]=useState(false);
+  const [roomDecorPos,setRoomDecorPos]=useState(()=>safeParseJSON(localStorage.getItem(playerStorageKey("roomDecorPos_hk")),{} )||{});
+  const [roomDecorDrawerOpen,setRoomDecorDrawerOpen]=useState(false);
+  const [selectedRoomDecor,setSelectedRoomDecor]=useState(null);
   const [flowers,setFlowers]=useState([
     {id:1,x:18,y:78,emoji:"🌸",visible:true},
     {id:2,x:42,y:82,emoji:"🌼",visible:true},
@@ -3043,6 +3324,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [modal,setModal]=useState(null);
   const [parentInitialTab,setParentInitialTab]=useState("tasks");
   const [helpTopic,setHelpTopic]=useState(null);
+  const [helpTopicForce,setHelpTopicForce]=useState(false);
+  const [coachHint,setCoachHint]=useState(null);
   const [allDoneCelebrate,setAllDoneCelebrate]=useState(false);
   const [deskTip,setDeskTip]=useState(null);
   const [focusMinutes,setFocusMinutes]=useState(20);
@@ -3050,6 +3333,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [focusNow,setFocusNow]=useState(Date.now());
   const [shopTab,setShopTab]=useState("food");
   const [previewAccessory,setPreviewAccessory]=useState(null);
+  const [syncDebug,setSyncDebug]=useState(()=>window.PetHabitPlatform&&window.PetHabitPlatform.getSyncDebugState?window.PetHabitPlatform.getSyncDebugState():null);
   const [kidShopTheme,setKidShopTheme]=useState("全部");
   const [closetTab,setClosetTab]=useState("kidTop");
   const [toast,setToast]=useState({msg:"",color:C.butter});
@@ -3080,13 +3364,156 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const actionRef=useRef();
   const parkPetDragRef=useRef(null);
   const parkKidDragRef=useRef(null);
+  const roomSceneRef=useRef(null);
+  const roomDecorDragRef=useRef(null);
+  const roomDecorClickGuardRef=useRef(false);
+  const googleButtonRef=useRef(null);
+  const getPlayerMeta=()=>{const fam=readFamily();return fam&&Array.isArray(fam.players)?fam.players.find(p=>p.id===playerId):null;};
+  const initialPlayerMeta=getPlayerMeta()||{};
+  const localSaveId=initialPlayerMeta.localSaveId||("local_"+(playerId||"solo"));
+  const [googleBinding,setGoogleBinding]=useState(()=>safeParseJSON(localStorage.getItem(googleBindingKey(localSaveId)),null));
+  const [googleLoadState,setGoogleLoadState]=useState("idle");
+  const [googleError,setGoogleError]=useState("");
+  const updateGoogleFamilyMeta=(patch)=>{
+    const fam=readFamily();
+    if(!fam||!Array.isArray(fam.players))return;
+    const next={...fam,players:fam.players.map(p=>p.id===playerId?{...p,...patch}:p)};
+    saveFamily(next);
+  };
+  const bindGoogleLocalSave=(payload)=>{
+    if(!payload||!payload.sub)throw new Error("Google credential missing sub");
+    const binding={
+      sub:payload.sub,
+      name:payload.name||"",
+      localSaveId,
+      boundAt:new Date().toISOString(),
+      cloudSaveStatus:"local_only"
+    };
+    localStorage.setItem(googleBindingKey(localSaveId),JSON.stringify(binding));
+    setGoogleBinding(binding);
+    updateGoogleFamilyMeta({futureGoogleUserId:payload.sub,loginStatus:"google_connected",cloudSaveStatus:"local_only",localSaveId});
+    trackSafe("google_login_success",{result:"success"});
+    trackSafe("google_local_save_bound",{localSaveId,result:"bound"});
+    toast2("已登入 Google，並綁定本機資料（尚未雲端同步）",C.yellow);
+    return binding;
+  };
+  // Deprecated legacy GIS binding is kept only as a local migration reference.
+  // Formal V1.1 login must go through SupabaseAuthManager.signInWithGoogle().
+  const handleGoogleCredential=(response)=>{
+    try{
+      const payload=decodeGoogleCredential(response&&response.credential||"");
+      bindGoogleLocalSave(payload);
+      setGoogleError("");
+    }catch(e){
+      const msg=String(e&&e.message||e);
+      setGoogleError(msg);
+      trackSafe("google_login_fail",{reason:msg});
+      toast2("Google 登入暫時失敗，遊戲仍可正常使用",C.peach);
+    }
+  };
+  const openGoogleLogin=()=>{
+    trackSafe("google_login_click",{entry:"header"});
+    setModal("googleLogin");
+  };
+  const startSupabaseGoogleLogin=()=>{
+    setGoogleLoadState("loading");
+    setGoogleError("");
+    if(!(window.PetHabitPlatform&&window.PetHabitPlatform.signInWithSupabaseGoogle)){
+      const msg="Supabase Auth Manager 尚未準備好，遊戲仍可用本機模式";
+      setGoogleLoadState("error");setGoogleError(msg);toast2(msg,C.peach);return;
+    }
+    window.PetHabitPlatform.signInWithSupabaseGoogle().then(res=>{
+      refreshSyncDebug();
+      if(res&&res.ok){setGoogleLoadState("ready");toast2("正在前往 Google 登入，本機資料不會被刪除",C.yellow);}
+      else{const msg=res&&res.error&&res.error.message||"Google 登入暫時不可用";setGoogleLoadState("error");setGoogleError(msg);toast2("Google 登入暫時失敗，遊戲仍可正常使用",C.peach);}
+    });
+  };
+  const googleLogout=()=>{
+    localStorage.removeItem(googleBindingKey(localSaveId));
+    setGoogleBinding(null);
+    updateGoogleFamilyMeta({loginStatus:"local",cloudSaveStatus:"not_connected"});
+    trackSafe("google_logout",{result:"local_data_kept"});
+    toast2("已登出 Google，本機遊戲資料仍保留",C.yellow);
+  };
+  const hintKey=(hintId,suffix)=>"petHabitHint_"+(playerId||"solo")+"_"+hintId+"_"+suffix;
+  const showCoachHint=(hintId,message)=>{
+    if(coachHint)return;
+    if(localStorage.getItem(hintKey(hintId,"seen"))==="true")return;
+    const attempts=Number(localStorage.getItem(hintKey(hintId,"attempts"))||"0");
+    if(attempts>=2)return;
+    localStorage.setItem(hintKey(hintId,"attempts"),String(attempts+1));
+    setCoachHint({hintId,message});
+    setTimeout(()=>setCoachHint(h=>h&&h.hintId===hintId?null:h),4200);
+  };
+  const acknowledgeCoachHint=()=>{
+    if(coachHint)localStorage.setItem(hintKey(coachHint.hintId,"seen"),"true");
+    setCoachHint(null);
+  };
   const showJit=(topic,force=false)=>{
     if(!JIT_TUTORIALS[topic])return;
     const key=playerStorageKey("jit_v"+TUTORIAL_VERSION+"_"+topic+"_seen");
-    if(force||localStorage.getItem(key)!=="true"){
-      localStorage.setItem(key,"true");
+    const attemptKey=playerStorageKey("jit_v"+TUTORIAL_VERSION+"_"+topic+"_attempts");
+    const attempts=Number(localStorage.getItem(attemptKey)||"0");
+    if(force||localStorage.getItem(key)!=="true"&&attempts<2){
+      if(!force)localStorage.setItem(attemptKey,String(attempts+1));
+      setHelpTopicForce(force);
       setHelpTopic(topic);
     }
+  };
+  const acknowledgeJit=()=>{
+    if(helpTopic&&helpTopic!=="index")localStorage.setItem(playerStorageKey("jit_v"+TUTORIAL_VERSION+"_"+helpTopic+"_seen"),"true");
+    setHelpTopic(null);
+    setHelpTopicForce(false);
+  };
+  const refreshSyncDebug=()=>{if(window.PetHabitPlatform&&window.PetHabitPlatform.getSyncDebugState)setSyncDebug(window.PetHabitPlatform.getSyncDebugState());};
+  const setMockModeAndRefresh=(mode)=>{
+    if(window.PetHabitPlatform&&window.PetHabitPlatform.setMockCloudMode)window.PetHabitPlatform.setMockCloudMode(mode);
+    refreshSyncDebug();
+    toast2("Mock Cloud: "+mode,C.yellow);
+  };
+  const runManualSync=()=>{
+    if(!(window.PetHabitPlatform&&window.PetHabitPlatform.syncNow)){toast2("Sync Manager 尚未準備好",C.peach);return;}
+    window.PetHabitPlatform.syncNow().then(()=>{refreshSyncDebug();toast2("手動同步測試完成",C.yellow);});
+  };
+  const runAuthSessionTest=()=>{
+    if(!(window.PetHabitPlatform&&window.PetHabitPlatform.restoreAuthSession)){toast2("Auth Manager 尚未準備好",C.peach);return;}
+    window.PetHabitPlatform.restoreAuthSession().then((res)=>{refreshSyncDebug();toast2(res&&res.ok?"Auth session 檢查完成":"Auth session 檢查失敗",res&&res.ok?C.green:C.peach);});
+  };
+  const runMigrationPlanTest=()=>{
+    if(!(window.PetHabitPlatform&&window.PetHabitPlatform.prepareCloudMigrationPlan)){toast2("Migration Manager 尚未準備好",C.peach);return;}
+    window.PetHabitPlatform.prepareCloudMigrationPlan().then((res)=>{refreshSyncDebug();toast2(res&&res.ok?"Migration Plan 已建立（未上傳）":"Migration Plan 檢查失敗",res&&res.ok?C.green:C.peach);});
+  };
+  const sendTrafficSourceV2Test=()=>{
+    const ctx=window.MaggieTrafficSource&&window.MaggieTrafficSource.getTrafficContext?window.MaggieTrafficSource.getTrafficContext():{};
+    trackSafe("test_analytics_traffic_source_v2",{test_mode:true,expectedSource:ctx.FirstSource||"",trafficModule:"v2"});
+    refreshSyncDebug();
+    toast2("已送出 Traffic Source V2 測試事件",C.yellow);
+  };
+  const resetTrafficSourceForDev=()=>{
+    if(!DEVELOPER_MODE)return;
+    if(!confirm("只重設 analytics.firstSource？不會清除遊戲資料。"))return;
+    const res=window.MaggieTrafficSource&&window.MaggieTrafficSource.resetForDeveloperTest?window.MaggieTrafficSource.resetForDeveloperTest():null;
+    refreshSyncDebug();
+    toast2(res&&res.ok?"Traffic Source 已重設":"Traffic Source 重設失敗",res&&res.ok?C.green:C.peach);
+  };
+  const grantStarsOnce=(rewardId,pts,eventName,params)=>{
+    if(markRewardGranted(playerId,rewardId)){
+      setPoints(p=>p+pts);
+      if(eventName)trackPetHabitEvent(eventName,params||{});
+      return true;
+    }
+    toast2("這個獎勵已經發過囉，不會重複發星星 🌟",C.yellow);
+    return false;
+  };
+  const refreshAdventureKeys=()=>setAdventureKeys(AdventureKeyManager.read(playerId));
+  const grantAdventureKey=(source,grantId,showToast=false)=>{
+    const result=AdventureKeyManager.grant(playerId,source,grantId);
+    setAdventureKeys(result.keys);
+    if(showToast){
+      if(result.granted)toast2(source==="daily_login"?"今天回到王國，獲得 1 把神秘鑰匙 🗝️":"獲得 1 把神秘鑰匙 🗝️",C.yellow);
+      else if(result.reason==="full")toast2("鑰匙已經裝滿囉 🗝️",C.yellow);
+    }
+    return result;
   };
   const acknowledgeInstallHint=()=>{
     try{localStorage.setItem("petHabitInstallHintShown","true");}catch(e){}
@@ -3106,17 +3533,24 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     }catch(e){}
   };
   const schoolUnlocked=schoolGiftClaimed||localStorage.getItem(SCHOOL_SCENE_GIFT_KEY)==="true";
-  const activeOutingScene=schoolUnlocked?outingScene:"park";
+  const selectedScene=SCENE_REGISTRY[outingScene]||SCENE_REGISTRY.park;
+  const activeOutingScene=isSceneUnlocked(selectedScene)?selectedScene.id:"park";
   const goTab=(next)=>{
     if(focusEndsAt){
       setModal("focusExitConfirm");
       return;
     }
     setTab(next);
-    if(["tasks","room","diary","park"].includes(next))showJit(next==="park"?"park":next);
+    if(["tasks","room","diary"].includes(next))showJit(next);
   };
 
   // persist
+  useEffect(()=>{
+    if(window.PetHabitPlatform&&window.PetHabitPlatform.bootstrapPlatformFoundation){
+      window.PetHabitPlatform.bootstrapPlatformFoundation({featureFlags:FEATURE_FLAGS}).then(()=>refreshSyncDebug());
+    }
+  },[]);
+
   useEffect(()=>{
     try{const s=JSON.parse(localStorage.getItem(saveKey)||"{}");
       if(s.profile)setProfile(s.profile);if(s.points!=null)setPoints(s.points);
@@ -3135,9 +3569,44 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
 
   useEffect(()=>{
     if(!profile)return;
-    localStorage.setItem(saveKey,JSON.stringify({
-      profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,officialEventProgress,achievements,streak,petMood,poops,neglect,approvalMode}));
+    const nextSave={profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,officialEventProgress,achievements,streak,petMood,poops,neglect,approvalMode};
+    localStorage.setItem(saveKey,JSON.stringify(nextSave));
+    if(DEVELOPER_MODE&&window.PetHabitPlatform&&window.PetHabitPlatform.PlatformFoundationState&&window.PetHabitPlatform.PlatformFoundationState.result&&window.PetHabitPlatform.PlatformFoundationState.result.data){
+      const sm=window.PetHabitPlatform.PlatformFoundationState.result.data.saveManager;
+      if(sm&&sm.savePlayer)sm.savePlayer(playerId,nextSave,{enqueue:true});
+      refreshSyncDebug();
+    }
   },[saveKey,profile,points,tasks,checked,owned,equipped,backpack,hunger,diary,wishes,bonusTasks,officialEventProgress,achievements,streak,petMood,poops,neglect,approvalMode]);
+
+  useEffect(()=>{
+    if(!profile)return;
+    const todayKey=ymd();
+    grantAdventureKey("daily_login","daily_login:"+(playerId||"solo")+":"+todayKey,true);
+  },[profile&&profile.petType,playerId]);
+
+  useEffect(()=>{
+    if(!roomEdit)return;
+    setRoomDecorDrawerOpen(true);
+    showCoachHint("room_decorate","拖動房間裡的裝飾，可以放到喜歡的位置。\n從下方選擇新的裝飾放進房間。");
+  },[roomEdit]);
+
+  useEffect(()=>{
+    if(tab!=="park"||modal||helpTopic)return;
+    if(activeOutingScene==="adventure_camp"){
+      showCoachHint(isAdventureOpenNow()?"adventure_camp_intro":"adventure_night",
+        isAdventureOpenNow()
+          ?"這裡是探險營地。\n有鑰匙時，可以從寶箱開始一趟小冒險。"
+          :adventureRestMessage());
+    }else{
+      showCoachHint("outing_drag","可以拖動小主人和寵物，放到喜歡的位置。");
+    }
+  },[tab,activeOutingScene,modal,helpTopic]);
+
+  useEffect(()=>{
+    if(modal!=="googleLogin")return;
+    setGoogleLoadState("idle");
+    setGoogleError("");
+  },[modal,localSaveId]);
 
   // UI 偏好獨立保存，避免改動既有 habitKingdom 存檔格式。
   // Updated by Claude on 2026/06/23 — removed weather_hk persistence (no longer manual/clicked)
@@ -3147,9 +3616,10 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       localStorage.setItem(playerStorageKey("parkPetPan_hk"),String(parkPetPan));
       localStorage.setItem(playerStorageKey("parkKidPan_hk"),String(parkKidPan));
       localStorage.setItem(playerStorageKey("outingScene_hk"),activeOutingScene);
+      localStorage.setItem(playerStorageKey("roomDecorPos_hk"),JSON.stringify(roomDecorPos));
     },200);
     return()=>clearTimeout(id);
-  },[musicOn,parkPetPan,parkKidPan,activeOutingScene]);
+  },[musicOn,parkPetPan,parkKidPan,activeOutingScene,roomDecorPos]);
 
   /* Updated by Claude on 2026/06/23
      Reason: Auto day/night park background. Checks real device time every minute so the
@@ -3269,6 +3739,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       localStorage.setItem(key,today);
       trackSafe("finish_daily",{pet:profile.petType,task:"daily"});
       trackSafe("complete_product",{pet:profile.petType,task:"daily"});
+      grantAdventureKey("daily_habits","daily_habits:"+(playerId||"solo")+":"+ymd(),true);
       setAllDoneCelebrate(true);
       startPetAction("hug","✨ 今天完成所有小約定！",50,1800);
       setPetMood(m=>Math.min(100,m+8));
@@ -3450,6 +3921,37 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     bl:{bottom:"8%",left:"20%"},
     br:{bottom:"8%",right:"18%"}
   };
+  const getRoomSlotPos=(slotId,item)=>item&&roomDecorPos[item.id]?roomDecorPos[item.id]:(roomDecorPos[slotId]||roomPos[slotId]||{});
+  const startRoomDecorDrag=(e,slotId,item)=>{
+    if(!roomEdit)return;
+    e.stopPropagation();
+    const elRect=e.currentTarget.getBoundingClientRect();
+    roomDecorDragRef.current={slotId,itemId:item&&item.id,moved:false,offsetX:e.clientX-elRect.left,offsetY:e.clientY-elRect.top,width:elRect.width,height:elRect.height};
+    if(e.currentTarget.setPointerCapture)e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const moveRoomDecorDrag=(e)=>{
+    if(!roomEdit||!roomDecorDragRef.current||!roomSceneRef.current)return;
+    e.stopPropagation();
+    const rect=roomSceneRef.current.getBoundingClientRect();
+    const drag=roomDecorDragRef.current;
+    const xPx=e.clientX-rect.left-(drag.offsetX||0);
+    const yPx=e.clientY-rect.top-(drag.offsetY||0);
+    const maxX=Math.max(0,rect.width-(drag.width||0));
+    const maxY=Math.max(0,rect.height-(drag.height||0));
+    const x=Math.max(0,Math.min(maxX,xPx))/rect.width*100;
+    const y=Math.max(0,Math.min(maxY,yPx))/rect.height*100;
+    const slotId=roomDecorDragRef.current.slotId;
+    const itemId=drag.itemId;
+    drag.moved=true;
+    setRoomDecorPos(pos=>({...pos,[itemId||slotId]:{left:x.toFixed(1)+"%",top:y.toFixed(1)+"%"}}));
+  };
+  const endRoomDecorDrag=()=>{
+    if(roomDecorDragRef.current&&roomDecorDragRef.current.moved){
+      roomDecorClickGuardRef.current=true;
+      setTimeout(()=>{roomDecorClickGuardRef.current=false;},80);
+    }
+    roomDecorDragRef.current=null;
+  };
 
   const NAVS=[
     {k:"home",icon:"🏠",l:"首頁"},
@@ -3482,6 +3984,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     });
   };
   const patPet=()=>{
+    showCoachHint("outing_pet_interaction","點一下寵物，可以摸摸牠、抱抱牠，增加心情。");
     if(neglect.sleeping){
       setNeglect(n=>({...n,sleeping:false}));startPetAction("yawn","嗯……你回來了！🥱",50,3000);
       setSpeech("醒來第一眼就看到你了 💛");setTimeout(()=>setSpeech(""),3000);Audio.pat();return;
@@ -3551,10 +4054,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   // wish cost find
   const activeWish=wishes.filter(w=>w.status==="active").sort((a,b)=>a.pts-b.pts)[0];
   const previewEvent=getCurrentOrPreviewOfficialEvents()[0];
-  const OUTING_SCENES=[
-    {id:"park",label:"公園",emoji:"🌳",place:"公園"},
-    {id:"school",label:"校園",emoji:"🏫",place:"校園",locked:!schoolUnlocked},
-  ];
+  const OUTING_SCENES=Object.values(SCENE_REGISTRY).map(s=>({...s,locked:!isSceneUnlocked(s)}));
   const currentOuting=OUTING_SCENES.find(s=>s.id===activeOutingScene)||OUTING_SCENES[0];
   const switchOutingScene=(dir)=>{
     const unlocked=OUTING_SCENES.filter(s=>!s.locked);
@@ -3615,6 +4115,17 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     <div style={{minHeight:"100vh",background:C.bg,fontFamily:"'Nunito',sans-serif",
       paddingBottom:isTablet?108:94,...themeVars(themeId)}}>
       <Toast msg={toast.msg} color={toast.color}/>
+      {coachHint&&<div style={{position:"fixed",left:"50%",top:86,transform:"translateX(-50%)",zIndex:3100,
+        ...bub("rgba(255,255,255,.96)",18),padding:"10px 12px",width:"min(340px,calc(100vw - 28px))",
+        border:"2px solid rgba(245,166,35,.22)",boxShadow:"0 8px 24px rgba(80,50,20,.14)"}}>
+        <button className="btn" onClick={()=>setCoachHint(null)} aria-label="關閉提示"
+          style={{position:"absolute",right:6,top:5,background:"transparent",border:"none",fontSize:14,fontWeight:900,color:C.soft}}>×</button>
+        <div style={{fontSize:12,fontWeight:900,color:C.brown,lineHeight:1.55,whiteSpace:"pre-line",paddingRight:20}}>{coachHint.message}</div>
+        <button className="btn" onClick={acknowledgeCoachHint}
+          style={{...bub(C.yellow,999),marginTop:8,padding:"7px 12px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>
+          我知道了
+        </button>
+      </div>}
 
       {modal==="deskSuggestion"&&<Overlay onClose={()=>setModal(null)}>
         <div style={{fontSize:42,textAlign:"center",marginBottom:8}}>{deskTip&&deskTip.done?"🏆":"📚"}</div>
@@ -3651,6 +4162,19 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
         <button className="btn" onClick={()=>setModal(null)}
           style={{...bub(C.orange,999),width:"100%",padding:"12px 0",fontSize:14,fontWeight:900,color:"#fff",border:"none"}}>
           好，我知道了
+        </button>
+      </Overlay>}
+
+      {modal==="roomDecorTip"&&<Overlay onClose={()=>setModal(null)}>
+        <div style={{fontSize:42,textAlign:"center",marginBottom:8}}>🏠</div>
+        {Sh("布置房間小提示")}
+        <div style={{fontSize:13,fontWeight:900,color:C.brown,lineHeight:1.8,textAlign:"center",whiteSpace:"pre-line",marginBottom:16}}>
+          拖動房間裡的裝飾，可以放到喜歡的位置。{"\n"}
+          從下方選擇新的裝飾放進房間。
+        </div>
+        <button className="btn" onClick={()=>setModal(null)}
+          style={{...bub(C.orange,999),width:"100%",padding:"13px 0",fontSize:14,fontWeight:900,color:"#fff",border:"none"}}>
+          我知道了
         </button>
       </Overlay>}
 
@@ -4524,7 +5048,7 @@ Maggie 阿姨才有勇氣，
           style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,marginTop:10,border:"none"}}>回房間</button>
       </Overlay>}
 
-      {helpTopic&&<Overlay onClose={()=>setHelpTopic(null)}>
+      {helpTopic&&<Overlay onClose={()=>{setHelpTopic(null);setHelpTopicForce(false);}}>
         {helpTopic==="index"
           ?<>
             <div style={{fontSize:19,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:5}}>📖 教學小幫手</div>
@@ -4532,12 +5056,22 @@ Maggie 阿姨才有勇氣，
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {Object.keys(JIT_TUTORIALS).map(k=>{
                 const h=JIT_TUTORIALS[k];
-                return <button key={k} className="btn" onClick={()=>setHelpTopic(k)}
+                return <button key={k} className="btn" onClick={()=>showJit(k,true)}
                   style={{...bub(C.light,18),padding:"12px 10px",border:"none",textAlign:"left"}}>
                   <div style={{fontSize:22,marginBottom:4}}>{h.icon}</div>
                   <div style={{fontSize:12,fontWeight:900,color:C.brown}}>{h.title}</div>
                 </button>;
               })}
+              {DEVELOPER_MODE&&<button className="btn" onClick={()=>{setHelpTopic(null);setModal("petAnchorPilot");}}
+                style={{...bub("#EEF7FF",18),padding:"12px 10px",border:"2px dashed #8BC5E8",textAlign:"left"}}>
+                <div style={{fontSize:22,marginBottom:4}}>🐶</div>
+                <div style={{fontSize:12,fontWeight:900,color:C.brown}}>Anchor Pilot</div>
+              </button>}
+              {DEVELOPER_MODE&&<button className="btn" onClick={()=>{setHelpTopic(null);refreshSyncDebug();setModal("syncDebug");}}
+                style={{...bub("#F7FAFF",18),padding:"12px 10px",border:"2px dashed #B8C7E8",textAlign:"left"}}>
+                <div style={{fontSize:22,marginBottom:4}}>🔄</div>
+                <div style={{fontSize:12,fontWeight:900,color:C.brown}}>Sync Debug</div>
+              </button>}
             </div>
           </>
           :(()=>{
@@ -4554,7 +5088,7 @@ Maggie 阿姨才有勇氣，
                   <span style={{fontSize:12,fontWeight:800,color:C.brown,lineHeight:1.55}}>{s}</span>
                 </div>)}
               </div>
-              <button className="btn" onClick={()=>setHelpTopic(null)}
+              <button className="btn" onClick={acknowledgeJit}
                 style={{...bub(C.orange),width:"100%",padding:"12px 0",borderRadius:999,
                   fontSize:13,fontWeight:900,color:"#fff",border:"none"}}>我知道了</button>
             </>;
@@ -4598,6 +5132,153 @@ Maggie 阿姨才有勇氣，
             fontSize:13,fontWeight:900,color:C.soft,marginTop:14,border:"none"}}>取消</button>
       </Overlay>}
 
+      {modal==="googleLogin"&&<Overlay onClose={()=>setModal(null)}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:900,color:C.brown}}>Google Login</div>
+            <div style={{fontSize:11,fontWeight:800,color:C.soft,marginTop:2}}>本機資料綁定，不是雲端同步</div>
+          </div>
+          <button className="btn" onClick={()=>setModal(null)} aria-label="關閉 Google Login"
+            style={{...bub(C.light),borderRadius:999,width:38,height:38,padding:0,fontSize:18,color:C.soft}}>×</button>
+        </div>
+        <div style={{...bub("#FFF8E8",18),padding:"13px 14px",border:"2px solid rgba(255,204,102,.45)",marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:900,color:C.brown,lineHeight:1.7}}>
+            {googleBinding?"✅ 已登入 Google":"🔐 尚未登入 Google"}<br/>
+            {googleBinding?"✅ 已綁定本機資料":"本機資料仍保存在這台裝置"}<br/>
+            ☁️ 尚未雲端同步
+          </div>
+          <div style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.6,marginTop:7}}>
+            Google Login 與家長 PIN 是分開的。登出 Google 不會刪除孩子的任務、星星、寵物或房間資料。
+          </div>
+        </div>
+        {googleBinding&&<div style={{display:"flex",gap:10,alignItems:"center",...bub("#fff",16),padding:12,marginBottom:12}}>
+          <div style={{width:42,height:42,borderRadius:999,display:"grid",placeItems:"center",background:C.light,border:"2px solid rgba(116,75,35,.12)",fontWeight:900,color:C.brown}}>G</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:13,fontWeight:900,color:C.brown,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{googleBinding.name||"Google 使用者"}</div>
+            <div style={{fontSize:10,fontWeight:800,color:C.soft,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>已綁定本機資料（尚未雲端同步）</div>
+          </div>
+        </div>}
+        {!googleBinding&&<div style={{display:"flex",justifyContent:"center",minHeight:46,alignItems:"center",margin:"12px 0"}}>
+          {googleLoadState==="loading"&&<div style={{fontSize:12,fontWeight:900,color:C.soft}}>Supabase Google Login 載入中…</div>}
+          {(googleLoadState==="idle"||googleLoadState==="ready")&&<button className="btn" onClick={startSupabaseGoogleLogin}
+            style={{...bub("#fff",999),padding:"12px 18px",border:"2px solid rgba(116,75,35,.14)",fontSize:13,fontWeight:900,color:C.brown}}>
+            使用 Google 登入
+          </button>}
+          {googleLoadState==="error"&&<div style={{fontSize:12,fontWeight:900,color:"#b45454",textAlign:"center",lineHeight:1.6}}>
+            Google Login 暫時無法載入。<br/>遊戲仍可正常使用。
+          </div>}
+        </div>}
+        {googleError&&<div style={{fontSize:10,fontWeight:800,color:"#b45454",textAlign:"center",marginBottom:10}}>{googleError}</div>}
+        <div style={{display:"grid",gridTemplateColumns:googleBinding?"1fr 1fr":"1fr",gap:8,marginTop:12}}>
+          {googleBinding&&<button className="btn" onClick={googleLogout}
+            style={{...bub(C.peach),padding:"11px 0",borderRadius:999,border:"none",fontSize:12,fontWeight:900,color:C.brown}}>登出 Google</button>}
+          <button className="btn" onClick={()=>setModal(null)}
+            style={{...bub(C.light),padding:"11px 0",borderRadius:999,border:"none",fontSize:12,fontWeight:900,color:C.soft}}>回到遊戲</button>
+        </div>
+      </Overlay>}
+
+      {modal==="petAnchorPilot"&&<Overlay onClose={()=>setModal(null)}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:900,color:C.brown}}>🐶 Pet Anchor Pilot</div>
+            <div style={{fontSize:10,fontWeight:800,color:C.soft,marginTop:2}}>Developer Mode：小狗四槽位視覺驗收，不開放正式商店</div>
+          </div>
+          <button className="btn" onClick={()=>setModal(null)} aria-label="關閉 Anchor Pilot"
+            style={{...bub(C.light),borderRadius:999,width:38,height:38,padding:0,fontSize:18,color:C.soft}}>×</button>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isTablet?"1fr 1fr":"1fr",gap:10}}>
+          {[
+            {id:"room",title:"房間",bg:"linear-gradient(180deg,#FFF3DA,#F9E3BF)"},
+            {id:"park",title:"公園",bg:"linear-gradient(180deg,#DDF5FF,#E8F8C8)"},
+            {id:"school",title:"校園",bg:"linear-gradient(180deg,#DDF4FF,#FFF0C8)"},
+            {id:"adventure_camp",title:"探險營地",bg:"linear-gradient(180deg,#FFE9B8,#D9F2C6)"}
+          ].map(scene=><div key={scene.id} style={{...bub("#fff",18),padding:10,border:"2px solid rgba(116,75,35,.10)"}}>
+            <div style={{fontSize:12,fontWeight:900,color:C.brown,marginBottom:7}}>{scene.title}</div>
+            <div style={{height:135,borderRadius:18,background:scene.bg,position:"relative",overflow:"hidden",display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:8}}>
+              {scene.id==="adventure_camp"&&<div style={{position:"absolute",top:18,left:"50%",transform:"translateX(-50%)",fontSize:30}}>⛺</div>}
+              <PetView petType="dog" mood={4} hunger={80} size={.72} isNight={false} sleeping={false}
+                hat={PET_ANCHOR_PILOT.items.head}
+                neck={PET_ANCHOR_PILOT.items.neck}
+                body={PET_ANCHOR_PILOT.items.body}
+                back={PET_ANCHOR_PILOT.items.back}/>
+            </div>
+          </div>)}
+        </div>
+        <div style={{...bub("#FFF8E8",16),padding:"10px 12px",marginTop:12,border:"none",fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.55}}>
+          測試組合：HEAD 草帽／NECK 星星領巾／BODY 橘色棋盤裙／BACK 探險背包。睡眠狀態仍由正式 Render Pipeline 隱藏不適合穿戴的配件。
+        </div>
+        <button className="btn" onClick={()=>setModal(null)}
+          style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,marginTop:10,border:"none"}}>關閉</button>
+      </Overlay>}
+
+      {modal==="syncDebug"&&<Overlay onClose={()=>setModal(null)} wide>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,marginBottom:10}}>
+          <div>
+            <div style={{fontSize:18,fontWeight:900,color:C.brown}}>🔄 Sync Debug</div>
+            <div style={{fontSize:10,fontWeight:800,color:C.soft,marginTop:2}}>Developer Mode：非破壞性同步測試，不顯示孩子日記內容</div>
+          </div>
+          <button className="btn" onClick={()=>setModal(null)}
+            style={{...bub(C.light),borderRadius:999,width:38,height:38,padding:0,fontSize:18,color:C.soft}}>×</button>
+        </div>
+        {(()=>{const d=syncDebug||{};const p=d.pending||{};const sm=d.syncManager||{};const t=d.trafficSource||{};return <div style={{display:"grid",gridTemplateColumns:isTablet?"1fr 1fr":"1fr",gap:10}}>
+          {[
+            ["Device ID",d.deviceId||"not_ready"],
+            ["APP_ENV",d.appEnv||"unknown"],
+            ["Supabase config",d.supabaseConfigured?"present":"missing"],
+            ["Supabase key",d.supabaseKeyPreview||"hidden"],
+            ["Auth status",d.authStatus&&d.authStatus.status||"unknown"],
+            ["Auth user",d.authStatus&&d.authStatus.user&&d.authStatus.user.id?String(d.authStatus.user.id).slice(0,8)+"…":"none"],
+            ["Cloud writes",d.cloudWriteEnabled?"enabled":"disabled"],
+            ["Cloud account",d.cloudAccount&&d.cloudAccount.familyId?String(d.cloudAccount.familyId).slice(0,8)+"…":"none"],
+            ["Active playerId",playerId||"solo"],
+            ["Cloud save revision",String(d.cloudRevision||0)],
+            ["Sync status",d.syncStatus||"unknown"],
+            ["Pending",String(p.pending||0)],
+            ["Failed",String(p.failed||0)],
+            ["Conflict",String(p.conflict||0)],
+            ["Repository",d.selectedRepository||sm.repository||"not_ready"],
+            ["FirstSource",t.FirstSource||"unknown"],
+            ["CurrentLaunch",t.CurrentLaunch||"browser"],
+            ["Campaign",t.Campaign||""],
+            ["Sanitized Referrer",t.Referrer||""],
+            ["firstSource key",t.firstSourceKeyExists?"exists":"missing"],
+            ["Source reason",t.reason||""],
+            ["Analytics V2",t.version||"not_loaded"]
+          ].map(([k,v])=><div key={k} style={{...bub(C.light,14),padding:"9px 10px",border:"none"}}>
+            <div style={{fontSize:9,fontWeight:900,color:C.soft}}>{k}</div>
+            <div style={{fontSize:12,fontWeight:900,color:C.brown,wordBreak:"break-all"}}>{v}</div>
+          </div>)}
+        </div>;})()}
+        <div style={{...bub("#FFF8E8",16),padding:"10px 12px",marginTop:12,border:"none"}}>
+          <div style={{fontSize:11,fontWeight:900,color:C.brown,marginBottom:6}}>Feature Flags</div>
+          <pre style={{fontSize:10,whiteSpace:"pre-wrap",color:C.soft,fontWeight:800}}>{JSON.stringify((syncDebug&&syncDebug.featureFlags)||FEATURE_FLAGS,null,2)}</pre>
+        </div>
+        <div style={{...bub("#FFF8E8",16),padding:"10px 12px",marginTop:12,border:"2px solid rgba(255,204,102,.45)"}}>
+          <div style={{fontSize:12,fontWeight:900,color:C.brown,marginBottom:6}}>📈 Traffic Source QA</div>
+          <div style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.65,wordBreak:"break-all"}}>
+            測試 URL：{location.href.split("#")[0]}<br/>
+            預期來源：{(syncDebug&&syncDebug.trafficSource&&syncDebug.trafficSource.FirstSource)||"unknown"}<br/>
+            實際來源：{(window.MaggieTrafficSource&&window.MaggieTrafficSource.getFirstSource&&window.MaggieTrafficSource.getFirstSource())||"unknown"}<br/>
+            啟動方式：{(syncDebug&&syncDebug.trafficSource&&syncDebug.trafficSource.CurrentLaunch)||"browser"}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:isTablet?"1fr 1fr 1fr":"1fr 1fr",gap:8,marginTop:12}}>
+          <button className="btn" onClick={()=>setMockModeAndRefresh("mock_cloud_success")} style={{...bub(C.green),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>模擬成功</button>
+          <button className="btn" onClick={()=>setMockModeAndRefresh("mock_cloud_offline")} style={{...bub(C.light),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>模擬離線</button>
+          <button className="btn" onClick={()=>setMockModeAndRefresh("mock_cloud_timeout")} style={{...bub(C.yellow),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>模擬 timeout</button>
+          <button className="btn" onClick={()=>setMockModeAndRefresh("mock_cloud_conflict")} style={{...bub(C.peach),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>模擬 conflict</button>
+          <button className="btn" onClick={()=>setMockModeAndRefresh("mock_cloud_duplicate")} style={{...bub(C.light),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>模擬 duplicate</button>
+          <button className="btn" onClick={runManualSync} style={{...bub(C.orange),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:"#fff"}}>手動 sync now</button>
+          <button className="btn" onClick={runAuthSessionTest} style={{...bub(C.green),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>測 Auth Session</button>
+          <button className="btn" onClick={runMigrationPlanTest} style={{...bub(C.card),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>測 Migration Plan</button>
+          <button className="btn" onClick={sendTrafficSourceV2Test} style={{...bub(C.yellow),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>送 Traffic V2 測試</button>
+          {DEVELOPER_MODE&&<button className="btn" onClick={resetTrafficSourceForDev} style={{...bub(C.peach),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>重設 FirstSource</button>}
+          <button className="btn" onClick={refreshSyncDebug} style={{...bub(C.card),padding:"10px",border:"none",borderRadius:999,fontSize:11,fontWeight:900,color:C.brown}}>重新整理</button>
+        </div>
+        <button className="btn" onClick={()=>setModal(null)}
+          style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,fontSize:13,fontWeight:900,color:C.soft,marginTop:12,border:"none"}}>關閉</button>
+      </Overlay>}
+
       {/* ── HEADER ── */}
       <div style={{background:C.yellow,borderBottom:"3px solid rgba(200,140,0,.12)",
         padding:isTablet?"18px 22px 14px":"13px 14px 11px",
@@ -4626,6 +5307,11 @@ Maggie 阿姨才有勇氣，
             style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>{musicOn?"🎵":"🔇"}</button>
           <button className="btn" onClick={()=>setHelpTopic("index")} aria-label="教學"
             style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>?</button>
+          <button className="btn" onClick={openGoogleLogin} aria-label="Google 登入狀態"
+            title={googleBinding?"已登入 Google（尚未雲端同步）":"Google 登入"}
+            style={{...bub(googleBinding?C.green:"#fff"),borderRadius:999,width:isTablet?44:34,height:isTablet?44:34,
+              display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:isTablet?17:14,
+              fontWeight:900,color:C.brown,border:"2px solid rgba(116,75,35,.12)"}}>G{googleBinding?"✓":""}</button>
           <button className="btn" aria-label="開啟家長控制台" title="家長控制台" onClick={(e)=>{
             e.preventDefault();e.stopPropagation();
             console.log("parent button clicked");
@@ -4839,7 +5525,7 @@ Maggie 阿姨才有勇氣，
                     const now=!kDone;
                     if(now&&approvalMode==="trust"){
                       setChecked(c=>({...c,[kk]:true,[ka]:true}));
-                      setPoints(p=>p+h.pts);trackPetHabitEvent("complete_task",{task:h.id,taskLabel:h.label,mode:"trust"});toast2("完成！星星已存入 🌟","#88cc88");Audio.approve();
+                      grantStarsOnce(ka,h.pts,"complete_task",{task:h.id,taskLabel:h.label,mode:"trust"});toast2("完成！星星已存入 🌟","#88cc88");Audio.approve();
                     }else{
                       setChecked(c=>({...c,[kk]:now}));
                       if(now){toast2("記錄完成！等爸媽陪伴確認 💛");Audio.check();}
@@ -4926,7 +5612,7 @@ Maggie 阿姨才有勇氣，
                     const now=!kDone;
                     if(now&&approvalMode==="trust"){
                       setChecked(c=>({...c,[kk]:true,[ka]:true}));
-                      setPoints(p=>p+t.pts);trackPetHabitEvent("complete_task",{task:t.id,taskLabel:t.label,mode:"trust_weekend"});toast2("週末任務完成！星星已存入 🌟","#88cc88");Audio.approve();
+                      grantStarsOnce(ka,t.pts,"complete_task",{task:t.id,taskLabel:t.label,mode:"trust_weekend"});toast2("週末任務完成！星星已存入 🌟","#88cc88");Audio.approve();
                     }else{
                       setChecked(c=>({...c,[kk]:now}));
                       if(now){toast2("週末小約定記錄完成！等爸媽陪伴確認 🎉","#FFB830");Audio.check();}
@@ -4995,8 +5681,10 @@ Maggie 阿姨才有勇氣，
               unaffected by this change. */}
           <div style={{position:"relative",height:isTablet?390:330,overflow:"hidden",
             margin:isTablet?"14px 22px 0":"10px 14px 0",borderRadius:24,
-            backgroundColor:activeOutingScene==="school"?(isNight?"#273659":"#BFE7FF"):(isNight?"#1B2A52":"#8ED5F4"),
-            backgroundImage:"url("+(activeOutingScene==="school"?IMG.school_day:(isNight?IMG.park_night:IMG.park_day))+")",
+            backgroundColor:activeOutingScene==="adventure_camp"?"#F8E3B4":activeOutingScene==="school"?(isNight?"#273659":"#BFE7FF"):(isNight?"#1B2A52":"#8ED5F4"),
+            backgroundImage:activeOutingScene==="adventure_camp"
+              ?"linear-gradient(180deg,#FBE8B8 0%,#F6D39A 48%,#DFA65F 100%)"
+              :"url("+(activeOutingScene==="school"?IMG.school_day:(isNight?IMG.park_night:IMG.park_day))+")",
             backgroundSize:"cover",backgroundPosition:"center bottom",
             border:"3px solid rgba(80,130,70,.14)",boxShadow:"0 7px 0 rgba(70,120,55,.12)",userSelect:"none",
             transition:"background 1.2s ease"}}>
@@ -5010,26 +5698,36 @@ Maggie 阿姨才有勇氣，
                 game elements via pickFlower, not just decoration), and all pet/kid
                 drag + ball/bath interactions — fully unaffected by this change. */}
             {activeOutingScene==="school"&&isNight&&<div style={{position:"absolute",inset:0,background:"rgba(26,43,84,.22)",zIndex:1,pointerEvents:"none"}}/>}
-            <div style={{position:"absolute",left:12,top:12,...bub("rgba(255,255,255,.82)",999),padding:"6px 12px",
-              fontSize:10,fontWeight:900,color:C.brown,border:"none",zIndex:8}}>🌈 今天一起出去玩！</div>
-            <div style={{position:"absolute",left:12,top:44,...bub("rgba(255,255,255,.72)",999),padding:"4px 10px",
-              fontSize:9,fontWeight:900,color:C.soft,border:"none",zIndex:8}}>📍 今天地點：{currentOuting.place}</div>
             <div style={{position:"absolute",top:11,left:"50%",transform:"translateX(-50%)",zIndex:9,
               display:"flex",alignItems:"center",gap:7,...bub("rgba(255,255,255,.82)",999),padding:"4px 8px",border:"none"}}>
               <button className="btn" onClick={()=>switchOutingScene(-1)} disabled={OUTING_SCENES.filter(s=>!s.locked).length<2}
                 style={{border:"none",background:"transparent",fontSize:14,fontWeight:900,color:C.brown,opacity:(OUTING_SCENES.filter(s=>!s.locked).length<2)?0.35:1}}>◀︎</button>
-              <span style={{fontSize:10,fontWeight:900,color:C.brown,minWidth:34,textAlign:"center"}}>{currentOuting.label}</span>
+              <span style={{fontSize:10,fontWeight:900,color:C.brown,minWidth:58,textAlign:"center"}}>📍 {currentOuting.label}</span>
               <button className="btn" onClick={()=>switchOutingScene(1)} disabled={OUTING_SCENES.filter(s=>!s.locked).length<2}
                 style={{border:"none",background:"transparent",fontSize:14,fontWeight:900,color:C.brown,opacity:(OUTING_SCENES.filter(s=>!s.locked).length<2)?0.35:1}}>▶︎</button>
-            </div>
-            <div style={{position:"absolute",top:48,left:"50%",transform:"translateX(-50%)",zIndex:9,
-              ...bub("rgba(255,255,255,.72)",999),padding:"3px 9px",fontSize:9,fontWeight:900,color:C.soft,border:"none",pointerEvents:"none"}}>
-              ↔ 小主人與寵物可分開拖曳
             </div>
             {/* day/night indicator - decorative only, no click action (was the weather toggle button) */}
             <div style={{position:"absolute",top:10,right:14,fontSize:isTablet?40:32,pointerEvents:"none"}}>
               {isNight?"🌙":"☀️"}
             </div>
+            {activeOutingScene==="adventure_camp"&&<div style={{position:"absolute",inset:0,zIndex:2,pointerEvents:"none",
+              color:C.brown,fontWeight:900,textShadow:"0 2px 0 rgba(255,255,255,.65)"}}>
+              <div style={{position:"absolute",top:"12%",left:"50%",transform:"translateX(-50%)",fontSize:isTablet?72:58}}>⛺</div>
+              <div style={{position:"absolute",right:"8%",bottom:"25%",textAlign:"center"}}>
+                <div style={{...bub(C.yellow,999),padding:"5px 12px",fontSize:12,border:"none",marginBottom:6}}>🗝️ {adventureKeys.length} / {ADVENTURE_KEY_MAX}</div>
+                <button className="btn" disabled={!isAdventureOpenNow()||adventureKeys.length===0}
+                  onClick={e=>{e.stopPropagation();showCoachHint("adventure_chest",isAdventureOpenNow()&&adventureKeys.length>0?"寶箱需要 1 把神秘鑰匙。\n正式小迷宮通過後，會在這裡打開寶箱。":isAdventureOpenNow()?"沒有鑰匙時，先完成今天的小約定吧！":adventureRestMessage());}}
+                  style={{...bub(isAdventureOpenNow()&&adventureKeys.length>0?C.orange:C.card,20),padding:"12px 16px",border:"none",
+                    fontSize:14,fontWeight:900,color:isAdventureOpenNow()&&adventureKeys.length>0?"#fff":C.soft,opacity:isAdventureOpenNow()&&adventureKeys.length>0?1:.78,
+                    pointerEvents:"auto"}}>
+                  🎁 寶箱
+                </button>
+              </div>
+              {!isAdventureOpenNow()&&<div style={{position:"absolute",left:"50%",bottom:"7%",transform:"translateX(-50%)",
+                ...bub("rgba(255,255,255,.82)",18),padding:"9px 12px",fontSize:11,lineHeight:1.5,textAlign:"center",whiteSpace:"pre-line",border:"none"}}>
+                {adventureRestMessage()}
+              </div>}
+            </div>}
             {[15,30,55,72,88].map((l,i)=>(
               <div key={i} style={{position:"absolute",bottom:"17%",left:l+"%",
                 fontSize:isTablet?20:16,animation:"gWave "+(1.5+i*.2)+"s ease-in-out infinite",
@@ -5081,8 +5779,6 @@ Maggie 阿姨才有勇氣，
             {hunger<30&&<div style={{position:"absolute",bottom:"54%",left:Math.min(horseX+6,80)+"%",
               ...bub("#fff"),borderRadius:14,padding:"5px 10px",fontSize:11,fontWeight:900,
               marginLeft:parkPetPan,color:"#e05060",whiteSpace:"nowrap",border:"none"}}>{HMSG[0]}</div>}
-            <div style={{position:"absolute",bottom:8,right:14,fontSize:9,
-              color:"rgba(70,75,35,.72)",fontWeight:900,background:"rgba(255,255,255,.58)",borderRadius:999,padding:"3px 8px"}}>🌸 點一下送給寵物　🤗 點一下抱抱寵物</div>
           </div>
           <div style={{padding:isTablet?"10px 22px 0":"8px 14px 0",
             display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
@@ -5152,7 +5848,7 @@ Maggie 阿姨才有勇氣，
           </div>
 
           {/* room scene - position based */}
-          <div style={{...cardS((wp&&wp.bg)||"linear-gradient(180deg,#FFF8D8,#FFE7B3)"),
+          <div ref={roomSceneRef} style={{...cardS((wp&&wp.bg)||"linear-gradient(180deg,#FFF8D8,#FFE7B3)"),
             height:isTablet?390:330,marginBottom:10,position:"relative",overflow:"hidden",border:"3px solid rgba(180,120,50,.14)",
             backgroundImage:"url("+IMG.room_bedroom_sunny+")",backgroundSize:"cover",backgroundPosition:"center",backgroundRepeat:"no-repeat"}}>
             {isNight&&<>
@@ -5179,9 +5875,9 @@ Maggie 阿姨才有勇氣，
               <div style={{...bub("rgba(255,255,255,.82)",999),padding:"5px 12px",fontSize:11,color:C.brown,fontWeight:900,border:"none"}}>
                 🏡 {profile.petName}的小房間
               </div>
-              <button className="btn" onClick={()=>setRoomEdit(v=>!v)} style={{...bub(roomEdit?C.orange:"rgba(255,255,255,.9)",999),
-                padding:"6px 12px",fontSize:10,fontWeight:900,color:roomEdit?"#fff":C.brown,border:"none"}}>
-                {roomEdit?"✓ 完成編輯":"✏️ 編輯房間"}
+              <button className="btn" onClick={()=>setRoomEdit(v=>{const next=!v;if(!next)setRoomDecorDrawerOpen(false);return next;})} style={{...bub(roomEdit?C.orange:"rgba(255,255,255,.94)",999),
+                minHeight:44,padding:"10px 15px",fontSize:13,fontWeight:900,color:roomEdit?"#fff":C.brown,border:"2px solid rgba(245,166,35,.22)"}}>
+                {roomEdit?"✓ 完成布置":"🏠 布置房間"}
               </button>
             </div>
 
@@ -5205,18 +5901,26 @@ Maggie 阿姨才有勇氣，
               const item=ROOMITEMS.find(r=>!r.locked&&r.id===equipped[slot.id]);
               if(!item&&!roomEdit)return null;
               return <button key={slot.id} className="btn" onClick={()=>{
-                if(roomEdit&&item)setEquipped(e=>({...e,[slot.id]:undefined}));
+                if(roomDecorClickGuardRef.current)return;
+                if(roomEdit&&item){setSelectedRoomDecor(selectedRoomDecor===item.id?null:item.id);return;}
                 else if(item){const fa=FURNITURE_ACTIONS[item.id];
                   if(fa){startPetAction(fa.action,fa.text,fa.x,4500);Audio.pat();}
                   else toast2(item.emoji+" "+item.label+"，房間變得更可愛了！");}
-              }} style={{position:"absolute",...roomPos[slot.id],zIndex:slot.id[0]==="t"?4:8,
+              }} onPointerDown={e=>item&&startRoomDecorDrag(e,slot.id,item)}
+                onPointerMove={moveRoomDecorDrag}
+                onPointerUp={endRoomDecorDrag}
+                onPointerCancel={endRoomDecorDrag}
+                style={{position:"absolute",...getRoomSlotPos(slot.id,item),zIndex:slot.id[0]==="t"?4:8,
                 width:item&&item.asset?(isTablet?112:92):(item?64:54),height:item&&item.asset?(isTablet?112:92):(item?64:54),borderRadius:17,border:roomEdit?"2px dashed rgba(116,75,35,.35)":"none",
-                background:roomEdit?"rgba(255,255,255,.42)":"transparent",boxShadow:"none",
+                background:roomEdit?(selectedRoomDecor===item?.id?"rgba(255,230,102,.55)":"rgba(255,255,255,.42)"):"transparent",boxShadow:"none",touchAction:roomEdit?"none":"auto",
                 display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
                 {item?<><RoomItemArt item={item} size={item.asset?(isTablet?(item.roomSize||112):(item.roomSize?Math.round(item.roomSize*.86):96)):(isTablet?42:36)}
                     style={item.asset?{transform:"scale("+(item.scale||1)+")",filter:isNight?"brightness(.84) saturate(.92)":"none"}:{filter:isNight?"brightness(.84) saturate(.92)":"none"}}/>
-                  {roomEdit&&<span style={{fontSize:7,fontWeight:900,color:C.brown,background:"rgba(255,255,255,.78)",borderRadius:8,padding:"1px 4px"}}>{item.label}</span>}</>
-                  :<span style={{fontSize:8,color:C.soft,fontWeight:900}}>{slot.label}</span>}
+                  {roomEdit&&selectedRoomDecor===item.id&&<button className="btn" onClick={e=>{e.stopPropagation();setEquipped(eq=>({...eq,[slot.id]:undefined}));setSelectedRoomDecor(null);}}
+                    style={{position:"absolute",top:-12,right:-10,...bub(C.red,999),padding:"5px 8px",fontSize:10,fontWeight:900,color:"#c03030",border:"none",zIndex:20}}>
+                    收回
+                  </button>}</>
+                  :<span style={{fontSize:18,color:C.soft,fontWeight:900}}>＋</span>}
               </button>;
             })}
 
@@ -5446,7 +6150,63 @@ Maggie 阿姨才有勇氣，
             </div>)}
 
           {/* 我的裝飾儲藏間 */}
-          {roomEdit&&ROOMITEMS.filter(i=>!i.locked&&owned.indexOf(i.id)>=0).length>0&&(
+          {roomEdit&&ROOMITEMS.filter(i=>!i.locked&&owned.indexOf(i.id)>=0).length>0&&roomDecorDrawerOpen&&(
+            <div style={{position:"fixed",left:"50%",bottom:isTablet?88:76,transform:"translateX(-50%)",
+              width:"min(728px,calc(100vw - 20px))",maxHeight:"42vh",overflowY:"auto",zIndex:2600,
+              ...cardS("rgba(255,255,255,.96)"),padding:12,border:"2px solid rgba(245,166,35,.24)",
+              boxShadow:"0 -8px 28px rgba(80,50,20,.14)"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:10}}>
+                <div>
+                  <div style={{fontSize:14,fontWeight:900,color:C.brown}}>🏠 我的裝飾</div>
+                  <div style={{fontSize:10,fontWeight:800,color:C.soft}}>點一下放進房間，放好後可拖動位置</div>
+                </div>
+                <button className="btn" onClick={()=>{setRoomEdit(false);setRoomDecorDrawerOpen(false);}}
+                  style={{...bub(C.orange,999),minHeight:44,padding:"10px 14px",fontSize:12,fontWeight:900,color:"#fff",border:"none"}}>
+                  ✓ 完成布置
+                </button>
+              </div>
+              <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:4}}>
+                {ROOMITEMS.filter(i=>!i.locked&&i.type==="wp"&&owned.indexOf(i.id)>=0).map(d=>{
+                  const isEq=equipped.wp===d.id;
+                  return <button key={d.id} className="btn" onClick={()=>setEquipped(e=>({...e,wp:isEq?undefined:d.id}))}
+                    style={{...bub(isEq?C.yellow:C.light,16),padding:"9px 12px",minWidth:86,textAlign:"center",border:"none"}}>
+                    <div style={{fontSize:22}}>{d.emoji}</div>
+                    <div style={{fontSize:9,fontWeight:900,color:C.brown}}>{d.label}</div>
+                    <div style={{fontSize:8,color:isEq?"#2a8a2a":C.soft,fontWeight:900}}>{isEq?"✓ 已放入":"放進房間"}</div>
+                  </button>;
+                })}
+                {ROOMITEMS.filter(i=>!i.locked&&i.type==="dc"&&owned.indexOf(i.id)>=0).map(d=>{
+                  const isPlaced=equipped[d.slot]===d.id;
+                  return <button key={d.id} className="btn" onClick={()=>{
+                    if(isPlaced){setSelectedRoomDecor(d.id);return;}
+                    setEquipped(e=>({...e,[d.slot]:d.id}));
+                    setSelectedRoomDecor(d.id);toast2(d.emoji+" "+d.label+"放進房間了！","#88cc88");
+                  }} style={{...bub(isPlaced?C.yellow:C.light,16),padding:"9px 10px",minWidth:86,textAlign:"center",border:"none",
+                    outline:isPlaced?"3px solid "+C.butter:"none"}}>
+                    <div style={{height:38,display:"flex",alignItems:"center",justifyContent:"center"}}><RoomItemArt item={d} thumb size={d.asset?38:34}/></div>
+                    <div style={{fontSize:9,fontWeight:900,color:C.brown,marginTop:2}}>{d.label}</div>
+                    <div style={{fontSize:8,color:isPlaced?"#2a8a2a":C.soft,fontWeight:900}}>{isPlaced?"✓ 已放入":"放進房間"}</div>
+                  </button>;
+                })}
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginTop:10}}>
+                <button className="btn" onClick={()=>{
+                  if(confirm("要恢復所有裝飾的預設位置嗎？\n不會清除已購買或已放置的裝飾。"))setRoomDecorPos({});
+                }} style={{...bub(C.light,999),minHeight:36,padding:"8px 12px",fontSize:11,fontWeight:900,color:C.soft,border:"none"}}>
+                  恢復預設位置
+                </button>
+                <button className="btn" onClick={()=>setRoomDecorDrawerOpen(false)}
+                  style={{...bub(C.card,999),minHeight:36,padding:"8px 12px",fontSize:11,fontWeight:900,color:C.brown,border:"none"}}>
+                  收合
+                </button>
+              </div>
+            </div>)}
+          {roomEdit&&!roomDecorDrawerOpen&&<button className="btn" onClick={()=>setRoomDecorDrawerOpen(true)}
+            style={{position:"fixed",left:"50%",bottom:isTablet?92:82,transform:"translateX(-50%)",zIndex:2600,
+              ...bub(C.yellow,999),minHeight:44,padding:"10px 18px",fontSize:13,fontWeight:900,color:C.brown,border:"none"}}>
+            🏠 打開我的裝飾
+          </button>}
+          {false&&roomEdit&&ROOMITEMS.filter(i=>!i.locked&&owned.indexOf(i.id)>=0).length>0&&(
             <div style={{...cardS(C.card),padding:12,marginBottom:10}}>
               {/* header */}
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
@@ -5473,8 +6233,8 @@ Maggie 阿姨才有勇氣，
                         <div style={{fontSize:22}}>{d.emoji}</div>
                         <div style={{fontSize:9,fontWeight:900,color:C.brown}}>{d.label}</div>
                         {isEq
-                          ?<div style={{fontSize:8,color:"#2a8a2a",fontWeight:900}}>✓ 使用中</div>
-                          :<div style={{fontSize:8,color:C.soft,fontWeight:800}}>點擊使用</div>}
+                          ?<div style={{fontSize:8,color:"#2a8a2a",fontWeight:900}}>✓ 已放入</div>
+                          :<div style={{fontSize:8,color:C.soft,fontWeight:800}}>放進房間</div>}
                       </button>);})}
                 </div>
               </>}

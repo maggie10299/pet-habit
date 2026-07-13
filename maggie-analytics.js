@@ -2,10 +2,11 @@
   "use strict";
 
   var DEFAULT_ENDPOINT = "https://script.google.com/macros/s/AKfycbwFuPv3IoIuv0ZcxRsQNVLO3K2J6WKkqqkK3CUox318AxB9bVrBoZl2L8NmWRQMsS4/exec";
-  var VALID_SOURCES = ["threads","facebook","website","line","qrcode","direct"];
+  var VALID_SOURCES = ["facebook","instagram","threads","official","line","qr","direct","unknown"];
   var SOURCE_KEY = "maggie_first_source";
   var FIRST_VISIT_KEY = "maggie_first_visit";
-  var DEVICE_KEY = "maggie_device_id";
+  var ANALYTICS_INSTALL_KEY = "analytics.installId";
+  var FORBIDDEN_KEYS = /^(familyId|family_id|childId|child_id|playerId|player_id|auth\.uid|authUid|authUserId|auth_user_id|googleSub|google_sub|sub|email|mail|childName|child_name|playerName|player_name|nickname|displayName|display_name|deviceLinkId|device_link_id|deviceId|device_id)$/i;
 
   var config = {
     endpoint: DEFAULT_ENDPOINT,
@@ -32,6 +33,9 @@
   }
 
   function getSource(){
+    if(global.MaggieTrafficSource && global.MaggieTrafficSource.getFirstSource){
+      return global.MaggieTrafficSource.getFirstSource();
+    }
     var source = safeLocalGet(SOURCE_KEY);
     if(!source){
       source = resolveSource();
@@ -39,6 +43,38 @@
     }
     if(VALID_SOURCES.indexOf(source) < 0)return "direct";
     return source;
+  }
+
+  function trafficContext(){
+    try{
+      if(global.MaggieTrafficSource && global.MaggieTrafficSource.getTrafficContext){
+        return global.MaggieTrafficSource.getTrafficContext();
+      }
+    }catch(e){}
+    return {FirstSource:"unknown",CurrentLaunch:"browser",Campaign:"",Referrer:""};
+  }
+
+  function sanitizeAnalyticsPayload(params){
+    var blocked = /diary|journal|wish|願望|日記|note|text|content|description|body|message/i;
+    var out = {};
+    params = params || {};
+    Object.keys(params).forEach(function(key){
+      var value = params[key];
+      if(FORBIDDEN_KEYS.test(key)){
+        return;
+      }else if(blocked.test(key)){
+        out[key] = "[redacted]";
+      }else if(key === "task" && typeof value === "string" && !/^[a-z0-9_-]{1,40}$/i.test(value)){
+        out[key] = "[redacted]";
+      }else if(typeof value === "string"){
+        out[key] = value.replace(/[\r\n\t]/g," ").slice(0,300);
+      }else if(value && typeof value === "object" && !Array.isArray(value)){
+        out[key] = sanitizeAnalyticsPayload(value);
+      }else{
+        out[key] = value;
+      }
+    });
+    return out;
   }
 
   function getFirstVisit(){
@@ -50,11 +86,23 @@
     return first;
   }
 
-  function getDeviceId(){
-    var id = safeLocalGet(DEVICE_KEY);
+  function getAnalyticsInstallId(){
+    var id = safeLocalGet(ANALYTICS_INSTALL_KEY);
     if(!id){
-      id = "dev_" + Date.now() + "_" + Math.random().toString(36).substring(2,10);
-      safeLocalSet(DEVICE_KEY,id);
+      if(global.crypto && typeof global.crypto.randomUUID === "function"){
+        id = "ai_" + global.crypto.randomUUID();
+      }else{
+        var bytes = "";
+        try{
+          var arr = new Uint32Array(4);
+          global.crypto && global.crypto.getRandomValues && global.crypto.getRandomValues(arr);
+          bytes = Array.prototype.map.call(arr,function(n){return n.toString(36);}).join("");
+        }catch(e){
+          bytes = Date.now().toString(36) + Math.random().toString(36).substring(2,14);
+        }
+        id = "ai_" + bytes;
+      }
+      safeLocalSet(ANALYTICS_INSTALL_KEY,id);
     }
     return id;
   }
@@ -74,31 +122,35 @@
     config.version = options.version || config.version;
     config.build = options.build || config.build;
     if(typeof options.enabled === "boolean")config.enabled = options.enabled;
+    try{global.MaggieTrafficSource && global.MaggieTrafficSource.initializeTrafficSource && global.MaggieTrafficSource.initializeTrafficSource();}catch(e){}
     getSource();
     getFirstVisit();
-    getDeviceId();
+    getAnalyticsInstallId();
     return api;
   }
 
   function track(event,params){
     if(!config.enabled || !event)return;
-    params = params || {};
+    params = sanitizeAnalyticsPayload(params || {});
+    var traffic = trafficContext();
     var payload = {
       product: config.product,
       timestamp: new Date().toISOString(),
       event: event,
-      deviceId: getDeviceId(),
+      analyticsInstallId: getAnalyticsInstallId(),
       version: config.version,
       firstVisit: getFirstVisit(),
-      familyId: params.familyId || "",
-      childId: params.childId || "",
       platform: params.platform || platform(),
       browser: params.browser || browser(),
       payload: params,
       pet: params.pet || "",
       task: params.task || "",
       source: getSource(),
-      build: params.build || config.build || ""
+      build: params.build || config.build || "",
+      FirstSource: traffic.FirstSource,
+      CurrentLaunch: traffic.CurrentLaunch,
+      Campaign: traffic.Campaign,
+      Referrer: traffic.Referrer
     };
     try{
       global.fetch(config.endpoint,{
@@ -129,7 +181,8 @@
     track:track,
     trackReturnOnce:trackReturnOnce,
     getSource:getSource,
-    getDeviceId:getDeviceId,
+    getDeviceId:getAnalyticsInstallId,
+    getAnalyticsInstallId:getAnalyticsInstallId,
     getFirstVisit:getFirstVisit
   };
 

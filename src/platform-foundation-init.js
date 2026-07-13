@@ -1,0 +1,78 @@
+(function(global){
+  const ns=global.PetHabitPlatform=global.PetHabitPlatform||{};
+  const state={ready:false,result:null,error:null};
+  ns.PlatformFoundationState=state;
+  ns.bootstrapPlatformFoundation=async function(options={}){
+    try{
+      const flags={...(ns.FeatureFlags||{}),...(options.featureFlags||{})};
+      const boot=new ns.AppBoot({featureFlags:flags});
+      const result=await boot.run();
+      state.ready=true;state.result=result;state.error=null;
+      return result;
+    }catch(e){
+      state.ready=false;state.error={code:"boot_failed",message:String(e&&e.message||e)};
+      return ns.err("boot_failed",state.error.message,true);
+    }
+  };
+  ns.getSyncDebugState=function(){
+    const result=state.result&&state.result.data;
+    const pending=result&&result.pendingOperations;
+      const sync=result&&result.syncManager;
+      const save=result&&result.saveManager;
+      const platform=result&&result.platform;
+      const auth=result&&result.authManager;
+      const cloud=result&&result.cloudRepository;
+      const mapping=result&&result.mappingManager;
+      const activePlayerId=result&&result.active&&result.active.activePlayerId;
+      return {
+        ready:state.ready,
+        error:state.error,
+        appEnv:ns.Environment&&ns.Environment.appEnv,
+        supabaseConfigured:!!(ns.Environment&&ns.Environment.supabaseUrl&&ns.Environment.supabasePublishableKey),
+        supabaseKeyPreview:ns.Environment&&ns.Environment.supabasePublishableKey?String(ns.Environment.supabasePublishableKey).slice(0,14)+"…":"",
+        sdkLoaded:!!(global.supabase&&global.supabase.createClient),
+        clientReady:!!(cloud&&cloud.ready),
+        authStatus:auth&&auth.getStatus?auth.getStatus():null,
+        cloudWriteEnabled:!!(cloud&&cloud.writeEnabled),
+        cloudAccount:mapping&&mapping.getAccount?mapping.getAccount().data:null,
+        deviceId:platform&&platform.getDeviceId?platform.getDeviceId():"",
+        activePlayerId:activePlayerId||"",
+        cloudRevision:save&&save.getCloudRevision&&activePlayerId?save.getCloudRevision(activePlayerId):0,
+        selectedRepository:result&&result.selectedRepository||"not_ready",
+      trafficSource:ns.TrafficSource&&ns.TrafficSource.getDebugState?ns.TrafficSource.getDebugState():null,
+      syncStatus:save&&save.getSyncStatus?save.getSyncStatus():"unknown",
+      syncManager:sync&&sync.getStatus?sync.getStatus():null,
+      pending:pending&&pending.counts?pending.counts():null,
+      featureFlags:ns.FeatureFlags,
+      bootSteps:result&&result.steps||[]
+    };
+  };
+  ns.setMockCloudMode=function(mode){
+    try{
+      global.localStorage&&global.localStorage.setItem("petHabitMockCloudMode",mode);
+      const cloud=state.result&&state.result.data&&state.result.data.cloudRepository;
+      if(cloud&&cloud.setMode)cloud.setMode(mode);
+      return ns.ok({mode});
+    }catch(e){return ns.err("mock_mode_failed",String(e&&e.message||e),false);}
+  };
+  ns.syncNow=function(){
+    const sync=state.result&&state.result.data&&state.result.data.syncManager;
+    return sync&&sync.syncNow?sync.syncNow():Promise.resolve(ns.err("sync_not_ready","Sync manager not ready",true));
+  };
+  ns.restoreAuthSession=function(){
+    const auth=state.result&&state.result.data&&state.result.data.authManager;
+    return auth&&auth.restoreSession?auth.restoreSession():Promise.resolve(ns.err("auth_not_ready","Auth manager not ready",true));
+  };
+  ns.signInWithSupabaseGoogle=function(){
+    const auth=state.result&&state.result.data&&state.result.data.authManager;
+    return auth&&auth.signInWithGoogle?auth.signInWithGoogle():Promise.resolve(ns.err("auth_not_ready","Auth manager not ready",true));
+  };
+  ns.signOutSupabase=function(){
+    const auth=state.result&&state.result.data&&state.result.data.authManager;
+    return auth&&auth.signOut?auth.signOut():Promise.resolve(ns.err("auth_not_ready","Auth manager not ready",true));
+  };
+  ns.prepareCloudMigrationPlan=function(){
+    const mgr=state.result&&state.result.data&&state.result.data.migrationManager;
+    return mgr&&mgr.prepareMigrationPlan?mgr.prepareMigrationPlan():Promise.resolve(ns.err("migration_not_ready","Migration manager not ready",true));
+  };
+})(typeof window!=="undefined"?window:globalThis);

@@ -1,10 +1,30 @@
-const CACHE_NAME = "pet-habit-v1-0-1-hotfix-analytics-request-20260706-2";
+const CACHE_NAME = "pet-habit-platform-foundation-v1-final-rc-20260713";
 
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./maggie-analytics.js",
   "./manifest.webmanifest",
+  "./src/analytics/traffic-source.js",
+  "./src/analytics/google-sheet-schema.js",
+  "./src/core/result.js",
+  "./src/config/environment.js",
+  "./src/core/feature-flags.js",
+  "./src/platform/web-platform-adapter.js",
+  "./src/analytics/analytics-manager.js",
+  "./src/data/repository.js",
+  "./src/data/local-repository.js",
+  "./src/data/pending-operations.js",
+  "./src/data/mock-cloud-repository.js",
+  "./src/data/supabase-cloud-repository.js",
+  "./src/auth/supabase-auth-manager.js",
+  "./src/core/conflict-manager.js",
+  "./src/core/cloud-mapping-manager.js",
+  "./src/core/cloud-migration-manager.js",
+  "./src/core/save-manager.js",
+  "./src/core/sync-manager.js",
+  "./src/core/app-boot.js",
+  "./src/platform-foundation-init.js",
   "./assets/icons/favicon.png",
   "./assets/icons/apple-touch-icon.png",
   "./assets/icons/icon-192.png",
@@ -42,7 +62,13 @@ self.addEventListener("fetch", event => {
   const request = event.request;
   let url;
   try{url = new URL(request.url);}catch(e){url = null;}
-  if (url && (url.hostname === "script.google.com" || url.hostname.endsWith(".googleusercontent.com"))) return;
+  if (url && (
+    url.hostname === "script.google.com" ||
+    url.hostname.endsWith(".googleusercontent.com") ||
+    url.hostname.endsWith(".supabase.co") ||
+    url.hostname === "cdn.jsdelivr.net" ||
+    url.hostname === "accounts.google.com"
+  )) return;
   if (request.method !== "GET") return;
 
   if (request.mode === "navigate") {
@@ -60,14 +86,14 @@ self.addEventListener("fetch", event => {
 
   event.respondWith(
     caches.match(request).then(cached => {
-      if (cached) return cached;
-      return fetch(request).then(response => {
-        if (response && response.ok && new URL(request.url).origin === location.origin) {
+      const network = fetch(request, {cache:"no-store"}).then(response => {
+        if (response && response.ok && url && url.origin === location.origin) {
           const copy = response.clone();
           caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
         }
         return response;
-      }).catch(() => cached);
+      });
+      return network.catch(() => cached);
     })
   );
 });
