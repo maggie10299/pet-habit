@@ -19,6 +19,9 @@
       this.step("auth_checked");
       let selectedRepository="local_only";
       let cloud=null;
+      const authRepository=(this.flags.googleLogin&&ns.SupabaseCloudRepository)
+        ?new ns.SupabaseCloudRepository({writeEnabled:false})
+        :null;
       if(this.flags.cloudSave){
         const supabase=new ns.SupabaseCloudRepository();
         if(supabase.ready){cloud=supabase;selectedRepository="supabase";}
@@ -37,7 +40,7 @@
       const pending=new ns.PendingOperations();
       const saveManager=new ns.SaveManager({localRepository:this.local,pendingOperations:pending,platformAdapter:this.platform,analyticsAdapter:this.analytics});
       const mappingManager=new ns.CloudMappingManager();
-      const authManager=new ns.SupabaseAuthManager({repository:cloud,analyticsAdapter:this.analytics});
+      const authManager=new ns.SupabaseAuthManager({repository:authRepository||cloud,analyticsAdapter:this.analytics});
       await authManager.restoreSession();
       authManager.startAuthListener&&authManager.startAuthListener();
       this.step("auth_session_checked");

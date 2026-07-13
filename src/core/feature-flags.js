@@ -4,7 +4,7 @@
   ns.FeatureFlags={
     adventure:existing.adventure===true,
     cloudSave:existing.cloudSave===true||global.FEATURE_CLOUD_SAVE===true,
-    googleLogin:existing.googleLogin!==false
+    googleLogin:existing.googleLogin===false||global.FEATURE_GOOGLE_LOGIN===false?false:true
   };
   ns.isFeatureEnabled=(name,opts={})=>{
     if(name==="adventure"&&opts.developerMode)return true;

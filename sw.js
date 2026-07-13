@@ -1,4 +1,4 @@
-const CACHE_NAME = "pet-habit-platform-foundation-v1-final-rc-20260713";
+const CACHE_NAME = "pet-habit-7-15-final-hotfix-20260715";
 
 const CORE_ASSETS = [
   "./",

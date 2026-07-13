@@ -89,8 +89,8 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 <script src="maggie-analytics.js"></script>
 <script>
 const PRODUCT="pet_habit";
-const VERSION="v1.1-foundation-dev";
-window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-v1.1-foundation-dev"});
+const VERSION="v1.1-final-hotfix-20260715";
+window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-15-final-hotfix"});
 </script>
 <script>
 // Staging-only public Supabase config. Do not copy this block to outputs/ or release/.
@@ -99,6 +99,7 @@ window.SUPABASE_URL="https://qzhgbzicnhztortqtnuw.supabase.co";
 window.SUPABASE_PUBLISHABLE_KEY="sb_publishable_bLyjC-mv1CXtP4xbvUfg2Q_x7FEET3H";
 window.APP_ENV="staging";
 window.FEATURE_CLOUD_SAVE=false;
+window.FEATURE_GOOGLE_LOGIN=true;
 window.FEATURE_ADVENTURE=false;
 </script>
 <script src="./src/core/result.js"></script>
@@ -130,7 +131,7 @@ if("serviceWorker" in navigator){
 
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
-const APP_VERSION="v1.1-foundation-dev";
+const APP_VERSION="v1.1-final-hotfix-20260715";
 const APP_SCHEMA_VERSION=2;
 const SAVE_PROTECTION_VERSION=1;
 const SAVE_SNAPSHOT_PREFIX="petHabitSafeSnapshot_";
@@ -429,13 +430,13 @@ const OUTFITS=[
   {id:"star_scarf",slot:"neck",anchorSlot:"neck",emoji:"⭐",label:"星星領巾",price:220,
     asset:"assets/pet-accessories/star_scarf.webp",
     thumb:"assets/pet-accessories/thumbs/star_scarf.webp",hidden:true,locked:true},
-  {id:"blue_bowtie_pending",slot:"neck",anchorSlot:"neck",emoji:"🩵",label:"藍色領結（待驗收）",price:320,
+  {id:"blue_bowtie_pending",slot:"neck",anchorSlot:"neck",emoji:"🩵",label:"藍色領結（即將上架）",price:320,
     asset:"assets/pet-accessories/pending/pet_accessory_blue_bowtie.png",
     thumb:"assets/pet-accessories/pending/thumbs/pet_accessory_blue_bowtie.png",pending:true,hidden:true,locked:true},
-  {id:"adventure_backpack_pending",slot:"back",anchorSlot:"back",emoji:"🎒",label:"探險背包（待驗收）",price:380,
+  {id:"adventure_backpack_pending",slot:"back",anchorSlot:"back",emoji:"🎒",label:"探險背包（即將上架）",price:380,
     asset:"assets/pet-accessories/pending/pet_accessory_adventure_backpack.png",
     thumb:"assets/pet-accessories/pending/thumbs/pet_accessory_adventure_backpack.png",pending:true,hidden:true,locked:true},
-  {id:"orange_checker_skirt_pending",slot:"body",anchorSlot:"body",emoji:"🟧",label:"橘色棋盤裙（待驗收）",price:360,
+  {id:"orange_checker_skirt_pending",slot:"body",anchorSlot:"body",emoji:"🟧",label:"橘色棋盤裙（即將上架）",price:360,
     asset:"assets/pet-accessories/pending/pet_accessory_orange_checker_skirt.png",
     thumb:"assets/pet-accessories/pending/thumbs/pet_accessory_orange_checker_skirt.png",pending:true,hidden:true,locked:true},
 ];
@@ -529,13 +530,13 @@ const ROOMITEMS=[
   {id:"cream_hanging_plant",type:"dc",slot:"tr",emoji:"🌿",label:"奶油吊掛植物",price:260,
     asset:"assets/furniture/cream_pet_room/cream_hanging_plant.webp",
     thumb:"assets/furniture/cream_pet_room/thumbs/cream_hanging_plant.webp",scale:1.28,roomSize:88},
-  {id:"cream_wood_bed_pending",type:"dc",slot:"bl",emoji:"🛏️",label:"奶油原木床（待驗收）",price:620,
+  {id:"cream_wood_bed_pending",type:"dc",slot:"bl",emoji:"🛏️",label:"奶油原木床（即將上架）",price:620,
     asset:"assets/furniture/pending/room_furniture_cream_wood_bed.png",
     thumb:"assets/furniture/pending/thumbs/room_furniture_cream_wood_bed.png",scale:2.35,roomSize:150,pending:true,locked:true},
-  {id:"cream_wood_wardrobe_pending",type:"dc",slot:"ml",emoji:"🚪",label:"奶油原木衣櫃（待驗收）",price:560,
+  {id:"cream_wood_wardrobe_pending",type:"dc",slot:"ml",emoji:"🚪",label:"奶油原木衣櫃（即將上架）",price:560,
     asset:"assets/furniture/pending/room_furniture_cream_wood_wardrobe.png",
     thumb:"assets/furniture/pending/thumbs/room_furniture_cream_wood_wardrobe.png",scale:1.85,roomSize:132,pending:true,locked:true},
-  {id:"cream_star_floor_lamp_pending",type:"dc",slot:"br",emoji:"💡",label:"奶油星星直立燈（待驗收）",price:420,
+  {id:"cream_star_floor_lamp_pending",type:"dc",slot:"br",emoji:"💡",label:"奶油星星直立燈（即將上架）",price:420,
     asset:"assets/furniture/pending/room_furniture_cream_star_floor_lamp.png",
     thumb:"assets/furniture/pending/thumbs/room_furniture_cream_star_floor_lamp.png",scale:1.75,roomSize:124,pending:true,locked:true},
   // emoji 裝飾版本（不需 PNG/SVG）
@@ -2386,7 +2387,7 @@ function EventApproveControl({eventId,mission,setOfficialEventProgress}){
     </button>
   </div>;
 }
-function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,owned,setOwned,backpack,setBackpack,officialEventProgress,setOfficialEventProgress,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,isTablet,toast2,onClose,initialTab}){
+function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,owned,setOwned,backpack,setBackpack,officialEventProgress,setOfficialEventProgress,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,isTablet,toast2,onClose,initialTab,googleBinding,googleLoadState,googleError,startSupabaseGoogleLogin,googleLogout}){
   const [authed,setAuthed]=useState(false);
   const [ptab,setPtab]=useState(initialTab||"tasks");
   const [nTask,setNTask]=useState(""),nPts=useRef(20);
@@ -2403,6 +2404,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
   const [giftCode,setGiftCode]=useState("");
   const [giftCodeMsg,setGiftCodeMsg]=useState("");
   const backupInputRef=useRef(null);
+  const wishRedeemLocks=useRef({});
   const day=new Date().getDay();
   const today=new Date().toLocaleDateString("zh-TW");
   const isWeekend=day===0||day===6;
@@ -2468,6 +2470,30 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
     }
     if(toast2)toast2("這個獎勵已經發過囉，不會重複發星星 🌟",C.yellow);
     return false;
+  };
+  const redeemWishOnce=(wish)=>{
+    const cost=Number(wish&&wish.pts||wish&&wish.kidPts||0);
+    const id=String(wish&&wish.id||"");
+    if(!wish||wish.status!=="active"||!id)return;
+    if(wish.redeemedAt||wishRedeemLocks.current[id])return;
+    if(!cost||cost<0){
+      trackSafe("wish_redeem_failed",{reason:"invalid_cost",currency:"stars"});
+      if(toast2)toast2("這個願望的星星設定需要重新確認喔",C.peach);
+      return;
+    }
+    if(points<cost){
+      trackSafe("wish_redeem_failed",{reason:"insufficient_stars",currency:"stars",cost});
+      if(toast2)toast2("星星還不夠，先一起慢慢累積吧 🌟",C.peach);
+      return;
+    }
+    wishRedeemLocks.current[id]=true;
+    const redeemedAt=new Date().toISOString();
+    setPoints(p=>Math.max(0,p-cost));
+    setWishes(ws=>ws.map(x=>x.id===wish.id&&x.status==="active"&&!x.redeemedAt
+      ?{...x,status:"done",redeemedAt,redeemedCurrency:"stars",redeemedCost:cost}
+      :x));
+    trackSafe("wish_redeem",{currency:"stars",cost});
+    if(toast2)toast2("願望成真了！已扣除 "+cost+"⭐",C.green);
   };
   const approveHabitOnce=(kidKey,okKey,pts,trackParams)=>{
     setChecked(c=>({...c,[kidKey]:true,[okKey]:true}));
@@ -2829,7 +2855,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
               {w.status==="done"?"✅已實現":w.status==="denied"?"❌拒絕":"進行中"}
             </span>
             {w.status==="active"&&<button className="btn"
-              onClick={()=>setWishes(ws=>ws.map(x=>x.id===w.id?{...x,status:"done"}:x))}
+              onClick={()=>redeemWishOnce(w)}
               style={{...bub(C.green),borderRadius:999,padding:"4px 10px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>標記實現</button>}
           </div>))}
       </>}
@@ -2855,6 +2881,29 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
       </>}
 
       {ptab==="reset"&&<>
+        <div style={{...bub("#F7FAFF",20),padding:"18px 16px",marginBottom:18,border:"2px solid rgba(139,197,232,.24)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+            <span style={{fontSize:26}}>☁️</span>
+            <div>
+              <div style={{fontSize:15,fontWeight:900,color:C.brown}}>資料備份與雲端同步</div>
+              <div style={{fontSize:10,color:C.soft,fontWeight:800}}>Google 登入與家長 PIN 是分開的。</div>
+            </div>
+          </div>
+          <div style={{fontSize:11,fontWeight:900,color:C.brown,lineHeight:1.8,marginBottom:10}}>
+            {googleBinding
+              ?<>✅ Google 已連結<br/>☁️ 雲端同步尚未開放<br/>💾 遊戲紀錄仍安全保存在這台裝置</>
+              :<>🔐 尚未連結 Google<br/>💾 遊戲紀錄目前只保存在這台裝置</>}
+          </div>
+          {googleError&&DEVELOPER_MODE&&<div style={{fontSize:10,fontWeight:800,color:"#b45454",marginBottom:8,wordBreak:"break-word"}}>{googleError}</div>}
+          {googleBinding
+            ?<button className="btn" onClick={googleLogout}
+              style={{...bub(C.light,999),width:"100%",padding:"11px 12px",fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>登出 Google</button>
+            :<button className="btn" onClick={startSupabaseGoogleLogin}
+              disabled={googleLoadState==="loading"}
+              style={{...bub(googleLoadState==="loading"?C.light:C.orange,999),width:"100%",padding:"11px 12px",fontSize:12,fontWeight:900,color:googleLoadState==="loading"?C.soft:"#fff",border:"none"}}>
+              {googleLoadState==="loading"?"Google 登入準備中…":"使用 Google 登入"}
+            </button>}
+        </div>
         <div style={{...bub("#EEF8FF",20),padding:"18px 16px",marginBottom:18,border:"none"}}>
           <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:7}}>
             <span style={{fontSize:28}}>💾</span>
@@ -2937,23 +2986,22 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
           ))}
         </div>}
         <div style={{height:1,background:"rgba(120,90,55,.12)",margin:"2px 0 18px"}}/>
-        <div style={{fontSize:12,fontWeight:900,color:"#cc3333",margin:"2px 0 10px"}}>Danger Zone</div>
-        <div style={{...bub("#fff5f5",20),padding:"18px 14px",marginBottom:14,textAlign:"center",border:"none",background:"#fff5f5"}}>
-          <div style={{fontSize:34,marginBottom:8}}>⚠️</div>
-          <div style={{fontSize:15,fontWeight:900,color:"#cc3333",marginBottom:6}}>格式化 / 重新開始</div>
-          <div style={{fontSize:11,color:"#888",fontWeight:800,lineHeight:1.7}}>
-            清除所有資料（星星、小約定、寵物、願望）<br/>
-            <span style={{color:"#cc3333",fontWeight:900}}>此操作無法復原！</span>
+        <div style={{fontSize:11,fontWeight:900,color:"#b66",margin:"10px 0 8px"}}>Danger Zone</div>
+        <div style={{...bub("#fffafa",18),padding:"12px 12px",marginBottom:10,textAlign:"left",border:"1px solid rgba(204,51,51,.14)",background:"#fffafa"}}>
+          <div style={{fontSize:12,fontWeight:900,color:"#b66",marginBottom:4}}>重新開始這個王國</div>
+          <div style={{fontSize:10,color:"#999",fontWeight:800,lineHeight:1.6}}>
+            會刪除本機星星、小約定、寵物、願望等資料。操作前系統會建立 Safe Snapshot，並需要二次確認。
           </div>
         </div>
         {!rst
           ?<button className="btn" onClick={()=>setRst(true)}
-            style={{...bub("#FFB0B0"),width:"100%",padding:"13px 0",borderRadius:999,
-              fontSize:14,fontWeight:900,color:"#cc0000",border:"none"}}>我要重新開始</button>
+            style={{background:"transparent",width:"100%",padding:"8px 0",borderRadius:999,
+              fontSize:11,fontWeight:900,color:"#b66",border:"1px solid rgba(204,51,51,.22)"}}>重新開始這個王國</button>
           :<>
             <div style={{background:"#fff0f0",borderRadius:16,padding:"12px",marginBottom:10,
               textAlign:"center",fontSize:12,fontWeight:900,color:"#cc3333"}}>確定嗎？所有資料都會消失！😢</div>
             <button className="btn" onClick={()=>{
+              backupLocalStorageSnapshot("manual-reset-before-clear");
               localStorage.removeItem(storageKey||"habitKingdom");
               if(playerId)["lastLogin_hk","lastStreak_hk","musicOn_hk","weather_hk","parkPetPan_hk","parkKidPan_hk"].forEach(k=>localStorage.removeItem(k+"_"+playerId));
               const fam=readFamily();
@@ -3332,6 +3380,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [focusEndsAt,setFocusEndsAt]=useState(null);
   const [focusNow,setFocusNow]=useState(Date.now());
   const [shopTab,setShopTab]=useState("food");
+  const [moreOpen,setMoreOpen]=useState(false);
+  const shopGridRef=useRef(null);
   const [previewAccessory,setPreviewAccessory]=useState(null);
   const [syncDebug,setSyncDebug]=useState(()=>window.PetHabitPlatform&&window.PetHabitPlatform.getSyncDebugState?window.PetHabitPlatform.getSyncDebugState():null);
   const [kidShopTheme,setKidShopTheme]=useState("全部");
@@ -3393,7 +3443,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     setGoogleBinding(binding);
     updateGoogleFamilyMeta({futureGoogleUserId:payload.sub,loginStatus:"google_connected",cloudSaveStatus:"local_only",localSaveId});
     trackSafe("google_login_success",{result:"success"});
-    trackSafe("google_local_save_bound",{localSaveId,result:"bound"});
+    trackSafe("google_local_save_bound",{result:"bound"});
     toast2("已登入 Google，並綁定本機資料（尚未雲端同步）",C.yellow);
     return binding;
   };
@@ -3412,20 +3462,26 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     }
   };
   const openGoogleLogin=()=>{
-    trackSafe("google_login_click",{entry:"header"});
+    trackSafe("google_login_click",{entry:"parent_backup"});
     setModal("googleLogin");
   };
   const startSupabaseGoogleLogin=()=>{
     setGoogleLoadState("loading");
     setGoogleError("");
+    trackSafe("google_login_click",{entry:"parent_backup"});
     if(!(window.PetHabitPlatform&&window.PetHabitPlatform.signInWithSupabaseGoogle)){
-      const msg="Supabase Auth Manager 尚未準備好，遊戲仍可用本機模式";
+      const msg="Google 登入尚未準備完成，請重新整理後再試一次。遊戲資料仍安全保存在這台裝置。";
       setGoogleLoadState("error");setGoogleError(msg);toast2(msg,C.peach);return;
     }
     window.PetHabitPlatform.signInWithSupabaseGoogle().then(res=>{
       refreshSyncDebug();
       if(res&&res.ok){setGoogleLoadState("ready");toast2("正在前往 Google 登入，本機資料不會被刪除",C.yellow);}
-      else{const msg=res&&res.error&&res.error.message||"Google 登入暫時不可用";setGoogleLoadState("error");setGoogleError(msg);toast2("Google 登入暫時失敗，遊戲仍可正常使用",C.peach);}
+      else{
+        const raw=res&&res.error&&res.error.message||"auth_unavailable";
+        const msg=DEVELOPER_MODE?raw:"Google 登入尚未準備完成，請重新整理後再試一次。遊戲資料仍安全保存在這台裝置。";
+        setGoogleLoadState("error");setGoogleError(raw);toast2(msg,C.peach);
+        trackSafe("google_login_fail",{reason:res&&res.error&&res.error.code||"auth_unavailable"});
+      }
     });
   };
   const googleLogout=()=>{
@@ -3547,7 +3603,15 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   // persist
   useEffect(()=>{
     if(window.PetHabitPlatform&&window.PetHabitPlatform.bootstrapPlatformFoundation){
-      window.PetHabitPlatform.bootstrapPlatformFoundation({featureFlags:FEATURE_FLAGS}).then(()=>refreshSyncDebug());
+      window.PetHabitPlatform.bootstrapPlatformFoundation({featureFlags:FEATURE_FLAGS}).then(()=>{
+        refreshSyncDebug();
+        const d=window.PetHabitPlatform&&window.PetHabitPlatform.getSyncDebugState?window.PetHabitPlatform.getSyncDebugState():null;
+        const auth=d&&d.authStatus;
+        const user=auth&&auth.user;
+        if(auth&&auth.status==="signed_in"&&user&&user.id&&!localStorage.getItem(googleBindingKey(localSaveId))){
+          bindGoogleLocalSave({sub:user.id,name:user.name||"Google 使用者"});
+        }
+      });
     }
   },[]);
 
@@ -4471,10 +4535,13 @@ Maggie 阿姨才有勇氣，
         approvalMode={approvalMode} setApprovalMode={setApprovalMode}
         isTablet={isTablet} toast2={toast2}
         initialTab={parentInitialTab}
+        googleBinding={googleBinding} googleLoadState={googleLoadState} googleError={googleError}
+        startSupabaseGoogleLogin={startSupabaseGoogleLogin} googleLogout={googleLogout}
         onClose={()=>{setParentInitialTab("tasks");setModal(null);}}/>}
 
       {/* SHOP MODAL */}
       {modal==="shop"&&<Overlay onClose={()=>setModal(null)} wide>
+        <div data-shop-modal style={{height:"calc(90vh - 54px)",display:"flex",flexDirection:"column",minHeight:0,paddingBottom:"env(safe-area-inset-bottom)"}}>
         <div style={{fontSize:19,fontWeight:900,color:C.brown,textAlign:"center",marginBottom:12}}>🛍️ 商店</div>
         {/* Updated by Claude on 2026/06/23
             Reason: Removed "🐾 寵物" (OUTFITS) and "👕 服飾" (KID_ITEMS) shop tabs per
@@ -4492,7 +4559,7 @@ Maggie 阿姨才有勇氣，
             wardrobe UI, or re-add a populated KID_ITEMS-equivalent for outfit purchases. */}
         <div style={{display:"flex",...bub(C.light,999),padding:4,gap:3,marginBottom:14}}>
           {[["food","🍎 食物"],["toy","🎮 玩具"],["pet","🐾 配件"],["outfit","👕 衣服"],["room","🏠 房間"]].map(([k,l])=>(
-            <button key={k} className="btn" onClick={()=>setShopTab(k)}
+            <button key={k} className="btn" onClick={()=>{setShopTab(k);setTimeout(()=>{if(shopGridRef.current)shopGridRef.current.scrollTop=0;},0);}}
               style={{flex:1,padding:"7px 2px",borderRadius:999,fontSize:10,fontWeight:900,color:C.brown,
                 background:shopTab===k?C.yellow:"transparent",
                 boxShadow:shopTab===k?"0 3px 0 rgba(0,0,0,.08)":"none",border:"none"}}>{l}</button>))}
@@ -4510,7 +4577,7 @@ Maggie 阿姨才有勇氣，
             <div style={{flex:1}}>
               <div style={{fontSize:13,fontWeight:900,color:C.brown,marginBottom:4}}>穿戴預覽</div>
               <div style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.55}}>
-                {item?item.label+" · "+(item.pending?"待 Founder 驗收，可實際試戴":"可購買並裝備"):"點下方配件先看看效果"}
+                {item?item.label+" · "+(item.pending?"即將上架，可實際試戴":"可購買並裝備"):"點下方配件先看看效果"}
               </div>
             </div>
           </div>;
@@ -4520,7 +4587,7 @@ Maggie 阿姨才有勇氣，
             style={{...bub(kidShopTheme===t?C.yellow:C.light,999),padding:"6px 12px",minWidth:"max-content",fontSize:10,fontWeight:900,
               color:C.brown,border:"none",outline:kidShopTheme===t?"2px solid "+C.butter:"none"}}>{t}</button>)}
         </div>}
-        <div style={{display:"grid",gridTemplateColumns:isTablet?"repeat(3,1fr)":"1fr 1fr",gap:10}}>
+        <div ref={shopGridRef} data-shop-product-grid style={{display:"grid",gridTemplateColumns:isTablet?"repeat(3,1fr)":"1fr 1fr",gap:10,overflowY:"auto",minHeight:0,flex:1,padding:"2px 2px 8px",WebkitOverflowScrolling:"touch"}}>
           {(shopTab==="food"?FOODS:shopTab==="toy"?TOYS:shopTab==="pet"?OUTFITS:shopTab==="outfit"?(profile&&profile.gender==="boy"?OUTFIT_CLOTHES_BOY:OUTFIT_CLOTHES_GIRL):shopTab==="kid"?KID_ITEMS:ROOMITEMS.filter(i=>i.asset))
             .filter(item=>{
               if(shopTab==="pet")return !item.hidden||owned.indexOf(item.id)>=0;
@@ -4532,7 +4599,7 @@ Maggie 阿姨才有勇氣，
             const isOwn=owned.indexOf(item.id)>=0;
             const isEq=equipped[item.slot||item.type]===item.id;
             const slotInfo=ROOM_SLOTS.find(s=>s.id===item.slot);
-            const qty=backpack[item.id]||0,can=points>=item.price;
+            const qty=backpack[item.id]||0,can=points>=item.price&&!item.locked&&!item.pending;
             return(
               <div key={item.id} onClick={()=>shopTab==="pet"&&setPreviewAccessory(item.id)}
                 style={{...cardS(isEq?C.yellow:isOwn?C.light:C.card),
@@ -4583,10 +4650,10 @@ Maggie 阿姨才有勇氣，
                       fontSize:11,fontWeight:900,color:isEq?"#fff":C.soft,border:"none"}}>
                     {shopTab==="kid"?(isEq?"✓ 穿著中":"試穿"):shopTab==="outfit"?(isEq?"✓ 穿著中":"已擁有・穿上"):shopTab==="pet"?(isEq?"✓ 戴著中":"戴上"):(isEq?"✓ 放置中":"放進房間")}</button>
                 :
-                  <button className="btn" onClick={(e)=>{e.stopPropagation();buy(item);}}
+                  <button className="btn" onClick={(e)=>{e.stopPropagation();if(!item.locked&&!item.pending)buy(item);}}
                     style={{...bub(can?C.orange:C.light),borderRadius:999,padding:"5px 14px",
                       fontSize:11,fontWeight:900,color:can&&!item.locked?"#fff":C.soft,opacity:can&&!item.locked?1:.6,border:"none"}}>
-                    {item.locked?"即將上架":item.pending?"待驗收 "+item.price+"⭐":item.price+"⭐"}</button>}
+                    {item.locked||item.pending?"即將上架":item.price+"⭐"}</button>}
               </div>);})}
         </div>
         {shopTab==="room"&&<div style={{fontSize:10,color:C.soft,fontWeight:800,
@@ -4596,6 +4663,7 @@ Maggie 阿姨才有勇氣，
         <button className="btn" onClick={()=>setModal(null)}
           style={{...bub(C.light),width:"100%",padding:"12px 0",borderRadius:999,
             fontSize:13,fontWeight:900,color:C.soft,marginTop:14,border:"none"}}>離開商店</button>
+        </div>
       </Overlay>}
 
       {/* BACKPACK */}
@@ -5296,22 +5364,33 @@ Maggie 阿姨才有勇氣，
             boxShadow:"0 5px 0 rgba(180,120,0,.18)"}}>
             ⭐ {points}
           </div>
-          {onSwitch&&<button className="btn" onClick={()=>{saveSnapshot();onSwitch();}} aria-label="切換小主人"
-            style={{...bub("#fff"),borderRadius:999,width:isTablet?44:32,height:isTablet?44:32,
-              display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:isTablet?20:17}}>👥</button>}
-          <button className="btn" onClick={()=>{
-            const next=!musicOn;setMusicOn(next);
-            if(next){Audio.startMusic(true);toast2("🎵 音樂開啟！");}
-            else{Audio.stopMusic();toast2("🔇 音樂關閉");}
-          }} aria-label="音樂開關"
-            style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>{musicOn?"🎵":"🔇"}</button>
-          <button className="btn" onClick={()=>setHelpTopic("index")} aria-label="教學"
-            style={{...bub("#fff"),borderRadius:999,padding:isTablet?"9px 11px":"7px 9px",fontSize:fs(18)}}>?</button>
-          <button className="btn" onClick={openGoogleLogin} aria-label="Google 登入狀態"
-            title={googleBinding?"已登入 Google（尚未雲端同步）":"Google 登入"}
-            style={{...bub(googleBinding?C.green:"#fff"),borderRadius:999,width:isTablet?44:34,height:isTablet?44:34,
-              display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:isTablet?17:14,
-              fontWeight:900,color:C.brown,border:"2px solid rgba(116,75,35,.12)"}}>G{googleBinding?"✓":""}</button>
+          <button className="btn" onClick={()=>setMoreOpen(v=>!v)} aria-label="更多"
+            style={{...bub("#fff"),borderRadius:999,width:48,height:48,minWidth:48,minHeight:48,
+              display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:22,
+              border:"2px solid rgba(116,75,35,.14)"}}>⚙️</button>
+          {moreOpen&&<>
+            <div onClick={()=>setMoreOpen(false)} style={{position:"fixed",inset:0,zIndex:1700,background:"transparent"}}/>
+            <div style={{position:"absolute",right:isTablet?58:56,top:"calc(100% + 8px)",zIndex:1701,
+              width:210,...cardS("#fff"),padding:10,border:"2px solid rgba(116,75,35,.12)",boxShadow:"0 12px 30px rgba(80,50,20,.18)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:12,fontWeight:900,color:C.brown}}>更多</div>
+                <button className="btn" onClick={()=>setMoreOpen(false)}
+                  style={{...bub(C.light,999),width:30,height:30,padding:0,border:"none",color:C.soft}}>×</button>
+              </div>
+              {onSwitch&&<button className="btn" onClick={()=>{setMoreOpen(false);saveSnapshot();onSwitch();}}
+                style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left",marginBottom:7}}>👥 切換小主人</button>}
+              <button className="btn" onClick={()=>{
+                setMoreOpen(false);
+                const next=!musicOn;setMusicOn(next);
+                if(next){Audio.startMusic(true);toast2("🎵 音樂開啟！");}
+                else{Audio.stopMusic();toast2("🔇 音樂關閉");}
+              }} style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left",marginBottom:7}}>
+                {musicOn?"🔇 關閉音樂":"🎵 開啟音樂"}
+              </button>
+              <button className="btn" onClick={()=>{setMoreOpen(false);setHelpTopic("index");}}
+                style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left"}}>❓ 使用說明</button>
+            </div>
+          </>}
           <button className="btn" aria-label="開啟家長控制台" title="家長控制台" onClick={(e)=>{
             e.preventDefault();e.stopPropagation();
             console.log("parent button clicked");

@@ -16,6 +16,11 @@
       if(sdk&&typeof sdk.createClient==="function")return sdk.createClient(this.url,this.publishableKey);
       return null;
     }
+    refreshClient(){
+      if(!this.client)this.client=this.createClient();
+      this.ready=!!(this.configValid&&this.client);
+      return this.ready;
+    }
     normalizeError(error,code="supabase_error",retryable=true){
       return ns.err((error&&error.code)||code,(error&&error.message)||String(error||code),retryable,{raw:error});
     }
@@ -23,7 +28,7 @@
       if(this.url&&/\/rest\/v1\/?$/i.test(this.url))return ns.err("supabase_invalid_url","Use the Supabase project root URL, not /rest/v1/",false);
       return ns.err("supabase_not_configured","Supabase config/client not ready; using local-only or mock repository",true);
     }
-    ensureReady(){return this.ready?null:this.notReady();}
+    ensureReady(){return (this.ready||this.refreshClient())?null:this.notReady();}
     writesDisabled(){return ns.err("supabase_writes_disabled","Supabase writes are disabled until Migration, RLS, and RPC pass manual review",false);}
     requireWrite(){return this.writeEnabled?this.ensureReady():this.writesDisabled();}
     async getCurrentUser(){
