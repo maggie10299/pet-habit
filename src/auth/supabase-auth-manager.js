@@ -17,22 +17,62 @@
       this.user=null;
       this.unsubscribe=null;
       this.lastEvent=null;
+      this.listenerStarted=false;
+      this.expiresAt=null;
+      this.authRestoreDuration=null;
     }
-    getStatus(){return {status:this.status,user:this.safeUser(),hasSession:!!this.session};}
+    getStatus(){
+      return {
+        status:this.status,
+        user:this.safeUser(),
+        hasSession:!!this.session,
+        sessionPresent:!!this.session,
+        listenerStarted:!!this.listenerStarted,
+        lastAuthEvent:this.lastEvent||"",
+        expiresAt:this.expiresAt||"",
+        authRestoreDuration:this.authRestoreDuration
+      };
+    }
+    previewId(id){
+      id=String(id||"");
+      return id?id.slice(0,4)+"…":"";
+    }
     safeUser(){
       if(!this.user)return null;
-      return {id:this.user.id,name:this.user.user_metadata&&this.user.user_metadata.name||""};
+      const meta=this.user.user_metadata||{};
+      return {idPreview:this.previewId(this.user.id),name:meta.name||meta.full_name||""};
+    }
+    getLocalBindingPayload(){
+      if(!this.user||!this.user.id)return null;
+      const meta=this.user.user_metadata||{};
+      return {sub:this.user.id,name:meta.name||meta.full_name||"Google 使用者"};
+    }
+    applySession(event,session){
+      this.lastEvent=event||this.lastEvent;
+      this.session=session||null;
+      this.user=session&&session.user||null;
+      this.expiresAt=session&&session.expires_at?new Date(Number(session.expires_at)*1000).toISOString():"";
+      if(session&&session.user){
+        this.status=AUTH_STATUS.SIGNED_IN;
+      }else if(event==="SIGNED_OUT"){
+        this.status=AUTH_STATUS.SIGNED_OUT;
+      }else if(event==="USER_DELETED"){
+        this.status=AUTH_STATUS.SESSION_EXPIRED;
+      }else{
+        this.status=AUTH_STATUS.SIGNED_OUT;
+      }
     }
     async restoreSession(){
+      const started=Date.now();
       if(this.repository.refreshClient)this.repository.refreshClient();
-      if(!this.repository.client||!this.repository.client.auth){this.status=AUTH_STATUS.LOCAL_ONLY;return ns.ok(this.getStatus());}
+      if(!this.repository.client||!this.repository.client.auth){this.status=AUTH_STATUS.LOCAL_ONLY;this.authRestoreDuration=Date.now()-started;return ns.ok(this.getStatus());}
       try{
         const res=await this.repository.client.auth.getSession();
         const session=res&&res.data&&res.data.session;
-        if(session&&session.user){this.session=session;this.user=session.user;this.status=AUTH_STATUS.SIGNED_IN;}
-        else{this.status=AUTH_STATUS.SIGNED_OUT;}
+        this.applySession("RESTORE_SESSION",session);
+        this.authRestoreDuration=Date.now()-started;
         return ns.ok(this.getStatus());
-      }catch(e){this.status=AUTH_STATUS.SESSION_EXPIRED;return ns.err("auth_session_restore_failed",String(e&&e.message||e),true);}
+      }catch(e){this.status=AUTH_STATUS.SESSION_EXPIRED;this.authRestoreDuration=Date.now()-started;return ns.err("auth_session_restore_failed",String(e&&e.message||e),true);}
     }
     startAuthListener(callback){
       if(this.repository.refreshClient)this.repository.refreshClient();
@@ -43,25 +83,24 @@
       if(this.unsubscribe)return ns.ok({status:"already_listening"});
       try{
         const res=this.repository.client.auth.onAuthStateChange((event,session)=>{
-          this.lastEvent=event;
-          this.session=session||null;
-          this.user=session&&session.user||null;
-          if(event==="SIGNED_IN"||event==="TOKEN_REFRESHED"){
-            this.status=AUTH_STATUS.SIGNED_IN;
-          }else if(event==="SIGNED_OUT"){
-            this.status=AUTH_STATUS.SIGNED_OUT;
-          }else if(event==="USER_DELETED"){
-            this.status=AUTH_STATUS.SESSION_EXPIRED;
+          if(event==="INITIAL_SESSION"||event==="SIGNED_IN"||event==="TOKEN_REFRESHED"||event==="USER_UPDATED"){
+            this.applySession(event,session);
+          }else if(event==="SIGNED_OUT"||event==="USER_DELETED"){
+            this.applySession(event,null);
+          }else{
+            this.applySession(event,session);
           }
           if(typeof callback==="function")callback({event,status:this.getStatus()});
         });
         this.unsubscribe=res&&res.data&&res.data.subscription&&res.data.subscription.unsubscribe||res&&res.unsubscribe||null;
+        this.listenerStarted=true;
         return ns.ok({status:"listening"});
       }catch(e){return ns.err("auth_listener_failed",String(e&&e.message||e),true);}
     }
     stopAuthListener(){
       try{
         if(this.unsubscribe){this.unsubscribe();this.unsubscribe=null;}
+        this.listenerStarted=false;
         return ns.ok({status:"stopped"});
       }catch(e){return ns.err("auth_listener_stop_failed",String(e&&e.message||e),true);}
     }
@@ -90,7 +129,7 @@
       try{
         const res=await this.repository.client.auth.signOut();
         if(res&&res.error)return this.repository.normalizeError(res.error,"auth_signout_failed");
-        this.session=null;this.user=null;this.status=AUTH_STATUS.SIGNED_OUT;
+        this.applySession("SIGNED_OUT",null);
         this.analytics.track("google_logout",{result:"local_data_kept"});
         return ns.ok(this.getStatus());
       }catch(e){return ns.err("auth_signout_failed",String(e&&e.message||e),true);}

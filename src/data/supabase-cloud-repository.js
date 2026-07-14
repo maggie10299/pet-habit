@@ -7,13 +7,21 @@
       this.publishableKey=config.publishableKey||(ns.Environment&&ns.Environment.supabasePublishableKey)||"";
       this.writeEnabled=config.writeEnabled===true;
       this.configValid=!!(this.url&&this.publishableKey&&!/\/rest\/v1\/?$/i.test(this.url));
+      this.clientOptions=config.clientOptions||{
+        auth:{
+          persistSession:true,
+          autoRefreshToken:true,
+          detectSessionInUrl:true,
+          storage:global.localStorage
+        }
+      };
       this.client=config.client||this.createClient();
       this.ready=!!(this.configValid&&this.client);
     }
     createClient(){
       if(!this.configValid)return null;
       const sdk=global.supabase||global.Supabase;
-      if(sdk&&typeof sdk.createClient==="function")return sdk.createClient(this.url,this.publishableKey);
+      if(sdk&&typeof sdk.createClient==="function")return sdk.createClient(this.url,this.publishableKey,this.clientOptions);
       return null;
     }
     refreshClient(){

@@ -24,6 +24,8 @@
       const cloud=result&&result.cloudRepository;
       const mapping=result&&result.mappingManager;
       const activePlayerId=result&&result.active&&result.active.activePlayerId;
+      const analytics=global.MaggieAnalytics&&global.MaggieAnalytics.getDebugState?global.MaggieAnalytics.getDebugState():null;
+      const perf=global.__PET_HABIT_PERF||null;
       return {
         ready:state.ready,
         error:state.error,
@@ -39,6 +41,8 @@
         activePlayerId:activePlayerId||"",
         cloudRevision:save&&save.getCloudRevision&&activePlayerId?save.getCloudRevision(activePlayerId):0,
         selectedRepository:result&&result.selectedRepository||"not_ready",
+      analytics:analytics,
+      perf:perf,
       trafficSource:ns.TrafficSource&&ns.TrafficSource.getDebugState?ns.TrafficSource.getDebugState():null,
       syncStatus:save&&save.getSyncStatus?save.getSyncStatus():"unknown",
       syncManager:sync&&sync.getStatus?sync.getStatus():null,
@@ -66,6 +70,10 @@
   ns.signInWithSupabaseGoogle=function(){
     const auth=state.result&&state.result.data&&state.result.data.authManager;
     return auth&&auth.signInWithGoogle?auth.signInWithGoogle():Promise.resolve(ns.err("auth_not_ready","Auth manager not ready",true));
+  };
+  ns.getSupabaseAuthBindingPayload=function(){
+    const auth=state.result&&state.result.data&&state.result.data.authManager;
+    return auth&&auth.getLocalBindingPayload?auth.getLocalBindingPayload():null;
   };
   ns.signOutSupabase=function(){
     const auth=state.result&&state.result.data&&state.result.data.authManager;

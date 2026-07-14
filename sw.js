@@ -1,4 +1,5 @@
-const CACHE_NAME = "pet-habit-7-15-final-hotfix-20260715";
+const CACHE_NAME = "pet-habit-7-15-final-qa-hotfix-03-20260715";
+const HTML_NETWORK_TIMEOUT_MS = 1200;
 
 const CORE_ASSETS = [
   "./",
@@ -72,14 +73,18 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET") return;
 
   if (request.mode === "navigate") {
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("html_network_timeout")), HTML_NETWORK_TIMEOUT_MS);
+    });
+    const network = fetch(request, {cache:"no-store"})
+      .then(response => {
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then(cache => cache.put("./index.html", copy));
+        return response;
+      });
     event.respondWith(
-      fetch(request)
-        .then(response => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put("./index.html", copy));
-          return response;
-        })
-        .catch(() => caches.match("./index.html"))
+      Promise.race([network, timeout])
+        .catch(() => caches.match("./index.html").then(cached => cached || network))
     );
     return;
   }

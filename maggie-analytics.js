@@ -2,6 +2,7 @@
   "use strict";
 
   var DEFAULT_ENDPOINT = "https://script.google.com/macros/s/AKfycbwFuPv3IoIuv0ZcxRsQNVLO3K2J6WKkqqkK3CUox318AxB9bVrBoZl2L8NmWRQMsS4/exec";
+  var SCHEMA_VERSION = "maggie_analytics_v2.1";
   var VALID_SOURCES = ["facebook","instagram","threads","official","line","qr","direct","unknown"];
   var SOURCE_KEY = "maggie_first_source";
   var FIRST_VISIT_KEY = "maggie_first_visit";
@@ -14,6 +15,14 @@
     version: "",
     build: "",
     enabled: true
+  };
+  var debugState = {
+    endpointUrl: DEFAULT_ENDPOINT,
+    lastAnalyticsStatus: "idle",
+    lastAnalyticsResponse: "",
+    lastAnalyticsError: "",
+    lastRequestDeviceIdPresent: false,
+    analyticsSchemaVersion: SCHEMA_VERSION
   };
 
   function safeLocalGet(key){
@@ -107,6 +116,11 @@
     return id;
   }
 
+  function idPreview(id){
+    id = String(id || "");
+    return id ? id.slice(0,4) + "…" : "";
+  }
+
   function platform(){
     return (global.navigator && global.navigator.platform) || "";
   }
@@ -118,6 +132,7 @@
   function init(options){
     options = options || {};
     config.endpoint = options.endpoint || config.endpoint || DEFAULT_ENDPOINT;
+    debugState.endpointUrl = config.endpoint;
     config.product = options.product || config.product;
     config.version = options.version || config.version;
     config.build = options.build || config.build;
@@ -133,11 +148,13 @@
     if(!config.enabled || !event)return;
     params = sanitizeAnalyticsPayload(params || {});
     var traffic = trafficContext();
+    var installId = getAnalyticsInstallId();
     var payload = {
       product: config.product,
       timestamp: new Date().toISOString(),
       event: event,
-      analyticsInstallId: getAnalyticsInstallId(),
+      analyticsInstallId: installId,
+      DeviceId: installId,
       version: config.version,
       firstVisit: getFirstVisit(),
       platform: params.platform || platform(),
@@ -153,6 +170,11 @@
       Referrer: traffic.Referrer
     };
     try{
+      debugState.endpointUrl = config.endpoint;
+      debugState.lastAnalyticsStatus = "sending";
+      debugState.lastAnalyticsResponse = "";
+      debugState.lastAnalyticsError = "";
+      debugState.lastRequestDeviceIdPresent = !!payload.DeviceId;
       global.fetch(config.endpoint,{
         method:"POST",
         mode:"no-cors",
@@ -160,8 +182,17 @@
         headers:{"Content-Type":"text/plain;charset=utf-8"},
         body:JSON.stringify(payload),
         keepalive:true
-      }).catch(function(){});
-    }catch(e){}
+      }).then(function(response){
+        debugState.lastAnalyticsStatus = "sent";
+        debugState.lastAnalyticsResponse = response && response.type ? response.type : "no-cors";
+      }).catch(function(err){
+        debugState.lastAnalyticsStatus = "failed";
+        debugState.lastAnalyticsError = String(err && err.message || err || "fetch_failed").slice(0,120);
+      });
+    }catch(e){
+      debugState.lastAnalyticsStatus = "failed";
+      debugState.lastAnalyticsError = String(e && e.message || e || "fetch_failed").slice(0,120);
+    }
   }
 
   function trackReturnOnce(){
@@ -176,6 +207,20 @@
     track("return_product");
   }
 
+  function getDebugState(){
+    var installId = safeLocalGet(ANALYTICS_INSTALL_KEY);
+    return {
+      analyticsInstallIdPresent: !!installId,
+      analyticsInstallIdPreview: idPreview(installId),
+      requestDeviceIdPresent: !!debugState.lastRequestDeviceIdPresent,
+      endpointUrl: debugState.endpointUrl || config.endpoint,
+      lastAnalyticsStatus: debugState.lastAnalyticsStatus,
+      lastAnalyticsResponse: debugState.lastAnalyticsResponse,
+      lastAnalyticsError: debugState.lastAnalyticsError,
+      analyticsSchemaVersion: debugState.analyticsSchemaVersion
+    };
+  }
+
   var api = {
     init:init,
     track:track,
@@ -183,7 +228,8 @@
     getSource:getSource,
     getDeviceId:getAnalyticsInstallId,
     getAnalyticsInstallId:getAnalyticsInstallId,
-    getFirstVisit:getFirstVisit
+    getFirstVisit:getFirstVisit,
+    getDebugState:getDebugState
   };
 
   global.MaggieAnalytics = api;

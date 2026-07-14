@@ -10,6 +10,17 @@
 <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png"/>
 <link rel="icon" href="assets/icons/favicon.png"/>
 <title>寵物習慣王國 🐾</title>
+<script>
+window.__PET_HABIT_PERF={marks:{}};
+window.__petHabitMark=function(name){
+  try{
+    const now=(performance&&performance.now)?Math.round(performance.now()):Date.now();
+    window.__PET_HABIT_PERF.marks[name]=now;
+    if(performance&&performance.mark)performance.mark("pet_habit_"+name);
+  }catch(e){}
+};
+window.__petHabitMark("app_start");
+</script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
@@ -82,15 +93,24 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 </style>
 </head>
 <body>
-<div id="root"></div>
+<div id="root">
+  <div id="app-shell" style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:#FFFBF0;background-image:radial-gradient(circle,#FFE56638 1.2px,transparent 1.2px);background-size:22px 22px;color:#5A4327;text-align:center;">
+    <div style="width:min(340px,92vw);padding:28px 22px;border-radius:30px;background:rgba(255,255,255,.76);box-shadow:0 16px 34px rgba(116,75,35,.12);border:2px solid rgba(255,217,125,.5);">
+      <img src="assets/icons/icon-192.png" alt="寵物習慣王國" style="width:82px;height:82px;border-radius:24px;box-shadow:0 8px 18px rgba(116,75,35,.16);margin-bottom:14px;" onerror="this.style.display='none'"/>
+      <div style="font-size:22px;font-weight:900;margin-bottom:8px;">寵物習慣王國</div>
+      <div style="font-size:14px;font-weight:900;color:#8D7A5F;">正在回到王國…</div>
+    </div>
+  </div>
+</div>
+<script>window.__petHabitMark&&window.__petHabitMark("first_paint");window.__petHabitMark&&window.__petHabitMark("app_shell_ready");</script>
 
 <script src="./src/analytics/traffic-source.js"></script>
 <script src="./src/analytics/google-sheet-schema.js"></script>
 <script src="maggie-analytics.js"></script>
 <script>
 const PRODUCT="pet_habit";
-const VERSION="v1.1-final-hotfix-20260715";
-window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-15-final-hotfix"});
+const VERSION="v1.1-final-qa-hotfix-03-20260715";
+window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-15-final-qa-hotfix-03"});
 </script>
 <script>
 // Staging-only public Supabase config. Do not copy this block to outputs/ or release/.
@@ -121,17 +141,18 @@ window.FEATURE_ADVENTURE=false;
 <script src="./src/core/sync-manager.js"></script>
 <script src="./src/core/app-boot.js"></script>
 <script src="./src/platform-foundation-init.js"></script>
+<script>window.__petHabitMark&&window.__petHabitMark("supabase_sdk_ready");</script>
 <script>
 if("serviceWorker" in navigator){
   window.addEventListener("load",function(){
-    navigator.serviceWorker.register("sw.js").catch(function(){});
+    navigator.serviceWorker.register("sw.js").then(function(){window.__petHabitMark&&window.__petHabitMark("sw_ready");}).catch(function(){window.__petHabitMark&&window.__petHabitMark("sw_ready");});
   });
 }
 </script>
 
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
-const APP_VERSION="v1.1-final-hotfix-20260715";
+const APP_VERSION="v1.1-final-qa-hotfix-03-20260715";
 const APP_SCHEMA_VERSION=2;
 const SAVE_PROTECTION_VERSION=1;
 const SAVE_SNAPSHOT_PREFIX="petHabitSafeSnapshot_";
@@ -3604,14 +3625,15 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   useEffect(()=>{
     if(window.PetHabitPlatform&&window.PetHabitPlatform.bootstrapPlatformFoundation){
       window.PetHabitPlatform.bootstrapPlatformFoundation({featureFlags:FEATURE_FLAGS}).then(()=>{
+        window.__petHabitMark&&window.__petHabitMark("auth_restore_done");
         refreshSyncDebug();
         const d=window.PetHabitPlatform&&window.PetHabitPlatform.getSyncDebugState?window.PetHabitPlatform.getSyncDebugState():null;
         const auth=d&&d.authStatus;
-        const user=auth&&auth.user;
-        if(auth&&auth.status==="signed_in"&&user&&user.id&&!localStorage.getItem(googleBindingKey(localSaveId))){
-          bindGoogleLocalSave({sub:user.id,name:user.name||"Google 使用者"});
+        const payload=window.PetHabitPlatform&&window.PetHabitPlatform.getSupabaseAuthBindingPayload?window.PetHabitPlatform.getSupabaseAuthBindingPayload():null;
+        if(auth&&auth.status==="signed_in"&&payload&&payload.sub&&!localStorage.getItem(googleBindingKey(localSaveId))){
+          bindGoogleLocalSave(payload);
         }
-      });
+      }).catch(()=>{window.__petHabitMark&&window.__petHabitMark("auth_restore_done");});
     }
   },[]);
 
@@ -3629,6 +3651,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       if(s.neglect)setNeglect(s.neglect);
       if(s.approvalMode)setApprovalMode(s.approvalMode);
     }catch(e){}
+    window.__petHabitMark&&window.__petHabitMark("local_save_ready");
   },[saveKey]);
 
   useEffect(()=>{
@@ -5288,14 +5311,19 @@ Maggie 阿姨才有勇氣，
           <button className="btn" onClick={()=>setModal(null)}
             style={{...bub(C.light),borderRadius:999,width:38,height:38,padding:0,fontSize:18,color:C.soft}}>×</button>
         </div>
-        {(()=>{const d=syncDebug||{};const p=d.pending||{};const sm=d.syncManager||{};const t=d.trafficSource||{};return <div style={{display:"grid",gridTemplateColumns:isTablet?"1fr 1fr":"1fr",gap:10}}>
+        {(()=>{const d=syncDebug||{};const p=d.pending||{};const sm=d.syncManager||{};const t=d.trafficSource||{};const a=d.analytics||{};const perf=d.perf&&d.perf.marks||{};const ms=(from,to)=>perf[from]!=null&&perf[to]!=null?String(Math.max(0,perf[to]-perf[from]))+"ms":"not_ready";return <div style={{display:"grid",gridTemplateColumns:isTablet?"1fr 1fr":"1fr",gap:10}}>
           {[
             ["Device ID",d.deviceId||"not_ready"],
             ["APP_ENV",d.appEnv||"unknown"],
             ["Supabase config",d.supabaseConfigured?"present":"missing"],
             ["Supabase key",d.supabaseKeyPreview||"hidden"],
             ["Auth status",d.authStatus&&d.authStatus.status||"unknown"],
-            ["Auth user",d.authStatus&&d.authStatus.user&&d.authStatus.user.id?String(d.authStatus.user.id).slice(0,8)+"…":"none"],
+            ["Session present",d.authStatus&&d.authStatus.sessionPresent?"present":"missing"],
+            ["Auth listener",d.authStatus&&d.authStatus.listenerStarted?"started":"not_started"],
+            ["Last auth event",d.authStatus&&d.authStatus.lastAuthEvent||""],
+            ["Auth expires at",d.authStatus&&d.authStatus.expiresAt||""],
+            ["Auth restore",d.authStatus&&d.authStatus.authRestoreDuration!=null?String(d.authStatus.authRestoreDuration)+"ms":"not_ready"],
+            ["Auth user",d.authStatus&&d.authStatus.user&&d.authStatus.user.idPreview?d.authStatus.user.idPreview:"none"],
             ["Cloud writes",d.cloudWriteEnabled?"enabled":"disabled"],
             ["Cloud account",d.cloudAccount&&d.cloudAccount.familyId?String(d.cloudAccount.familyId).slice(0,8)+"…":"none"],
             ["Active playerId",playerId||"solo"],
@@ -5311,7 +5339,18 @@ Maggie 阿姨才有勇氣，
             ["Sanitized Referrer",t.Referrer||""],
             ["firstSource key",t.firstSourceKeyExists?"exists":"missing"],
             ["Source reason",t.reason||""],
-            ["Analytics V2",t.version||"not_loaded"]
+            ["Analytics V2",t.version||"not_loaded"],
+            ["Analytics install ID",a.analyticsInstallIdPresent?"present "+(a.analyticsInstallIdPreview||""):"missing"],
+            ["Request DeviceId",a.requestDeviceIdPresent?"present":"missing"],
+            ["Analytics endpoint",a.endpointUrl||"not_ready"],
+            ["Analytics status",a.lastAnalyticsStatus||"idle"],
+            ["Analytics response",a.lastAnalyticsResponse||""],
+            ["Analytics error",a.lastAnalyticsError||""],
+            ["Analytics schema",a.analyticsSchemaVersion||"not_loaded"],
+            ["Perf shell",ms("app_start","app_shell_ready")],
+            ["Perf local save",ms("app_start","local_save_ready")],
+            ["Perf auth restore",ms("app_start","auth_restore_done")],
+            ["Perf SW",ms("app_start","sw_ready")]
           ].map(([k,v])=><div key={k} style={{...bub(C.light,14),padding:"9px 10px",border:"none"}}>
             <div style={{fontSize:9,fontWeight:900,color:C.soft}}>{k}</div>
             <div style={{fontSize:12,fontWeight:900,color:C.brown,wordBreak:"break-all"}}>{v}</div>
@@ -5364,13 +5403,33 @@ Maggie 阿姨才有勇氣，
             boxShadow:"0 5px 0 rgba(180,120,0,.18)"}}>
             ⭐ {points}
           </div>
-          <button className="btn" onClick={()=>setMoreOpen(v=>!v)} aria-label="更多"
+          <button className="btn" aria-label="開啟家長控制台" title="家長控制台" onClick={(e)=>{
+            e.preventDefault();e.stopPropagation();
+            console.log("parent button clicked");
+            toast2("正在開啟家長控制台");
+            setModal("parent");
+            setTimeout(()=>console.log("parent modal requested"),0);
+            setTimeout(()=>setModal(m=>{
+              if(m!=="parent")console.log("parent modal retry",m);
+              return m==="parent"?m:"parent";
+            }),800);
+          }}
             style={{...bub("#fff"),borderRadius:999,width:48,height:48,minWidth:48,minHeight:48,
               display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:22,
-              border:"2px solid rgba(116,75,35,.14)"}}>⚙️</button>
+              position:"relative",zIndex:9999,touchAction:"manipulation",border:"2px solid rgba(116,75,35,.14)"}}>🔐</button>
+          <button className="btn" onClick={()=>setMoreOpen(v=>!v)} aria-label="更多功能"
+            style={{...bub("#fff"),borderRadius:999,width:48,height:48,minWidth:48,minHeight:48,
+              display:"flex",alignItems:"center",justifyContent:"center",padding:0,
+              border:"2px solid rgba(116,75,35,.14)"}}>
+            <svg width="25" height="25" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h16M4 17h16" stroke="#355A3A" strokeWidth="2.4" strokeLinecap="round"/>
+              <circle cx="9" cy="7" r="2.3" fill="#fff" stroke="#355A3A" strokeWidth="2.1"/>
+              <circle cx="15" cy="17" r="2.3" fill="#fff" stroke="#355A3A" strokeWidth="2.1"/>
+            </svg>
+          </button>
           {moreOpen&&<>
             <div onClick={()=>setMoreOpen(false)} style={{position:"fixed",inset:0,zIndex:1700,background:"transparent"}}/>
-            <div style={{position:"absolute",right:isTablet?58:56,top:"calc(100% + 8px)",zIndex:1701,
+            <div style={{position:"absolute",right:0,top:"calc(100% + 8px)",zIndex:1701,
               width:210,...cardS("#fff"),padding:10,border:"2px solid rgba(116,75,35,.12)",boxShadow:"0 12px 30px rgba(80,50,20,.18)"}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
                 <div style={{fontSize:12,fontWeight:900,color:C.brown}}>更多</div>
@@ -5391,20 +5450,6 @@ Maggie 阿姨才有勇氣，
                 style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left"}}>❓ 使用說明</button>
             </div>
           </>}
-          <button className="btn" aria-label="開啟家長控制台" title="家長控制台" onClick={(e)=>{
-            e.preventDefault();e.stopPropagation();
-            console.log("parent button clicked");
-            toast2("正在開啟家長控制台");
-            setModal("parent");
-            setTimeout(()=>console.log("parent modal requested"),0);
-            setTimeout(()=>setModal(m=>{
-              if(m!=="parent")console.log("parent modal retry",m);
-              return m==="parent"?m:"parent";
-            }),800);
-          }}
-            style={{...bub("#fff"),borderRadius:999,width:48,height:48,minWidth:48,minHeight:48,
-              display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:22,
-              position:"relative",zIndex:9999,touchAction:"manipulation",border:"2px solid rgba(116,75,35,.14)"}}>🔐</button>
         </div>
       </div>
 
