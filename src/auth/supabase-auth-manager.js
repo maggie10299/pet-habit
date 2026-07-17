@@ -20,6 +20,7 @@
       this.listenerStarted=false;
       this.expiresAt=null;
       this.authRestoreDuration=null;
+      this.subscribers=[];
     }
     getStatus(){
       return {
@@ -61,6 +62,21 @@
       }else{
         this.status=AUTH_STATUS.SIGNED_OUT;
       }
+      this.notifySubscribers(event);
+    }
+    notifySubscribers(event){
+      const payload={event:event||this.lastEvent,status:this.getStatus()};
+      this.subscribers.slice().forEach(fn=>{
+        try{fn(payload);}catch(e){}
+      });
+    }
+    subscribe(callback){
+      if(typeof callback!=="function")return ()=>{};
+      this.subscribers.push(callback);
+      try{callback({event:"CURRENT_STATE",status:this.getStatus()});}catch(e){}
+      return ()=>{
+        this.subscribers=this.subscribers.filter(fn=>fn!==callback);
+      };
     }
     async restoreSession(){
       const started=Date.now();
@@ -80,8 +96,12 @@
         this.status=AUTH_STATUS.LOCAL_ONLY;
         return ns.err("auth_listener_unavailable","Supabase auth listener unavailable; local-only mode remains active",true);
       }
-      if(this.unsubscribe)return ns.ok({status:"already_listening"});
+      if(this.unsubscribe){
+        const unsubscribe=typeof callback==="function"?this.subscribe(callback):null;
+        return ns.ok({status:"already_listening",unsubscribe});
+      }
       try{
+        if(typeof callback==="function")this.subscribe(callback);
         const res=this.repository.client.auth.onAuthStateChange((event,session)=>{
           if(event==="INITIAL_SESSION"||event==="SIGNED_IN"||event==="TOKEN_REFRESHED"||event==="USER_UPDATED"){
             this.applySession(event,session);
@@ -90,7 +110,6 @@
           }else{
             this.applySession(event,session);
           }
-          if(typeof callback==="function")callback({event,status:this.getStatus()});
         });
         this.unsubscribe=res&&res.data&&res.data.subscription&&res.data.subscription.unsubscribe||res&&res.unsubscribe||null;
         this.listenerStarted=true;

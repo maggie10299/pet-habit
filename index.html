@@ -22,13 +22,10 @@ window.__petHabitMark=function(name){
 window.__petHabitMark("app_start");
 </script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet"/>
-<script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js"></script>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" onload="this.onload=null;this.rel='stylesheet'"/>
+<noscript><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet"/></noscript>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 :root{--theme-main:#F5A623;--theme-mid:#FFD97D;--theme-soft:#FFE566;--theme-border:rgba(255,215,140,.22);--theme-dark:#4A3000;}
@@ -59,6 +56,7 @@ body{
 @keyframes giftBounce{0%,100%{transform:translateY(0) rotate(-1deg)}45%{transform:translateY(-10px) rotate(2deg)}70%{transform:translateY(2px) rotate(-1deg)}}
 @keyframes giftLid{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-12px) rotate(-5deg)}}
 @keyframes sparkleFloat{0%{opacity:.15;transform:translateY(8px) scale(.65) rotate(0)}50%{opacity:1;transform:translateY(-7px) scale(1.15) rotate(12deg)}100%{opacity:.25;transform:translateY(4px) scale(.8) rotate(-8deg)}}
+@keyframes shellLine{0%,30%{opacity:1;transform:translateY(0)}33%,100%{opacity:0;transform:translateY(-6px)}}
 .kid-eye{transform-box:fill-box;transform-origin:center;animation:kidBlink 4.8s infinite;}
 @keyframes ponyBlink{0%,43%,47%,100%{transform:scaleY(1)}45%{transform:scaleY(.08)}}
 @keyframes ponyEar{0%,82%,100%{transform:rotate(0)}88%{transform:rotate(-9deg)}93%{transform:rotate(7deg)}}
@@ -98,19 +96,26 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
     <div style="width:min(340px,92vw);padding:28px 22px;border-radius:30px;background:rgba(255,255,255,.76);box-shadow:0 16px 34px rgba(116,75,35,.12);border:2px solid rgba(255,217,125,.5);">
       <img src="assets/icons/icon-192.png" alt="寵物習慣王國" style="width:82px;height:82px;border-radius:24px;box-shadow:0 8px 18px rgba(116,75,35,.16);margin-bottom:14px;" onerror="this.style.display='none'"/>
       <div style="font-size:22px;font-weight:900;margin-bottom:8px;">寵物習慣王國</div>
-      <div style="font-size:14px;font-weight:900;color:#8D7A5F;">正在回到王國…</div>
+      <div style="position:relative;height:20px;font-size:14px;font-weight:900;color:#8D7A5F;overflow:hidden;">
+        <span style="position:absolute;inset:0;animation:shellLine 3.6s infinite;">正在回到王國…</span>
+        <span style="position:absolute;inset:0;opacity:0;animation:shellLine 3.6s infinite .9s;">小寵物正在跑過來…</span>
+        <span style="position:absolute;inset:0;opacity:0;animation:shellLine 3.6s infinite 1.8s;">正在整理房間…</span>
+      </div>
     </div>
   </div>
 </div>
 <script>window.__petHabitMark&&window.__petHabitMark("first_paint");window.__petHabitMark&&window.__petHabitMark("app_shell_ready");</script>
 
+<script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js"></script>
 <script src="./src/analytics/traffic-source.js"></script>
 <script src="./src/analytics/google-sheet-schema.js"></script>
 <script src="maggie-analytics.js"></script>
 <script>
 const PRODUCT="pet_habit";
-const VERSION="v1.1-final-qa-hotfix-03-20260715";
-window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-15-final-qa-hotfix-03"});
+const VERSION="v1.1-final-first-paint-fix-20260717";
+window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-15-final-first-paint-fix"});
 </script>
 <script>
 // Staging-only public Supabase config. Do not copy this block to outputs/ or release/.
@@ -152,7 +157,7 @@ if("serviceWorker" in navigator){
 
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
-const APP_VERSION="v1.1-final-qa-hotfix-03-20260715";
+const APP_VERSION="v1.1-final-first-paint-fix-20260717";
 const APP_SCHEMA_VERSION=2;
 const SAVE_PROTECTION_VERSION=1;
 const SAVE_SNAPSHOT_PREFIX="petHabitSafeSnapshot_";
@@ -1930,7 +1935,7 @@ function NumPad({title,subtitle,onSuccess,onClose,correctPin}){
 function Overlay({onClose,children,wide}){
   return(
     <div style={{position:"fixed",inset:0,background:"rgba(60,20,0,.4)",backdropFilter:"blur(6px)",
-      zIndex:1500,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"0 0 0 0"}}
+      zIndex:5000,display:"flex",alignItems:"flex-end",justifyContent:"center",padding:"0 0 0 0"}}
       onClick={onClose}>
       <div style={{...cardS(C.card),borderRadius:"28px 28px 0 0",
         padding:"22px 18px 32px",width:"100%",maxWidth:wide?768:480,position:"relative",
@@ -2408,7 +2413,7 @@ function EventApproveControl({eventId,mission,setOfficialEventProgress}){
     </button>
   </div>;
 }
-function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,owned,setOwned,backpack,setBackpack,officialEventProgress,setOfficialEventProgress,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,isTablet,toast2,onClose,initialTab,googleBinding,googleLoadState,googleError,startSupabaseGoogleLogin,googleLogout}){
+function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,owned,setOwned,backpack,setBackpack,officialEventProgress,setOfficialEventProgress,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,isTablet,toast2,onClose,initialTab,googleBinding,authUiState,googleLoadState,googleError,startSupabaseGoogleLogin,googleLogout}){
   const [authed,setAuthed]=useState(false);
   const [ptab,setPtab]=useState(initialTab||"tasks");
   const [nTask,setNTask]=useState(""),nPts=useRef(20);
@@ -2430,6 +2435,7 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
   const today=new Date().toLocaleDateString("zh-TW");
   const isWeekend=day===0||day===6;
   const SAVE_KEYS=getPetHabitSaveKeys();
+  const googleConnected=!!googleBinding||!!(authUiState&&(authUiState.status==="signed_in"||authUiState.sessionPresent));
 
   const exportBackup=()=>{
     try{
@@ -2911,12 +2917,12 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
             </div>
           </div>
           <div style={{fontSize:11,fontWeight:900,color:C.brown,lineHeight:1.8,marginBottom:10}}>
-            {googleBinding
+            {googleConnected
               ?<>✅ Google 已連結<br/>☁️ 雲端同步尚未開放<br/>💾 遊戲紀錄仍安全保存在這台裝置</>
               :<>🔐 尚未連結 Google<br/>💾 遊戲紀錄目前只保存在這台裝置</>}
           </div>
           {googleError&&DEVELOPER_MODE&&<div style={{fontSize:10,fontWeight:800,color:"#b45454",marginBottom:8,wordBreak:"break-word"}}>{googleError}</div>}
-          {googleBinding
+          {googleConnected
             ?<button className="btn" onClick={googleLogout}
               style={{...bub(C.light,999),width:"100%",padding:"11px 12px",fontSize:12,fontWeight:900,color:C.brown,border:"none"}}>登出 Google</button>
             :<button className="btn" onClick={startSupabaseGoogleLogin}
@@ -3445,6 +3451,8 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const [googleBinding,setGoogleBinding]=useState(()=>safeParseJSON(localStorage.getItem(googleBindingKey(localSaveId)),null));
   const [googleLoadState,setGoogleLoadState]=useState("idle");
   const [googleError,setGoogleError]=useState("");
+  const [authUiState,setAuthUiState]=useState(()=>({status:"unknown",sessionPresent:false,authStoreReady:false,parentPanelSubscribed:false,lastAuthEvent:""}));
+  const googleConnected=!!googleBinding||authUiState.status==="signed_in"||authUiState.sessionPresent;
   const updateGoogleFamilyMeta=(patch)=>{
     const fam=readFamily();
     if(!fam||!Array.isArray(fam.players))return;
@@ -3467,6 +3475,27 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     trackSafe("google_local_save_bound",{result:"bound"});
     toast2("已登入 Google，並綁定本機資料（尚未雲端同步）",C.yellow);
     return binding;
+  };
+  const syncGoogleAuthUi=(authStatus)=>{
+    if(!authStatus)return;
+    setAuthUiState({
+      status:authStatus.status||"unknown",
+      sessionPresent:!!authStatus.sessionPresent,
+      authStoreReady:true,
+      parentPanelSubscribed:true,
+      lastAuthEvent:authStatus.lastAuthEvent||""
+    });
+    if(authStatus.status==="signed_in"){
+      const payload=window.PetHabitPlatform&&window.PetHabitPlatform.getSupabaseAuthBindingPayload?window.PetHabitPlatform.getSupabaseAuthBindingPayload():null;
+      const existing=safeParseJSON(localStorage.getItem(googleBindingKey(localSaveId)),null);
+      if(payload&&payload.sub&&!existing)bindGoogleLocalSave(payload);
+      else if(existing)setGoogleBinding(existing);
+      setGoogleLoadState("ready");
+      setGoogleError("");
+    }else if(authStatus.status==="signed_out"||authStatus.status==="session_expired"||authStatus.status==="local_only"){
+      setGoogleBinding(null);
+      if(authStatus.status==="signed_out")localStorage.removeItem(googleBindingKey(localSaveId));
+    }
   };
   // Deprecated legacy GIS binding is kept only as a local migration reference.
   // Formal V1.1 login must go through SupabaseAuthManager.signInWithGoogle().
@@ -3508,8 +3537,13 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const googleLogout=()=>{
     localStorage.removeItem(googleBindingKey(localSaveId));
     setGoogleBinding(null);
+    setAuthUiState(s=>({...s,status:"signed_out",sessionPresent:false,lastAuthEvent:"SIGNED_OUT",authStoreReady:true}));
     updateGoogleFamilyMeta({loginStatus:"local",cloudSaveStatus:"not_connected"});
-    trackSafe("google_logout",{result:"local_data_kept"});
+    if(window.PetHabitPlatform&&window.PetHabitPlatform.signOutSupabase){
+      window.PetHabitPlatform.signOutSupabase().then(()=>{refreshSyncDebug();}).catch(()=>{});
+    }else{
+      trackSafe("google_logout",{result:"local_data_kept"});
+    }
     toast2("已登出 Google，本機遊戲資料仍保留",C.yellow);
   };
   const hintKey=(hintId,suffix)=>"petHabitHint_"+(playerId||"solo")+"_"+hintId+"_"+suffix;
@@ -3623,18 +3657,25 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
 
   // persist
   useEffect(()=>{
+    let unsubscribeAuth=null;
+    let cancelled=false;
     if(window.PetHabitPlatform&&window.PetHabitPlatform.bootstrapPlatformFoundation){
       window.PetHabitPlatform.bootstrapPlatformFoundation({featureFlags:FEATURE_FLAGS}).then(()=>{
         window.__petHabitMark&&window.__petHabitMark("auth_restore_done");
+        if(cancelled)return;
         refreshSyncDebug();
         const d=window.PetHabitPlatform&&window.PetHabitPlatform.getSyncDebugState?window.PetHabitPlatform.getSyncDebugState():null;
         const auth=d&&d.authStatus;
-        const payload=window.PetHabitPlatform&&window.PetHabitPlatform.getSupabaseAuthBindingPayload?window.PetHabitPlatform.getSupabaseAuthBindingPayload():null;
-        if(auth&&auth.status==="signed_in"&&payload&&payload.sub&&!localStorage.getItem(googleBindingKey(localSaveId))){
-          bindGoogleLocalSave(payload);
+        syncGoogleAuthUi(auth);
+        if(window.PetHabitPlatform&&window.PetHabitPlatform.subscribeAuthState){
+          unsubscribeAuth=window.PetHabitPlatform.subscribeAuthState(({event,status})=>{
+            syncGoogleAuthUi(status);
+            refreshSyncDebug();
+          });
         }
       }).catch(()=>{window.__petHabitMark&&window.__petHabitMark("auth_restore_done");});
     }
+    return ()=>{cancelled=true;if(typeof unsubscribeAuth==="function")unsubscribeAuth();};
   },[]);
 
   useEffect(()=>{
@@ -3992,6 +4033,7 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const moodFromHabits=approved===0?0:approved<2?1:approved<4?3:approved<6?4:5;
   const mood=Math.min(5,Math.round((moodFromHabits/5*50+petMood/100*50)/20));
   const lv=LEVELS.reduce((a,l)=>points>=l.min?l:a,LEVELS[0]);
+  const petStatusText=hunger<30?"有點餓":petMood<35?"想要陪伴":"狀態很好";
   const nxtLv=LEVELS[Math.min(lv.lv,4)];
   const lvProg=lv.lv<5?Math.min(100,((points-lv.min)/(nxtLv.min-lv.min))*100):100;
   const wp=ROOMITEMS.find(i=>i.id===equipped.wp);
@@ -4558,7 +4600,7 @@ Maggie 阿姨才有勇氣，
         approvalMode={approvalMode} setApprovalMode={setApprovalMode}
         isTablet={isTablet} toast2={toast2}
         initialTab={parentInitialTab}
-        googleBinding={googleBinding} googleLoadState={googleLoadState} googleError={googleError}
+        googleBinding={googleBinding} authUiState={authUiState} googleLoadState={googleLoadState} googleError={googleError}
         startSupabaseGoogleLogin={startSupabaseGoogleLogin} googleLogout={googleLogout}
         onClose={()=>{setParentInitialTab("tasks");setModal(null);}}/>}
 
@@ -5234,22 +5276,22 @@ Maggie 阿姨才有勇氣，
         </div>
         <div style={{...bub("#FFF8E8",18),padding:"13px 14px",border:"2px solid rgba(255,204,102,.45)",marginBottom:12}}>
           <div style={{fontSize:12,fontWeight:900,color:C.brown,lineHeight:1.7}}>
-            {googleBinding?"✅ 已登入 Google":"🔐 尚未登入 Google"}<br/>
-            {googleBinding?"✅ 已綁定本機資料":"本機資料仍保存在這台裝置"}<br/>
+            {googleConnected?"✅ 已登入 Google":"🔐 尚未登入 Google"}<br/>
+            {googleConnected?"✅ 已綁定本機資料":"本機資料仍保存在這台裝置"}<br/>
             ☁️ 尚未雲端同步
           </div>
           <div style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.6,marginTop:7}}>
             Google Login 與家長 PIN 是分開的。登出 Google 不會刪除孩子的任務、星星、寵物或房間資料。
           </div>
         </div>
-        {googleBinding&&<div style={{display:"flex",gap:10,alignItems:"center",...bub("#fff",16),padding:12,marginBottom:12}}>
+        {googleConnected&&<div style={{display:"flex",gap:10,alignItems:"center",...bub("#fff",16),padding:12,marginBottom:12}}>
           <div style={{width:42,height:42,borderRadius:999,display:"grid",placeItems:"center",background:C.light,border:"2px solid rgba(116,75,35,.12)",fontWeight:900,color:C.brown}}>G</div>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:13,fontWeight:900,color:C.brown,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{googleBinding.name||"Google 使用者"}</div>
+            <div style={{fontSize:13,fontWeight:900,color:C.brown,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>Google 帳號已連結</div>
             <div style={{fontSize:10,fontWeight:800,color:C.soft,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>已綁定本機資料（尚未雲端同步）</div>
           </div>
         </div>}
-        {!googleBinding&&<div style={{display:"flex",justifyContent:"center",minHeight:46,alignItems:"center",margin:"12px 0"}}>
+        {!googleConnected&&<div style={{display:"flex",justifyContent:"center",minHeight:46,alignItems:"center",margin:"12px 0"}}>
           {googleLoadState==="loading"&&<div style={{fontSize:12,fontWeight:900,color:C.soft}}>Supabase Google Login 載入中…</div>}
           {(googleLoadState==="idle"||googleLoadState==="ready")&&<button className="btn" onClick={startSupabaseGoogleLogin}
             style={{...bub("#fff",999),padding:"12px 18px",border:"2px solid rgba(116,75,35,.14)",fontSize:13,fontWeight:900,color:C.brown}}>
@@ -5260,8 +5302,8 @@ Maggie 阿姨才有勇氣，
           </div>}
         </div>}
         {googleError&&<div style={{fontSize:10,fontWeight:800,color:"#b45454",textAlign:"center",marginBottom:10}}>{googleError}</div>}
-        <div style={{display:"grid",gridTemplateColumns:googleBinding?"1fr 1fr":"1fr",gap:8,marginTop:12}}>
-          {googleBinding&&<button className="btn" onClick={googleLogout}
+        <div style={{display:"grid",gridTemplateColumns:googleConnected?"1fr 1fr":"1fr",gap:8,marginTop:12}}>
+          {googleConnected&&<button className="btn" onClick={googleLogout}
             style={{...bub(C.peach),padding:"11px 0",borderRadius:999,border:"none",fontSize:12,fontWeight:900,color:C.brown}}>登出 Google</button>}
           <button className="btn" onClick={()=>setModal(null)}
             style={{...bub(C.light),padding:"11px 0",borderRadius:999,border:"none",fontSize:12,fontWeight:900,color:C.soft}}>回到遊戲</button>
@@ -5318,6 +5360,9 @@ Maggie 阿姨才有勇氣，
             ["Supabase config",d.supabaseConfigured?"present":"missing"],
             ["Supabase key",d.supabaseKeyPreview||"hidden"],
             ["Auth status",d.authStatus&&d.authStatus.status||"unknown"],
+            ["UI auth state",authUiState.status||"unknown"],
+            ["Auth store ready",authUiState.authStoreReady?"ready":"not_ready"],
+            ["Parent panel subscribed",authUiState.parentPanelSubscribed?"yes":"no"],
             ["Session present",d.authStatus&&d.authStatus.sessionPresent?"present":"missing"],
             ["Auth listener",d.authStatus&&d.authStatus.listenerStarted?"started":"not_started"],
             ["Last auth event",d.authStatus&&d.authStatus.lastAuthEvent||""],
@@ -5388,12 +5433,13 @@ Maggie 阿姨才有勇氣，
 
       {/* ── HEADER ── */}
       <div style={{background:C.yellow,borderBottom:"3px solid rgba(200,140,0,.12)",
-        padding:isTablet?"18px 22px 14px":"13px 14px 11px",
+        padding:isTablet?"18px 22px 14px":"calc(13px + env(safe-area-inset-top)) 14px 11px",
         display:"flex",justifyContent:"space-between",alignItems:"center",
-        boxShadow:"0 4px 0 rgba(200,140,0,.1)",position:"relative",zIndex:1600}}>
+        boxShadow:"0 4px 0 rgba(200,140,0,.1)",position:isTablet?"relative":"sticky",top:0,zIndex:1600,
+        backgroundColor:"rgba(255,229,102,.92)",backdropFilter:isTablet?undefined:"blur(14px)"}}>
         <div>
           <div style={{fontSize:fs(19),fontWeight:900,color:C.brown}}>嗨，{profile.kidName}！🌸</div>
-          <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,marginTop:1}}>
+          <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,marginTop:1,display:isTablet?"block":"none"}}>
             {new Date().toLocaleDateString("zh-TW",{month:"long",day:"numeric",weekday:"long"})}
           </div>
         </div>
@@ -5452,6 +5498,23 @@ Maggie 阿姨才有勇氣，
           </>}
         </div>
       </div>
+
+      {!isTablet&&<div data-mobile-sticky-hud style={{position:"sticky",top:"calc(73px + env(safe-area-inset-top))",zIndex:1550,
+        margin:"0 auto",padding:"6px 12px 7px",background:"rgba(255,251,240,.86)",
+        backdropFilter:"blur(14px)",borderBottom:"1px solid rgba(116,75,35,.08)",
+        boxShadow:"0 6px 18px rgba(116,75,35,.07)"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,alignItems:"center",maxWidth:480,margin:"0 auto"}}>
+          {[{l:"💛 心情",v:petMood,c:petMood>60?"#FFB3C6":petMood>30?C.orange:"#ff6060"},{l:"🍎 飢餓",v:hunger,c:hunger>50?"#88dd88":hunger>25?C.orange:"#ff6060"}].map(b=><div key={b.l}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:9,fontWeight:900,color:C.soft,marginBottom:2}}>
+              <span>{b.l}</span><span>{b.v}%</span>
+            </div>
+            <div style={{height:7,borderRadius:99,background:"rgba(116,75,35,.1)",overflow:"hidden"}}>
+              <div style={{width:b.v+"%",height:"100%",background:b.c,borderRadius:99,transition:"width .35s"}}/>
+            </div>
+          </div>)}
+          <div style={{fontSize:10,fontWeight:900,color:C.brown,whiteSpace:"nowrap"}}>{petStatusText}</div>
+        </div>
+      </div>}
 
       {allDoneCelebrate&&<div style={{position:"fixed",left:"50%",top:"22%",transform:"translateX(-50%)",zIndex:3000,
         ...bub(C.yellow,24),padding:"14px 18px",fontSize:16,fontWeight:900,color:C.brown,textAlign:"center",
@@ -6575,5 +6638,6 @@ root.render(React.createElement(FamilyRoot));
 </body>
 </html>
 </html>
+
 
 

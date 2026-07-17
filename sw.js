@@ -1,4 +1,4 @@
-const CACHE_NAME = "pet-habit-7-15-final-qa-hotfix-03-20260715";
+﻿const CACHE_NAME = "pet-habit-7-15-final-first-paint-fix-20260717";
 const HTML_NETWORK_TIMEOUT_MS = 1200;
 
 const CORE_ASSETS = [
@@ -102,3 +102,4 @@ self.addEventListener("fetch", event => {
     })
   );
 });
+

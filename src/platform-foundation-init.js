@@ -75,6 +75,11 @@
     const auth=state.result&&state.result.data&&state.result.data.authManager;
     return auth&&auth.getLocalBindingPayload?auth.getLocalBindingPayload():null;
   };
+  ns.subscribeAuthState=function(callback){
+    const auth=state.result&&state.result.data&&state.result.data.authManager;
+    if(auth&&auth.subscribe)return auth.subscribe(callback);
+    return function(){};
+  };
   ns.signOutSupabase=function(){
     const auth=state.result&&state.result.data&&state.result.data.authManager;
     return auth&&auth.signOut?auth.signOut():Promise.resolve(ns.err("auth_not_ready","Auth manager not ready",true));
