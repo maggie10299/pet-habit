@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = "pet-habit-7-15-google-oauth-callback-session-fix-20260717";
+﻿const CACHE_NAME = "pet-habit-7-15-safe-auto-cloud-save-v1-20260718";
 const HTML_NETWORK_TIMEOUT_MS = 1200;
 
 const CORE_ASSETS = [

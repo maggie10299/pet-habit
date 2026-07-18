@@ -23,7 +23,7 @@
         ?new ns.SupabaseCloudRepository({writeEnabled:false})
         :null;
       if(this.flags.cloudSave){
-        const supabase=new ns.SupabaseCloudRepository();
+        const supabase=new ns.SupabaseCloudRepository({writeEnabled:true});
         if(supabase.ready){cloud=supabase;selectedRepository="supabase";}
         else if(ns.Environment&&ns.Environment.developerMode){cloud=new ns.MockCloudRepository(global.localStorage,"mock_cloud_offline");selectedRepository="local_only_missing_config";}
         else{cloud={constructor:{name:"LocalOnlyRepository"},savePlayerSave:async()=>ns.err("cloud_disabled","Cloud Save is not ready",false)};selectedRepository="local_only_missing_config";}
@@ -48,11 +48,15 @@
       }
       this.step("auth_session_checked");
       const migrationManager=new ns.CloudMigrationManager({localRepository:this.local,cloudRepository:cloud,saveManager,mappingManager});
+      const cloudSaveManager=(this.flags.cloudSave&&ns.CloudSaveManager)
+        ?new ns.CloudSaveManager({cloudRepository:cloud,authManager,exporter:new ns.PlayerSaveExporter({platformAdapter:this.platform}),platformAdapter:this.platform,analyticsAdapter:this.analytics})
+        :null;
+      if(cloudSaveManager)cloudSaveManager.start();
       const syncManager=new ns.SyncManager({pendingOperations:pending,localRepository:this.local,cloudRepository:cloud,platformAdapter:this.platform,analyticsAdapter:this.analytics,saveManager});
       syncManager.start();
       this.step("sync_manager_started");
       this.step("app_ready");
-      return ns.ok({steps:this.steps,active:active.data,selectedRepository,platform:this.platform,localRepository:this.local,pendingOperations:pending,cloudRepository:cloud,saveManager,syncManager,authManager,mappingManager,migrationManager});
+      return ns.ok({steps:this.steps,active:active.data,selectedRepository,platform:this.platform,localRepository:this.local,pendingOperations:pending,cloudRepository:cloud,saveManager,syncManager,authManager,mappingManager,migrationManager,cloudSaveManager});
     }
   }
   ns.AppBoot=AppBoot;

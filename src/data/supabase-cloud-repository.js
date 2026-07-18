@@ -216,6 +216,45 @@
       if(res.error)return this.normalizeError(res.error,"sign_out_failed",true);
       return ns.ok({status:"signed_out"});
     }
+    async getCloudSaveMetadata(){
+      const bad=this.ensureReady();if(bad)return bad;
+      const res=await this.rpc("get_player_save_metadata",{},true);
+      if(!res.ok)return res;
+      const row=Array.isArray(res.data)?res.data[0]:res.data;
+      return ns.ok(row||null);
+    }
+    async getCloudSave(){
+      const bad=this.ensureReady();if(bad)return bad;
+      const res=await this.rpc("get_player_save",{},true);
+      if(!res.ok)return res;
+      const row=Array.isArray(res.data)?res.data[0]:res.data;
+      return ns.ok(row||null);
+    }
+    async upsertCloudSave(input){
+      const write=this.requireWrite();if(write)return write;
+      const res=await this.rpc("upsert_player_save_v1",{
+        p_save_data:input.saveData,
+        p_schema_version:String(input.schemaVersion||global.APP_SCHEMA_VERSION||2),
+        p_game_version:String(input.gameVersion||global.APP_VERSION||global.VERSION||""),
+        p_checksum:String(input.checksum||""),
+        p_device_id:String(input.deviceId||""),
+        p_expected_save_version:Number(input.expectedSaveVersion||0)
+      },true);
+      if(!res.ok)return res;
+      const row=Array.isArray(res.data)?res.data[0]:res.data;
+      if(row&&row.ok===false&&row.status==="conflict")return ns.err("cloud_save_conflict","Cloud save version conflict",false,row);
+      return ns.ok(row||{});
+    }
+    async createCloudSnapshot(input){
+      const write=this.requireWrite();if(write)return write;
+      const meta=input&&input.metadata||null;
+      if(!meta)return ns.ok({status:"no_cloud_snapshot_needed"});
+      const res=await this.rpc("create_cloud_snapshot",{
+        p_source:String(input.source||"manual_backup"),
+        p_metadata:meta
+      },false);
+      return res.ok?ns.ok(Array.isArray(res.data)?res.data[0]:res.data):res;
+    }
   }
   ns.SupabaseCloudRepository=SupabaseCloudRepository;
 })(typeof window!=="undefined"?window:globalThis);

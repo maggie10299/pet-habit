@@ -21,6 +21,7 @@
       const save=result&&result.saveManager;
       const platform=result&&result.platform;
       const auth=result&&result.authManager;
+      const cloudSave=result&&result.cloudSaveManager;
       const cloud=result&&result.cloudRepository;
       const mapping=result&&result.mappingManager;
       const activePlayerId=result&&result.active&&result.active.activePlayerId;
@@ -35,6 +36,7 @@
         sdkLoaded:!!(global.supabase&&global.supabase.createClient),
         clientReady:!!(cloud&&cloud.ready),
         authStatus:auth&&auth.getStatus?auth.getStatus():null,
+        cloudSaveStatus:cloudSave&&cloudSave.getStatus?cloudSave.getStatus():null,
         cloudWriteEnabled:!!(cloud&&cloud.writeEnabled),
         cloudAccount:mapping&&mapping.getAccount?mapping.getAccount().data:null,
         deviceId:platform&&platform.getDeviceId?platform.getDeviceId():"",
@@ -83,6 +85,35 @@
   ns.signOutSupabase=function(){
     const auth=state.result&&state.result.data&&state.result.data.authManager;
     return auth&&auth.signOut?auth.signOut():Promise.resolve(ns.err("auth_not_ready","Auth manager not ready",true));
+  };
+  ns.getCloudSaveStatus=function(){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    return mgr&&mgr.getStatus?mgr.getStatus():{status:"not_ready"};
+  };
+  ns.subscribeCloudSaveState=function(callback){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    if(mgr&&mgr.subscribe)return mgr.subscribe(callback);
+    return function(){};
+  };
+  ns.initialCloudSaveCheck=function(){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    return mgr&&mgr.initialCheck?mgr.initialCheck():Promise.resolve(ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true));
+  };
+  ns.markCloudSaveDirty=function(reason){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    return mgr&&mgr.markSaveDirty?mgr.markSaveDirty(reason):ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true);
+  };
+  ns.manualCloudBackup=function(){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    return mgr&&mgr.manualBackup?mgr.manualBackup({source:"manual_backup"}):Promise.resolve(ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true));
+  };
+  ns.restoreCloudSave=function(){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    return mgr&&mgr.restoreFromCloud?mgr.restoreFromCloud():Promise.resolve(ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true));
+  };
+  ns.resolveCloudSaveConflict=function(choice){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    return mgr&&mgr.resolveConflict?mgr.resolveConflict(choice):Promise.resolve(ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true));
   };
   ns.prepareCloudMigrationPlan=function(){
     const mgr=state.result&&state.result.data&&state.result.data.migrationManager;
