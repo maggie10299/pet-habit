@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = "pet-habit-7-15-final-first-paint-fix-20260717";
+﻿const CACHE_NAME = "pet-habit-7-15-google-oauth-callback-session-fix-20260717";
 const HTML_NETWORK_TIMEOUT_MS = 1200;
 
 const CORE_ASSETS = [

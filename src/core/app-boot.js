@@ -41,8 +41,11 @@
       const saveManager=new ns.SaveManager({localRepository:this.local,pendingOperations:pending,platformAdapter:this.platform,analyticsAdapter:this.analytics});
       const mappingManager=new ns.CloudMappingManager();
       const authManager=new ns.SupabaseAuthManager({repository:authRepository||cloud,analyticsAdapter:this.analytics});
-      await authManager.restoreSession();
-      authManager.startAuthListener&&authManager.startAuthListener();
+      if(authManager.initializeAuth)await authManager.initializeAuth();
+      else{
+        authManager.startAuthListener&&authManager.startAuthListener();
+        await authManager.restoreSession();
+      }
       this.step("auth_session_checked");
       const migrationManager=new ns.CloudMigrationManager({localRepository:this.local,cloudRepository:cloud,saveManager,mappingManager});
       const syncManager=new ns.SyncManager({pendingOperations:pending,localRepository:this.local,cloudRepository:cloud,platformAdapter:this.platform,analyticsAdapter:this.analytics,saveManager});

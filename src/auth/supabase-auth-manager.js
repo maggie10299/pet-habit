@@ -1,11 +1,14 @@
 (function(global){
   const ns=global.PetHabitPlatform=global.PetHabitPlatform||{};
   const AUTH_STATUS={
+    INITIALIZING:"initializing",
+    CALLBACK_PROCESSING:"callback_processing",
     SIGNED_OUT:"signed_out",
     SIGNING_IN:"signing_in",
     SIGNED_IN:"signed_in",
     SESSION_EXPIRED:"session_expired",
     AUTH_FAILED:"auth_failed",
+    ERROR:"error",
     LOCAL_ONLY:"local_only"
   };
   class SupabaseAuthManager{
@@ -18,6 +21,9 @@
       this.unsubscribe=null;
       this.lastEvent=null;
       this.listenerStarted=false;
+      this.callbackProcessing=false;
+      this.callbackHandled=false;
+      this.callbackError=null;
       this.expiresAt=null;
       this.authRestoreDuration=null;
       this.subscribers=[];
@@ -29,6 +35,9 @@
         hasSession:!!this.session,
         sessionPresent:!!this.session,
         listenerStarted:!!this.listenerStarted,
+        callbackProcessing:!!this.callbackProcessing,
+        callbackHandled:!!this.callbackHandled,
+        callbackError:this.callbackError,
         lastAuthEvent:this.lastEvent||"",
         expiresAt:this.expiresAt||"",
         authRestoreDuration:this.authRestoreDuration
@@ -53,6 +62,7 @@
       this.session=session||null;
       this.user=session&&session.user||null;
       this.expiresAt=session&&session.expires_at?new Date(Number(session.expires_at)*1000).toISOString():"";
+      this.callbackProcessing=false;
       if(session&&session.user){
         this.status=AUTH_STATUS.SIGNED_IN;
       }else if(event==="SIGNED_OUT"){
@@ -62,6 +72,11 @@
       }else{
         this.status=AUTH_STATUS.SIGNED_OUT;
       }
+      this.notifySubscribers(event);
+    }
+    setTransientStatus(status,event){
+      this.status=status;
+      this.lastEvent=event||this.lastEvent;
       this.notifySubscribers(event);
     }
     notifySubscribers(event){
@@ -79,13 +94,112 @@
       };
     }
     async restoreSession(){
+      return this.initializeAuth();
+    }
+    getOAuthCallbackInfo(){
+      const loc=global.location||{};
+      const search=String(loc.search||"");
+      const hash=String(loc.hash||"");
+      const params=new URLSearchParams(search.replace(/^\?/,""));
+      const hashParams=new URLSearchParams(hash.replace(/^#/,""));
+      const code=params.get("code")||"";
+      const error=params.get("error")||hashParams.get("error")||"";
+      const errorDescription=params.get("error_description")||hashParams.get("error_description")||"";
+      const accessToken=hashParams.get("access_token")||"";
+      return {hasCallback:!!(code||accessToken||error),hasCode:!!code,hasImplicit:!!accessToken,code,error,errorDescription};
+    }
+    clearOAuthCallbackUrl(){
+      try{
+        if(!global.history||!global.history.replaceState||!global.location)return;
+        const url=new URL(global.location.href||"",global.location.origin||"https://maggie10299.github.io");
+        ["code","error","error_description","state"].forEach(k=>url.searchParams.delete(k));
+        url.hash="";
+        const next=url.pathname+(url.search?url.search:"")+(url.hash||"");
+        global.history.replaceState({},global.document&&global.document.title||"",next);
+      }catch(e){}
+    }
+    async processOAuthCallback(info){
+      info=info||this.getOAuthCallbackInfo();
+      if(!info.hasCallback)return ns.ok({status:"no_callback"});
+      this.callbackProcessing=true;
+      this.callbackError=null;
+      this.setTransientStatus(AUTH_STATUS.CALLBACK_PROCESSING,"OAUTH_CALLBACK_PROCESSING");
+      if(info.error){
+        this.callbackProcessing=false;
+        this.callbackHandled=true;
+        this.callbackError={code:info.error,message:info.errorDescription||info.error};
+        this.status=AUTH_STATUS.ERROR;
+        this.lastEvent="OAUTH_CALLBACK_ERROR";
+        this.notifySubscribers("OAUTH_CALLBACK_ERROR");
+        this.clearOAuthCallbackUrl();
+        return ns.err(info.error,info.errorDescription||"Google 登入暫時失敗，請再試一次。",true);
+      }
+      if(info.hasCode){
+        if(!this.repository.client.auth.exchangeCodeForSession){
+          this.callbackProcessing=false;
+          this.callbackHandled=true;
+          this.callbackError={code:"exchange_unavailable",message:"Supabase SDK does not support exchangeCodeForSession"};
+          this.status=AUTH_STATUS.ERROR;
+          this.lastEvent="OAUTH_CALLBACK_ERROR";
+          this.notifySubscribers("OAUTH_CALLBACK_ERROR");
+          return ns.err("exchange_unavailable","Google 登入回跳尚未準備完成，請重新整理後再試一次。",true);
+        }
+        try{
+          const exchanged=await this.repository.client.auth.exchangeCodeForSession(info.code);
+          if(exchanged&&exchanged.error)throw exchanged.error;
+          let session=exchanged&&exchanged.data&&exchanged.data.session;
+          if(!session&&this.repository.client.auth.getSession){
+            const confirmed=await this.repository.client.auth.getSession();
+            if(confirmed&&confirmed.error)throw confirmed.error;
+            session=confirmed&&confirmed.data&&confirmed.data.session;
+          }
+          this.callbackProcessing=false;
+          this.callbackHandled=true;
+          this.applySession("OAUTH_CALLBACK",session);
+          this.clearOAuthCallbackUrl();
+          return ns.ok(this.getStatus());
+        }catch(e){
+          this.callbackProcessing=false;
+          this.callbackHandled=true;
+          this.callbackError={code:e&&e.code||"oauth_callback_exchange_failed",message:String(e&&e.message||e)};
+          this.status=AUTH_STATUS.ERROR;
+          this.lastEvent="OAUTH_CALLBACK_ERROR";
+          this.notifySubscribers("OAUTH_CALLBACK_ERROR");
+          return ns.err(this.callbackError.code,this.callbackError.message,true);
+        }
+      }
+      if(info.hasImplicit){
+        this.lastEvent="OAUTH_CALLBACK_HASH";
+        this.notifySubscribers("OAUTH_CALLBACK_HASH");
+      }
+      return ns.ok({status:"callback_detected"});
+    }
+    async initializeAuth(){
       const started=Date.now();
       if(this.repository.refreshClient)this.repository.refreshClient();
       if(!this.repository.client||!this.repository.client.auth){this.status=AUTH_STATUS.LOCAL_ONLY;this.authRestoreDuration=Date.now()-started;return ns.ok(this.getStatus());}
       try{
+        this.setTransientStatus(AUTH_STATUS.INITIALIZING,"AUTH_INITIALIZING");
+        const callbackInfo=this.getOAuthCallbackInfo();
+        if(callbackInfo.hasCallback){
+          this.callbackProcessing=true;
+          this.lastEvent="OAUTH_CALLBACK_DETECTED";
+        }
+        this.startAuthListener();
+        if(callbackInfo.hasCallback){
+          const processed=await this.processOAuthCallback(callbackInfo);
+          if(!processed.ok){
+            this.authRestoreDuration=Date.now()-started;
+            return processed;
+          }
+        }
         const res=await this.repository.client.auth.getSession();
         const session=res&&res.data&&res.data.session;
-        this.applySession("RESTORE_SESSION",session);
+        if(session){
+          this.applySession(callbackInfo.hasCallback&&!this.session?"OAUTH_CALLBACK":"RESTORE_SESSION",session);
+        }else if(!this.session&&!this.callbackProcessing){
+          this.applySession("RESTORE_SESSION",null);
+        }
         this.authRestoreDuration=Date.now()-started;
         return ns.ok(this.getStatus());
       }catch(e){this.status=AUTH_STATUS.SESSION_EXPIRED;this.authRestoreDuration=Date.now()-started;return ns.err("auth_session_restore_failed",String(e&&e.message||e),true);}
@@ -103,6 +217,11 @@
       try{
         if(typeof callback==="function")this.subscribe(callback);
         const res=this.repository.client.auth.onAuthStateChange((event,session)=>{
+          if(this.callbackProcessing&&!session&&(event==="INITIAL_SESSION"||event==="SIGNED_OUT")){
+            this.lastEvent=event;
+            this.notifySubscribers(event);
+            return;
+          }
           if(event==="INITIAL_SESSION"||event==="SIGNED_IN"||event==="TOKEN_REFRESHED"||event==="USER_UPDATED"){
             this.applySession(event,session);
           }else if(event==="SIGNED_OUT"||event==="USER_DELETED"){
