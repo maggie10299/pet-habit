@@ -19,6 +19,15 @@
   };
   function readJson(storage,key,fallback){try{return ns.safeJsonParse?ns.safeJsonParse(storage.getItem(key),fallback):JSON.parse(storage.getItem(key)||"null")||fallback;}catch(e){return fallback;}}
   function writeJson(storage,key,value){storage.setItem(key,JSON.stringify(value));}
+  function cloudDebug(event,details){
+    if(!global.DEVELOPER_MODE)return;
+    const d=details&&typeof details==="object"?details:{};
+    const safe={};
+    ["code","message","details","hint","rpc_name","operation","retry_count","source","result","status"].forEach(k=>{
+      if(d[k]!=null)safe[k]=d[k];
+    });
+    try{console.log("[CloudSave] "+event,safe);}catch(e){}
+  }
   class CloudSaveManager{
     constructor({cloudRepository,authManager,exporter,platformAdapter,analyticsAdapter,debounceMs=9000}={}){
       this.cloud=cloudRepository||new ns.SupabaseCloudRepository({writeEnabled:true});
@@ -39,11 +48,11 @@
     notify(){const s=this.getStatus();this.subscribers.slice().forEach(fn=>{try{fn(s);}catch(e){}});}
     getAuthStatus(){return this.auth&&this.auth.getStatus?this.auth.getStatus():null;}
     isSignedIn(){const s=this.getAuthStatus();return !!(s&&s.status==="signed_in"&&s.sessionPresent);}
-    getStatus(){return {...this.state,online:this.platform.isOnline(),signedIn:this.isSignedIn(),busy:this.state.status===STATUS.SAVING||this.state.status===STATUS.RESTORING||this.state.status===STATUS.CHECKING};}
+    getStatus(){return {...this.state,hasRemote:!!this.state.metadata,online:this.platform.isOnline(),signedIn:this.isSignedIn(),busy:this.state.status===STATUS.SAVING||this.state.status===STATUS.RESTORING||this.state.status===STATUS.CHECKING};}
     setStatus(status,patch={}){this.state={...this.state,...patch,status};this.saveState();}
     track(event,params={}){try{if(global.MaggieAnalytics&&global.MaggieAnalytics.track)global.MaggieAnalytics.track(event,{...params,game_version:global.APP_VERSION||global.VERSION||"",schema_version:String(global.APP_SCHEMA_VERSION||2),online_state:this.platform.isOnline()?"online":"offline"});}catch(e){}}
     async ensureSignedIn(){
-      if(this.isSignedIn())return ns.ok(true);
+      if(this.isSignedIn()){cloudDebug("session_ok",{operation:"ensureSignedIn"});return ns.ok(true);}
       this.setStatus(STATUS.NOT_SIGNED_IN,{dirty:false,initialCheckDone:false});
       return ns.err("not_signed_in","請先登入 Google",false);
     }
@@ -83,6 +92,7 @@
         const localMeaningful=this.exporter.isMeaningfulPlayerSave(local.data);
         const meta=await this.cloud.getCloudSaveMetadata();
         if(!meta.ok){this.setStatus(STATUS.FAILED,{lastError:meta.error});this.track("cloud_sync_initial_check_completed",{result:"failed",error_code:meta.error&&meta.error.code});return meta;}
+        cloudDebug("metadata_ok",{operation:"initial_check",status:meta.data?"found":"empty"});
         const cloudMeta=meta.data||null;
         if(!cloudMeta&&localMeaningful){
           this.setStatus(STATUS.NEEDS_INITIAL_BACKUP,{initialCheckDone:true,metadata:null,baselineChecksum:""});
@@ -103,6 +113,7 @@
             return ns.ok({mode:"same",metadata:cloudMeta});
           }
           this.setStatus(STATUS.CONFLICT,{initialCheckDone:true,conflict:true,dirty:true,metadata:cloudMeta,localSummary:this.exporter.summarize(local.data)});
+          cloudDebug("conflict_detected",{operation:"initial_check",result:"local_and_cloud_differ"});
           this.track("cloud_save_conflict_detected",{source:"initial_check",conflict_type:"local_and_cloud_differ"});
           return ns.err("cloud_save_conflict","偵測到兩份不同的遊戲進度",false,{metadata:cloudMeta});
         }
@@ -138,6 +149,7 @@
         if(res.error&&res.error.retryable&&this.state.retryCount>0&&this.state.retryCount<=this.maxRetries){
           const delay=[5000,15000,30000][Math.min(this.state.retryCount-1,2)];
           if(this.timer)clearTimeout(this.timer);
+          cloudDebug("retry_scheduled",{operation:"auto_backup",retry_count:this.state.retryCount});
           this.timer=setTimeout(()=>this.flushAutoSave(),delay);
         }
       }
@@ -152,17 +164,29 @@
         if(!this.exporter.isMeaningfulPlayerSave(local.data)){this.track("cloud_save_empty_blocked");return ns.err("empty_save_blocked","空白存檔不會覆蓋雲端資料",false);}
         const remote=await this.cloud.getCloudSaveMetadata();
         if(!remote.ok)return remote;
+        cloudDebug("metadata_ok",{operation:"backup",status:remote.data?"found":"empty"});
         const cloudMeta=remote.data||null;
         if(cloudMeta&&this.state.baselineChecksum&&cloudMeta.checksum!==this.state.baselineChecksum&&cloudMeta.checksum!==local.data.checksum){
           this.setStatus(STATUS.CONFLICT,{conflict:true,metadata:cloudMeta,localSummary:this.exporter.summarize(local.data)});
+          cloudDebug("conflict_detected",{operation:"backup",result:"remote_changed"});
           this.track("cloud_save_conflict_detected",{source,conflict_type:"remote_changed"});
           return ns.err("cloud_save_conflict","雲端有較新的遊戲進度",false,{metadata:cloudMeta});
         }
         const snap=this.createLocalSnapshot(source);if(!snap.ok)return snap;
-        await this.createCloudSnapshot(source,cloudMeta);
+        cloudDebug("snapshot_started",{operation:"backup",source});
+        const cloudSnap=await this.createCloudSnapshot(source,cloudMeta);
+        if(!cloudSnap.ok){
+          this.state.retryCount=Math.min(this.maxRetries,(this.state.retryCount||0)+1);
+          this.setStatus(STATUS.FAILED,{dirty:true,lastError:cloudSnap.error,retryCount:this.state.retryCount});
+          cloudDebug("snapshot_failed",{operation:"backup",code:cloudSnap.error&&cloudSnap.error.code,message:cloudSnap.error&&cloudSnap.error.message,details:cloudSnap.error&&cloudSnap.error.details,hint:cloudSnap.error&&cloudSnap.error.hint,rpc_name:"create_cloud_snapshot",retry_count:this.state.retryCount});
+          return cloudSnap;
+        }
+        cloudDebug("snapshot_succeeded",{operation:"backup",source});
         this.setStatus(STATUS.SAVING,{lastError:null});
+        cloudDebug("upsert_started",{operation:"backup",rpc_name:"upsert_player_save_v1"});
         const uploaded=await this.cloud.upsertCloudSave({saveData:local.data,checksum:local.data.checksum,schemaVersion:local.data.schemaVersion,gameVersion:local.data.gameVersion,deviceId:this.platform.getDeviceId(),expectedSaveVersion:cloudMeta&&cloudMeta.save_version||0});
-        if(!uploaded.ok){this.state.retryCount=Math.min(this.maxRetries,(this.state.retryCount||0)+1);this.setStatus(STATUS.FAILED,{dirty:true,lastError:uploaded.error,retryCount:this.state.retryCount});return uploaded;}
+        if(!uploaded.ok){this.state.retryCount=Math.min(this.maxRetries,(this.state.retryCount||0)+1);this.setStatus(STATUS.FAILED,{dirty:true,lastError:uploaded.error,retryCount:this.state.retryCount});cloudDebug("upsert_failed",{operation:"backup",code:uploaded.error&&uploaded.error.code,message:uploaded.error&&uploaded.error.message,details:uploaded.error&&uploaded.error.details,hint:uploaded.error&&uploaded.error.hint,rpc_name:"upsert_player_save_v1",retry_count:this.state.retryCount});return uploaded;}
+        cloudDebug("upsert_succeeded",{operation:"backup",rpc_name:"upsert_player_save_v1"});
         const meta=uploaded.data&&uploaded.data.metadata||uploaded.data||{};
         this.retryCount=0;
         this.setStatus(STATUS.SYNCED,{dirty:false,conflict:false,initialCheckDone:true,metadata:meta,baselineChecksum:local.data.checksum,lastSyncedAt:meta.updated_at||ns.nowIso(),retryCount:0,lastError:null});
@@ -173,22 +197,24 @@
     }
     async restoreFromCloud({force=false}={}){
       return this.runSingleFlight("restore",async()=>{
+        cloudDebug("restore_started",{operation:"restore"});
         this.track("cloud_restore_started");
         const signed=await this.ensureSignedIn();if(!signed.ok)return signed;
         const meta=await this.cloud.getCloudSaveMetadata();if(!meta.ok)return meta;
         if(!meta.data)return ns.err("cloud_save_missing","雲端沒有存檔",false);
         const snap=this.createLocalSnapshot("before_restore");if(!snap.ok)return snap;
         this.setStatus(STATUS.RESTORING,{lastError:null});
-        const remote=await this.cloud.getCloudSave();if(!remote.ok){this.setStatus(STATUS.FAILED,{lastError:remote.error});this.track("cloud_restore_failed",{error_code:remote.error&&remote.error.code});return remote;}
+        const remote=await this.cloud.getCloudSave();if(!remote.ok){this.setStatus(STATUS.FAILED,{lastError:remote.error});cloudDebug("restore_failed",{operation:"restore",code:remote.error&&remote.error.code,message:remote.error&&remote.error.message});this.track("cloud_restore_failed",{error_code:remote.error&&remote.error.code});return remote;}
         const save=remote.data&&remote.data.save_data||remote.data&&remote.data.saveData||remote.data;
         const checksum=this.exporter.calculatePlayerSaveChecksum(save||{});
         if(remote.data&&remote.data.checksum&&remote.data.checksum!==checksum){
           const err=ns.err("checksum_mismatch","雲端存檔驗證失敗",false);
-          this.setStatus(STATUS.FAILED,{lastError:err.error});this.track("cloud_restore_failed",{error_code:"checksum_mismatch"});return err;
+          this.setStatus(STATUS.FAILED,{lastError:err.error});cloudDebug("restore_failed",{operation:"restore",code:"checksum_mismatch"});this.track("cloud_restore_failed",{error_code:"checksum_mismatch"});return err;
         }
         const imported=this.exporter.importPlayerSave(save);
-        if(!imported.ok){this.setStatus(STATUS.FAILED,{lastError:imported.error});this.track("cloud_restore_failed",{error_code:imported.error&&imported.error.code});return imported;}
+        if(!imported.ok){this.setStatus(STATUS.FAILED,{lastError:imported.error});cloudDebug("restore_failed",{operation:"restore",code:imported.error&&imported.error.code,message:imported.error&&imported.error.message});this.track("cloud_restore_failed",{error_code:imported.error&&imported.error.code});return imported;}
         this.setStatus(STATUS.SYNCED,{dirty:false,conflict:false,initialCheckDone:true,metadata:meta.data,baselineChecksum:remote.data&&remote.data.checksum||checksum,lastSyncedAt:meta.data.updated_at||ns.nowIso(),lastError:null});
+        cloudDebug("restore_succeeded",{operation:"restore"});
         this.track("cloud_restore_succeeded");
         return ns.ok(imported.data);
       });

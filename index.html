@@ -114,8 +114,8 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 <script src="maggie-analytics.js"></script>
 <script>
 const PRODUCT="pet_habit";
-const VERSION="v1.1-safe-auto-cloud-save-v1-20260718";
-window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-15-safe-auto-cloud-save-v1"});
+const VERSION="v1.1-cloud-save-rpc-header-ux-fix-20260718";
+window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-15-cloud-save-rpc-header-ux-fix"});
 </script>
 <script>
 // Staging-only public Supabase config. Do not copy this block to outputs/ or release/.
@@ -159,7 +159,7 @@ if("serviceWorker" in navigator){
 
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
-const APP_VERSION="v1.1-safe-auto-cloud-save-v1-20260718";
+const APP_VERSION="v1.1-cloud-save-rpc-header-ux-fix-20260718";
 const APP_SCHEMA_VERSION=2;
 const SAVE_PROTECTION_VERSION=1;
 const SAVE_SNAPSHOT_PREFIX="petHabitSafeSnapshot_";
@@ -2441,19 +2441,25 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
   const cloudState=cloudSaveState||{status:"not_ready"};
   const cloudStatusLabel={
     local_only:"僅本機保存",
-    checking:"檢查雲端存檔中",
+    checking:"正在確認雲端資料…",
     not_signed_in:"尚未登入 Google",
     needs_initial_backup:"尚未建立雲端備份",
-    cloud_available:"雲端已有存檔，請選擇",
+    cloud_available:"找到雲端遊戲進度",
     synced:"已同步",
     dirty:"有新變更等待備份",
-    saving:"備份中",
-    restoring:"還原中",
-    waiting_network:"等待網路恢復",
-    failed:"雲端備份失敗",
-    conflict:"需要家長選擇",
-    waiting_choice:"等待家長選擇"
+    saving:"正在同步",
+    restoring:"正在還原",
+    waiting_network:"等待連線",
+    failed:"同步失敗",
+    conflict:"偵測到不同的遊戲進度",
+    waiting_choice:"偵測到不同的遊戲進度"
   }[cloudState.status]||"雲端備份準備中";
+  const cloudMainStatus=cloudState.status==="synced"
+    ?{kind:"ok",icon:"✅",title:"已同步",body:cloudState.lastSyncedAt?"最後同步："+new Date(cloudState.lastSyncedAt).toLocaleString("zh-TW"):"遊戲進度已安全保存"}
+    :["checking","saving","restoring","dirty","needs_initial_backup"].includes(cloudState.status)
+      ?{kind:"busy",icon:"🟡",title:cloudState.status==="dirty"?"尚未同步":"正在同步",body:cloudState.status==="dirty"?"遊戲進度稍後會自動保存":"遊戲進度正在安全保存"}
+      :{kind:"needs",icon:"⚠️",title:"需要處理",body:cloudStatusLabel};
+  const cloudStatusColor=cloudMainStatus.kind==="ok"?"#2A7A3B":cloudMainStatus.kind==="busy"?C.orange:"#C23B3B";
   const cloudButtonDisabled=cloudState.status==="saving"||cloudState.status==="restoring"||cloudState.status==="checking";
 
   const exportBackup=()=>{
@@ -2937,33 +2943,41 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
           </div>
           <div style={{fontSize:11,fontWeight:900,color:C.brown,lineHeight:1.8,marginBottom:10}}>
             {googleConnected
-              ?<>✅ Google 已連結<br/>☁️ 雲端備份：{cloudStatusLabel}<br/>💾 本機資料仍會優先保存</>
+              ?<>✅ Google 已連結<br/>☁️ 雲端同步：{cloudStatusLabel}<br/>💾 本機資料仍會優先保存</>
               :<>🔐 尚未連結 Google<br/>💾 遊戲紀錄目前只保存在這台裝置</>}
           </div>
           {googleConnected&&<div style={{...bub(C.card,16),padding:"10px 11px",marginBottom:10,border:"1px solid rgba(116,75,35,.10)"}}>
             <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:6}}>
-              <span style={{fontSize:11,fontWeight:900,color:C.soft}}>雲端 Save V1</span>
-              <span style={{fontSize:10,fontWeight:900,color:cloudState.status==="synced"?"#2A7A3B":cloudState.status==="failed"||cloudState.status==="conflict"?"#C23B3B":C.brown}}>
-                {cloudStatusLabel}
+              <span style={{fontSize:11,fontWeight:900,color:C.soft}}>雲端同步</span>
+              <span style={{fontSize:10,fontWeight:900,color:cloudStatusColor}}>
+                {cloudMainStatus.icon} {cloudMainStatus.title}
               </span>
             </div>
             <div style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.55,marginBottom:9}}>
-              {cloudState.lastSyncedAt?"上次備份："+new Date(cloudState.lastSyncedAt).toLocaleString("zh-TW"):"尚未完成雲端備份"}<br/>
+              {cloudMainStatus.body}<br/>
               {cloudState.lastError&&DEVELOPER_MODE?"錯誤："+(cloudState.lastError.code||cloudState.lastError.message||"unknown"):"不會因同步失敗清除本機資料。"}
             </div>
             {cloudState.status==="cloud_available"||cloudState.status==="waiting_choice"||cloudState.status==="conflict"
-              ?<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+              ?<div>
+                <div style={{...bub("#FFF5F5",14),padding:"9px 10px",fontSize:10,fontWeight:900,color:C.brown,lineHeight:1.55,marginBottom:8,border:"1px solid rgba(194,59,59,.16)"}}>
+                  偵測到不同的遊戲進度。<br/>請選擇要保留哪一份：
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                 <button className="btn" onClick={()=>resolveCloudConflict&&resolveCloudConflict("local")}
                   disabled={cloudButtonDisabled}
-                  style={{...bub(C.yellow,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>使用本機資料備份</button>
+                  style={{...bub(C.yellow,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>使用這台裝置的進度</button>
                 <button className="btn" onClick={()=>resolveCloudConflict&&resolveCloudConflict("cloud")}
                   disabled={cloudButtonDisabled}
-                  style={{...bub(C.light,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>從雲端還原</button>
+                  style={{...bub(C.light,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:C.brown,border:"none"}}>使用雲端進度</button>
+                </div>
+                <button className="btn" onClick={()=>resolveCloudConflict&&resolveCloudConflict("later")}
+                  disabled={cloudButtonDisabled}
+                  style={{...bub("#F7FAFF",999),width:"100%",padding:"8px 6px",fontSize:10,fontWeight:900,color:C.soft,border:"1px solid rgba(139,197,232,.28)",marginBottom:8}}>稍後再決定</button>
               </div>
               :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                 <button className="btn" onClick={runManualCloudBackup}
                   disabled={cloudButtonDisabled}
-                  style={{...bub(C.orange,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:"#fff",border:"none"}}>立即備份到雲端</button>
+                  style={{...bub(C.orange,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:"#fff",border:"none"}}>{cloudState.status==="failed"?"重新嘗試同步":"立即備份"}</button>
                 <button className="btn" onClick={runCloudRestore}
                   disabled={cloudButtonDisabled||!cloudState.hasRemote}
                   style={{...bub(C.light,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:C.brown,border:"none",opacity:cloudState.hasRemote?1:.55}}>從雲端還原</button>
@@ -5551,11 +5565,46 @@ Maggie 阿姨才有勇氣，
         display:"flex",justifyContent:"space-between",alignItems:"center",
         boxShadow:"0 4px 0 rgba(200,140,0,.1)",position:isTablet?"relative":"sticky",top:0,zIndex:1600,
         backgroundColor:"rgba(255,229,102,.92)",backdropFilter:isTablet?undefined:"blur(14px)"}}>
-        <div>
-          <div style={{fontSize:fs(19),fontWeight:900,color:C.brown}}>嗨，{profile.kidName}！🌸</div>
-          <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,marginTop:1,display:isTablet?"block":"none"}}>
-            {new Date().toLocaleDateString("zh-TW",{month:"long",day:"numeric",weekday:"long"})}
+        <div style={{display:"flex",gap:isTablet?10:8,alignItems:"center",position:"relative",zIndex:1601,minWidth:0}}>
+          <button className="btn" onClick={()=>setMoreOpen(v=>!v)} aria-label="開啟主選單" title="主選單"
+            style={{...bub("#fff"),borderRadius:999,width:48,height:48,minWidth:48,minHeight:48,
+              display:"flex",alignItems:"center",justifyContent:"center",padding:0,
+              border:"2px solid rgba(116,75,35,.14)"}}>
+            <svg width="25" height="25" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M4 7h16M4 17h16" stroke="#355A3A" strokeWidth="2.4" strokeLinecap="round"/>
+              <circle cx="9" cy="7" r="2.3" fill="#fff" stroke="#355A3A" strokeWidth="2.1"/>
+              <circle cx="15" cy="17" r="2.3" fill="#fff" stroke="#355A3A" strokeWidth="2.1"/>
+            </svg>
+          </button>
+          <div style={{minWidth:0}}>
+            <div style={{fontSize:fs(19),fontWeight:900,color:C.brown,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>嗨，{profile.kidName}！🌸</div>
+            <div style={{fontSize:fs(10),color:C.soft,fontWeight:800,marginTop:1,display:isTablet?"block":"none"}}>
+              {new Date().toLocaleDateString("zh-TW",{month:"long",day:"numeric",weekday:"long"})}
+            </div>
           </div>
+          {moreOpen&&<>
+            <div onClick={()=>setMoreOpen(false)} style={{position:"fixed",inset:0,zIndex:1700,background:"transparent"}}/>
+            <div style={{position:"absolute",left:0,top:"calc(100% + 8px)",zIndex:1701,
+              width:210,...cardS("#fff"),padding:10,border:"2px solid rgba(116,75,35,.12)",boxShadow:"0 12px 30px rgba(80,50,20,.18)"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <div style={{fontSize:12,fontWeight:900,color:C.brown}}>更多</div>
+                <button className="btn" onClick={()=>setMoreOpen(false)}
+                  style={{...bub(C.light,999),width:30,height:30,padding:0,border:"none",color:C.soft}}>×</button>
+              </div>
+              {onSwitch&&<button className="btn" onClick={()=>{setMoreOpen(false);saveSnapshot();onSwitch();}}
+                style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left",marginBottom:7}}>👥 切換小主人</button>}
+              <button className="btn" onClick={()=>{
+                setMoreOpen(false);
+                const next=!musicOn;setMusicOn(next);
+                if(next){Audio.startMusic(true);toast2("🎵 音樂開啟！");}
+                else{Audio.stopMusic();toast2("🔇 音樂關閉");}
+              }} style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left",marginBottom:7}}>
+                {musicOn?"🔇 關閉音樂":"🎵 開啟音樂"}
+              </button>
+              <button className="btn" onClick={()=>{setMoreOpen(false);setHelpTopic("index");}}
+                style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left"}}>❓ 使用說明</button>
+            </div>
+          </>}
         </div>
         <div style={{display:"flex",gap:isTablet?8:6,alignItems:"center",position:"relative",zIndex:1601}}>
           <div style={{...bub(C.yellow),borderRadius:999,padding:isTablet?"10px 20px":"8px 10px",
@@ -5577,39 +5626,6 @@ Maggie 阿姨才有勇氣，
             style={{...bub("#fff"),borderRadius:999,width:48,height:48,minWidth:48,minHeight:48,
               display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontSize:22,
               position:"relative",zIndex:9999,touchAction:"manipulation",border:"2px solid rgba(116,75,35,.14)"}}>🔐</button>
-          <button className="btn" onClick={()=>setMoreOpen(v=>!v)} aria-label="更多功能"
-            style={{...bub("#fff"),borderRadius:999,width:48,height:48,minWidth:48,minHeight:48,
-              display:"flex",alignItems:"center",justifyContent:"center",padding:0,
-              border:"2px solid rgba(116,75,35,.14)"}}>
-            <svg width="25" height="25" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 7h16M4 17h16" stroke="#355A3A" strokeWidth="2.4" strokeLinecap="round"/>
-              <circle cx="9" cy="7" r="2.3" fill="#fff" stroke="#355A3A" strokeWidth="2.1"/>
-              <circle cx="15" cy="17" r="2.3" fill="#fff" stroke="#355A3A" strokeWidth="2.1"/>
-            </svg>
-          </button>
-          {moreOpen&&<>
-            <div onClick={()=>setMoreOpen(false)} style={{position:"fixed",inset:0,zIndex:1700,background:"transparent"}}/>
-            <div style={{position:"absolute",right:0,top:"calc(100% + 8px)",zIndex:1701,
-              width:210,...cardS("#fff"),padding:10,border:"2px solid rgba(116,75,35,.12)",boxShadow:"0 12px 30px rgba(80,50,20,.18)"}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                <div style={{fontSize:12,fontWeight:900,color:C.brown}}>更多</div>
-                <button className="btn" onClick={()=>setMoreOpen(false)}
-                  style={{...bub(C.light,999),width:30,height:30,padding:0,border:"none",color:C.soft}}>×</button>
-              </div>
-              {onSwitch&&<button className="btn" onClick={()=>{setMoreOpen(false);saveSnapshot();onSwitch();}}
-                style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left",marginBottom:7}}>👥 切換小主人</button>}
-              <button className="btn" onClick={()=>{
-                setMoreOpen(false);
-                const next=!musicOn;setMusicOn(next);
-                if(next){Audio.startMusic(true);toast2("🎵 音樂開啟！");}
-                else{Audio.stopMusic();toast2("🔇 音樂關閉");}
-              }} style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left",marginBottom:7}}>
-                {musicOn?"🔇 關閉音樂":"🎵 開啟音樂"}
-              </button>
-              <button className="btn" onClick={()=>{setMoreOpen(false);setHelpTopic("index");}}
-                style={{...bub(C.light,14),width:"100%",padding:"10px 12px",border:"none",fontSize:12,fontWeight:900,color:C.brown,textAlign:"left"}}>❓ 使用說明</button>
-            </div>
-          </>}
         </div>
       </div>
 
