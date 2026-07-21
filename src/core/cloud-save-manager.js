@@ -19,11 +19,26 @@
   };
   function readJson(storage,key,fallback){try{return ns.safeJsonParse?ns.safeJsonParse(storage.getItem(key),fallback):JSON.parse(storage.getItem(key)||"null")||fallback;}catch(e){return fallback;}}
   function writeJson(storage,key,value){storage.setItem(key,JSON.stringify(value));}
+  function safeErrorDetails(error){
+    const src=error&&error.details&&typeof error.details==="object"?error.details:{};
+    const out={};
+    ["code","message","details","hint","rpc_name","operation","retry_count","source","result","status","stage"].forEach(k=>{
+      if(src[k]!=null&&k!=="raw")out[k]=src[k];
+    });
+    return out;
+  }
+  function withStage(stage,result,extra={}){
+    if(!result||result.ok!==false)return result;
+    result.error=result.error||{code:"unknown_error",message:"未知錯誤",retryable:false};
+    const details={...safeErrorDetails(result.error),...extra,stage};
+    result.error.details=details;
+    return result;
+  }
   function cloudDebug(event,details){
     if(!global.DEVELOPER_MODE)return;
     const d=details&&typeof details==="object"?details:{};
     const safe={};
-    ["code","message","details","hint","rpc_name","operation","retry_count","source","result","status"].forEach(k=>{
+    ["stage","code","message","details","hint","rpc_name","operation","retry_count","source","result","status"].forEach(k=>{
       if(d[k]!=null)safe[k]=d[k];
     });
     try{console.log("[CloudSave] "+event,safe);}catch(e){}
@@ -51,6 +66,29 @@
     getStatus(){return {...this.state,hasRemote:!!this.state.metadata,online:this.platform.isOnline(),signedIn:this.isSignedIn(),busy:this.state.status===STATUS.SAVING||this.state.status===STATUS.RESTORING||this.state.status===STATUS.CHECKING};}
     setStatus(status,patch={}){this.state={...this.state,...patch,status};this.saveState();}
     track(event,params={}){try{if(global.MaggieAnalytics&&global.MaggieAnalytics.track)global.MaggieAnalytics.track(event,{...params,game_version:global.APP_VERSION||global.VERSION||"",schema_version:String(global.APP_SCHEMA_VERSION||2),online_state:this.platform.isOnline()?"online":"offline"});}catch(e){}}
+    failStage(stage,result,extra={}){
+      const res=withStage(stage,result,extra);
+      const err=res&&res.error||{};
+      const safeLog={
+        stage,
+        code:err.code||"unknown_error",
+        message:err.message||"未知錯誤",
+        details:err.details&&err.details.details,
+        hint:err.details&&err.details.hint,
+        rpc_name:err.details&&err.details.rpc_name,
+        operation:extra.operation||"manual_backup",
+        retry_count:this.state.retryCount||0
+      };
+      try{console.log("[CloudSave] manual_backup_failed",safeLog);}catch(e){}
+      return res;
+    }
+    async waitForSingleFlight(maxMs=12000){
+      const started=Date.now();
+      while(this.singleFlight&&Date.now()-started<maxMs){
+        await new Promise(resolve=>setTimeout(resolve,150));
+      }
+      return !this.singleFlight;
+    }
     async ensureSignedIn(){
       if(this.isSignedIn()){cloudDebug("session_ok",{operation:"ensureSignedIn"});return ns.ok(true);}
       this.setStatus(STATUS.NOT_SIGNED_IN,{dirty:false,initialCheckDone:false});
@@ -68,16 +106,20 @@
       if(!valid.ok)return valid;
       return save;
     }
-    createLocalSnapshot(source){
-      const exported=this.exportLocal();
-      if(!exported.ok)return exported;
-      const snapshot={snapshot_id:"local_snap_"+Date.now()+"_"+Math.random().toString(36).slice(2,8),source,created_at:ns.nowIso(),save_version:this.state.metadata&&this.state.metadata.save_version||0,schema_version:String(global.APP_SCHEMA_VERSION||2),game_version:global.APP_VERSION||global.VERSION||"",checksum:exported.data.checksum,device_id:this.platform.getDeviceId(),save_data:exported.data};
-      const index=readJson(this.storage,SNAPSHOT_INDEX_KEY,[]);
-      index.unshift(snapshot);
-      const trimmed=index.slice(0,5);
-      writeJson(this.storage,SNAPSHOT_INDEX_KEY,trimmed);
-      if(global.backupLocalStorageSnapshot)try{global.backupLocalStorageSnapshot(source);}catch(e){}
-      return ns.ok(snapshot);
+    createLocalSnapshot(source,preExported){
+      try{
+        const exported=preExported&&preExported.ok?preExported:this.exportLocal();
+        if(!exported.ok)return exported;
+        const snapshot={snapshot_id:"local_snap_"+Date.now()+"_"+Math.random().toString(36).slice(2,8),source,created_at:ns.nowIso(),save_version:this.state.metadata&&this.state.metadata.save_version||0,schema_version:String(global.APP_SCHEMA_VERSION||2),game_version:global.APP_VERSION||global.VERSION||"",checksum:exported.data.checksum,device_id:this.platform.getDeviceId(),save_data:exported.data};
+        const index=readJson(this.storage,SNAPSHOT_INDEX_KEY,[]);
+        index.unshift(snapshot);
+        const trimmed=index.slice(0,5);
+        writeJson(this.storage,SNAPSHOT_INDEX_KEY,trimmed);
+        if(global.backupLocalStorageSnapshot)try{global.backupLocalStorageSnapshot(source);}catch(e){}
+        return ns.ok(snapshot);
+      }catch(e){
+        return ns.err("local_snapshot_failed",String(e&&e.message||e),false);
+      }
     }
     async createCloudSnapshot(source,metadata){
       if(!this.cloud.createCloudSnapshot)return ns.ok({status:"snapshot_rpc_unavailable"});
@@ -155,37 +197,90 @@
       }
       return res;
     }
-    async manualBackup(opts={}){this.track("cloud_manual_save_started");const res=await this.backupNow(opts.source||"manual_backup");if(res.ok)this.track("cloud_manual_save_succeeded");else this.track("cloud_manual_save_failed",{error_code:res.error&&res.error.code});return res;}
+    async manualBackup(opts={}){
+      const source=opts.source||"manual_backup";
+      this.track("cloud_manual_save_started");
+      try{
+        if(this.singleFlight&&this.singleFlight!=="initialCheck"){
+          cloudDebug("manual_backup_waiting",{stage:"single_flight",operation:"manual_backup",status:this.singleFlight});
+          const released=await this.waitForSingleFlight();
+          if(!released){
+            const busy=ns.err("single_flight_busy","上一個雲端同步流程仍在進行中",true);
+            this.track("cloud_manual_save_failed",{error_code:busy.error.code});
+            return this.failStage("single_flight",busy);
+          }
+        }
+        if(!this.state.initialCheckDone&&this.singleFlight!=="initialCheck"&&source!=="initial_cloud_backup"){
+          const init=await this.initialCheck();
+          if(!init.ok){
+            this.track("cloud_manual_save_failed",{error_code:init.error&&init.error.code});
+            const initCode=init.error&&init.error.code;
+            const initStage=init.error&&init.error.details&&init.error.details.stage||(
+              initCode==="not_signed_in"?"ensure_signed_in":
+              initCode==="cloud_save_conflict"?"metadata":
+              initCode==="offline"?"online_check":
+              "initial_check"
+            );
+            return this.failStage(initStage,init);
+          }
+          if(this.state.status===STATUS.SYNCED||this.state.status===STATUS.CONFLICT||this.state.status===STATUS.WAITING_CHOICE){
+            this.track("cloud_manual_save_succeeded",{result:"initial_check_completed"});
+            return init;
+          }
+        }
+        const res=await this.backupNow(source);
+        if(res.ok)this.track("cloud_manual_save_succeeded");
+        else this.track("cloud_manual_save_failed",{error_code:res.error&&res.error.code,stage:res.error&&res.error.details&&res.error.details.stage});
+        return res;
+      }catch(e){
+        const err=ns.err("manual_backup_exception",String(e&&e.message||e),true);
+        this.track("cloud_manual_save_failed",{error_code:err.error.code});
+        return this.failStage("manual_backup",err);
+      }
+    }
     async backupNow(source){
       const execute=async()=>{
-        const signed=await this.ensureSignedIn();if(!signed.ok)return signed;
-        if(!this.platform.isOnline()){this.setStatus(STATUS.WAITING_NETWORK,{dirty:true});return ns.err("offline","等待連線",true);}
-        const local=this.exportLocal();if(!local.ok)return local;
-        if(!this.exporter.isMeaningfulPlayerSave(local.data)){this.track("cloud_save_empty_blocked");return ns.err("empty_save_blocked","空白存檔不會覆蓋雲端資料",false);}
-        const remote=await this.cloud.getCloudSaveMetadata();
-        if(!remote.ok)return remote;
+        const signed=await this.ensureSignedIn();if(!signed.ok)return this.failStage("ensure_signed_in",signed);
+        let online=false;
+        try{online=this.platform.isOnline();}catch(e){return this.failStage("online_check",ns.err("online_check_failed",String(e&&e.message||e),true));}
+        if(!online){this.setStatus(STATUS.WAITING_NETWORK,{dirty:true});return this.failStage("online_check",ns.err("offline","等待連線",true));}
+        let rawExport;
+        try{rawExport=this.exporter.exportPlayerSave();}catch(e){rawExport=ns.err("export_local_failed",String(e&&e.message||e),false);}
+        if(!rawExport.ok)return this.failStage("export_local",rawExport);
+        let valid;
+        try{valid=this.exporter.validatePlayerSave(rawExport.data);}catch(e){valid=ns.err("validate_save_exception",String(e&&e.message||e),false);}
+        if(!valid.ok)return this.failStage("validate_save",valid);
+        let meaningful=false;
+        try{meaningful=this.exporter.isMeaningfulPlayerSave(rawExport.data);}catch(e){return this.failStage("meaningful_save_check",ns.err("meaningful_save_check_failed",String(e&&e.message||e),false));}
+        if(!meaningful){this.track("cloud_save_empty_blocked");return this.failStage("meaningful_save_check",ns.err("empty_save_blocked","空白存檔不會覆蓋雲端資料",false));}
+        let remote;
+        try{remote=await this.cloud.getCloudSaveMetadata();}catch(e){remote=ns.err("get_cloud_metadata_exception",String(e&&e.message||e),true);}
+        if(!remote.ok)return this.failStage("metadata",remote);
         cloudDebug("metadata_ok",{operation:"backup",status:remote.data?"found":"empty"});
         const cloudMeta=remote.data||null;
-        if(cloudMeta&&this.state.baselineChecksum&&cloudMeta.checksum!==this.state.baselineChecksum&&cloudMeta.checksum!==local.data.checksum){
-          this.setStatus(STATUS.CONFLICT,{conflict:true,metadata:cloudMeta,localSummary:this.exporter.summarize(local.data)});
+        if(cloudMeta&&this.state.baselineChecksum&&cloudMeta.checksum!==this.state.baselineChecksum&&cloudMeta.checksum!==rawExport.data.checksum){
+          this.setStatus(STATUS.CONFLICT,{conflict:true,metadata:cloudMeta,localSummary:this.exporter.summarize(rawExport.data)});
           cloudDebug("conflict_detected",{operation:"backup",result:"remote_changed"});
           this.track("cloud_save_conflict_detected",{source,conflict_type:"remote_changed"});
-          return ns.err("cloud_save_conflict","雲端有較新的遊戲進度",false,{metadata:cloudMeta});
+          return this.failStage("metadata",ns.err("cloud_save_conflict","雲端有較新的遊戲進度",false,{result:"remote_changed"}));
         }
-        const snap=this.createLocalSnapshot(source);if(!snap.ok)return snap;
+        const local=rawExport;
+        const snap=this.createLocalSnapshot(source,local);if(!snap.ok)return this.failStage("local_snapshot",snap);
         cloudDebug("snapshot_started",{operation:"backup",source});
-        const cloudSnap=await this.createCloudSnapshot(source,cloudMeta);
+        let cloudSnap;
+        try{cloudSnap=await this.createCloudSnapshot(source,cloudMeta);}catch(e){cloudSnap=ns.err("create_cloud_snapshot_exception",String(e&&e.message||e),true);}
         if(!cloudSnap.ok){
           this.state.retryCount=Math.min(this.maxRetries,(this.state.retryCount||0)+1);
           this.setStatus(STATUS.FAILED,{dirty:true,lastError:cloudSnap.error,retryCount:this.state.retryCount});
           cloudDebug("snapshot_failed",{operation:"backup",code:cloudSnap.error&&cloudSnap.error.code,message:cloudSnap.error&&cloudSnap.error.message,details:cloudSnap.error&&cloudSnap.error.details,hint:cloudSnap.error&&cloudSnap.error.hint,rpc_name:"create_cloud_snapshot",retry_count:this.state.retryCount});
-          return cloudSnap;
+          return this.failStage("cloud_snapshot",cloudSnap,{rpc_name:"create_cloud_snapshot",retry_count:this.state.retryCount});
         }
         cloudDebug("snapshot_succeeded",{operation:"backup",source});
         this.setStatus(STATUS.SAVING,{lastError:null});
         cloudDebug("upsert_started",{operation:"backup",rpc_name:"upsert_player_save_v1"});
-        const uploaded=await this.cloud.upsertCloudSave({saveData:local.data,checksum:local.data.checksum,schemaVersion:local.data.schemaVersion,gameVersion:local.data.gameVersion,deviceId:this.platform.getDeviceId(),expectedSaveVersion:cloudMeta&&cloudMeta.save_version||0});
-        if(!uploaded.ok){this.state.retryCount=Math.min(this.maxRetries,(this.state.retryCount||0)+1);this.setStatus(STATUS.FAILED,{dirty:true,lastError:uploaded.error,retryCount:this.state.retryCount});cloudDebug("upsert_failed",{operation:"backup",code:uploaded.error&&uploaded.error.code,message:uploaded.error&&uploaded.error.message,details:uploaded.error&&uploaded.error.details,hint:uploaded.error&&uploaded.error.hint,rpc_name:"upsert_player_save_v1",retry_count:this.state.retryCount});return uploaded;}
+        let uploaded;
+        try{uploaded=await this.cloud.upsertCloudSave({saveData:local.data,checksum:local.data.checksum,schemaVersion:local.data.schemaVersion,gameVersion:local.data.gameVersion,deviceId:this.platform.getDeviceId(),expectedSaveVersion:cloudMeta&&cloudMeta.save_version||0});}catch(e){uploaded=ns.err("upsert_cloud_save_exception",String(e&&e.message||e),true);}
+        if(!uploaded.ok){this.state.retryCount=Math.min(this.maxRetries,(this.state.retryCount||0)+1);this.setStatus(STATUS.FAILED,{dirty:true,lastError:uploaded.error,retryCount:this.state.retryCount});cloudDebug("upsert_failed",{operation:"backup",code:uploaded.error&&uploaded.error.code,message:uploaded.error&&uploaded.error.message,details:uploaded.error&&uploaded.error.details,hint:uploaded.error&&uploaded.error.hint,rpc_name:"upsert_player_save_v1",retry_count:this.state.retryCount});return this.failStage("upsert",uploaded,{rpc_name:"upsert_player_save_v1",retry_count:this.state.retryCount});}
         cloudDebug("upsert_succeeded",{operation:"backup",rpc_name:"upsert_player_save_v1"});
         const meta=uploaded.data&&uploaded.data.metadata||uploaded.data||{};
         this.retryCount=0;

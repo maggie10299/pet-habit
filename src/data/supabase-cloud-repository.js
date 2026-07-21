@@ -248,10 +248,9 @@
     async createCloudSnapshot(input){
       const write=this.requireWrite();if(write)return write;
       const meta=input&&input.metadata||null;
-      if(!meta)return ns.ok({status:"no_cloud_snapshot_needed"});
       const res=await this.rpc("create_cloud_snapshot",{
         p_source:String(input.source||"manual_backup"),
-        p_metadata:meta
+        p_metadata:meta||{}
       },false);
       return res.ok?ns.ok(Array.isArray(res.data)?res.data[0]:res.data):res;
     }

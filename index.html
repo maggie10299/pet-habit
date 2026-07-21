@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8"/>
@@ -114,8 +114,8 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 <script src="maggie-analytics.js"></script>
 <script>
 const PRODUCT="pet_habit";
-const VERSION="v1.1-cloud-save-rpc-header-ux-fix-20260718";
-window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-15-cloud-save-rpc-header-ux-fix"});
+const VERSION="v1.1-cloud-save-preflight-trace-20260719";
+window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-19-cloud-save-preflight-trace"});
 </script>
 <script>
 // Staging-only public Supabase config. Do not copy this block to outputs/ or release/.
@@ -159,7 +159,7 @@ if("serviceWorker" in navigator){
 
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
-const APP_VERSION="v1.1-cloud-save-rpc-header-ux-fix-20260718";
+const APP_VERSION="v1.1-cloud-save-preflight-trace-20260719";
 const APP_SCHEMA_VERSION=2;
 const SAVE_PROTECTION_VERSION=1;
 const SAVE_SNAPSHOT_PREFIX="petHabitSafeSnapshot_";
@@ -3671,7 +3671,22 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     if(!(window.PetHabitPlatform&&window.PetHabitPlatform.manualCloudBackup)){toast2("雲端備份尚未準備好",C.peach);return;}
     window.PetHabitPlatform.manualCloudBackup().then(res=>{
       refreshCloudSaveState();refreshSyncDebug();
-      toast2(res&&res.ok?"已完成雲端備份 ☁️":"雲端備份失敗，本機資料仍保留",res&&res.ok?C.green:C.peach);
+      if(res&&res.ok){toast2("已完成雲端備份 ☁️",C.green);return;}
+      const code=res&&res.error&&res.error.code;
+      const messageMap={
+        empty_save_blocked:"目前沒有可備份的遊戲進度",
+        initial_check_required:"正在確認雲端資料，請稍後再試一次",
+        local_snapshot_failed:"本機安全備份建立失敗",
+        cloud_save_conflict:"偵測到不同的遊戲進度，請選擇要保留哪一份",
+        conflict:"偵測到不同的遊戲進度，請選擇要保留哪一份",
+        single_flight_busy:"正在完成上一個同步流程，請稍後再試一次",
+        operation_in_progress:"正在完成上一個同步流程，請稍後再試一次"
+      };
+      toast2(messageMap[code]||"同步失敗，本機資料仍安全保留",C.peach);
+    }).catch(err=>{
+      refreshCloudSaveState();refreshSyncDebug();
+      console.log("[CloudSave] manual_backup_failed",{stage:"ui_promise",code:"manual_backup_promise_rejected",message:String(err&&err.message||err)});
+      toast2("同步失敗，本機資料仍安全保留",C.peach);
     });
   };
   const runCloudRestore=()=>{
