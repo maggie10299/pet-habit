@@ -2,6 +2,7 @@
   const ns=global.PetHabitPlatform=global.PetHabitPlatform||{};
   const STATE_KEY="petHabitCloudSaveV1_state";
   const SNAPSHOT_INDEX_KEY="petHabitCloudSaveV1_localSnapshots";
+  const BINDING_KEY="petHabitCloudSaveV1_familyBinding";
   const STATUS={
     LOCAL_ONLY:"local_only",
     CHECKING:"checking",
@@ -57,13 +58,15 @@
       this.state={status:STATUS.LOCAL_ONLY,dirty:false,initialCheckDone:false,conflict:false,lastSyncedAt:"",lastError:null,metadata:null,baselineChecksum:"",retryCount:0};
       this.loadState();
     }
+    readBinding(){return readJson(this.storage,BINDING_KEY,null);}
+    writeBinding(binding){try{writeJson(this.storage,BINDING_KEY,binding);this.state.binding=binding;this.saveState();return ns.ok(binding);}catch(e){return ns.err("binding_write_failed",String(e&&e.message||e),false);}}
     loadState(){const saved=readJson(this.storage,STATE_KEY,null);if(saved&&typeof saved==="object")this.state={...this.state,...saved};return this.state;}
     saveState(){try{writeJson(this.storage,STATE_KEY,this.state);}catch(e){}this.notify();}
     subscribe(fn){if(typeof fn!=="function")return ()=>{};this.subscribers.push(fn);try{fn(this.getStatus());}catch(e){}return()=>{this.subscribers=this.subscribers.filter(x=>x!==fn);};}
     notify(){const s=this.getStatus();this.subscribers.slice().forEach(fn=>{try{fn(s);}catch(e){}});}
     getAuthStatus(){return this.auth&&this.auth.getStatus?this.auth.getStatus():null;}
     isSignedIn(){const s=this.getAuthStatus();return !!(s&&s.status==="signed_in"&&s.sessionPresent);}
-    getStatus(){return {...this.state,hasRemote:!!this.state.metadata,online:this.platform.isOnline(),signedIn:this.isSignedIn(),busy:this.state.status===STATUS.SAVING||this.state.status===STATUS.RESTORING||this.state.status===STATUS.CHECKING};}
+    getStatus(){return {...this.state,binding:this.state.binding||this.readBinding(),hasRemote:!!this.state.metadata,online:this.platform.isOnline(),signedIn:this.isSignedIn(),busy:this.state.status===STATUS.SAVING||this.state.status===STATUS.RESTORING||this.state.status===STATUS.CHECKING};}
     setStatus(status,patch={}){this.state={...this.state,...patch,status};this.saveState();}
     track(event,params={}){try{if(global.MaggieAnalytics&&global.MaggieAnalytics.track)global.MaggieAnalytics.track(event,{...params,game_version:global.APP_VERSION||global.VERSION||"",schema_version:String(global.APP_SCHEMA_VERSION||2),online_state:this.platform.isOnline()?"online":"offline"});}catch(e){}}
     failStage(stage,result,extra={}){
@@ -93,6 +96,97 @@
       if(this.isSignedIn()){cloudDebug("session_ok",{operation:"ensureSignedIn"});return ns.ok(true);}
       this.setStatus(STATUS.NOT_SIGNED_IN,{dirty:false,initialCheckDone:false});
       return ns.err("not_signed_in","請先登入 Google",false);
+    }
+    setExporterContext(candidateId,familyId){
+      this.exporter.selectedCandidateId=candidateId||"";
+      this.exporter.familyId=familyId||"";
+    }
+    scanLocalCandidates(){
+      const res=this.exporter.discoverLocalSaveCandidates?this.exporter.discoverLocalSaveCandidates():ns.err("candidate_scan_unavailable","本機存檔掃描器尚未準備好",false);
+      if(!res.ok)return res;
+      const candidates=res.data||[];
+      this.state.localCandidates=candidates.map(c=>({candidateId:c.candidateId,summary:c.summary,playerSummaries:c.playerSummaries,suspectedTest:c.suspectedTest,recognizedSectionCount:c.recognizedSectionCount,notes:c.notes||[],fingerprint:c.fingerprint}));
+      this.saveState();
+      return ns.ok(candidates);
+    }
+    getSelectedCandidate(candidateId){
+      const res=this.exporter.getCandidateById?this.exporter.getCandidateById(candidateId):ns.err("candidate_scan_unavailable","本機存檔掃描器尚未準備好",false);
+      if(!res.ok)return res;
+      return ns.ok(res.data);
+    }
+    async resolveFamilyBinding(candidate){
+      const existing=this.readBinding();
+      if(existing&&existing.family_id){
+        this.setExporterContext(candidate&&candidate.candidateId,existing.family_id);
+        try{console.log("[CloudSave] family_binding_resolved",{stage:"binding",has_family:true});}catch(e){}
+        return ns.ok(existing);
+      }
+      if(!this.cloud.getOrCreateFamily)return ns.err("family_binding_missing","雲端家庭綁定尚未準備好",false);
+      const familyName=candidate&&candidate.family&&candidate.family.name||"我的家庭";
+      const fam=await this.cloud.getOrCreateFamily(familyName);
+      if(!fam.ok)return withStage("family_binding",fam);
+      const familyId=(fam.data&&fam.data.id)||fam.data&&fam.data.family_id||"";
+      if(!familyId)return ns.err("family_binding_missing","無法建立雲端家庭",false);
+      const binding={family_id:familyId,active_local_save_fingerprint:candidate&&candidate.fingerprint||"",schema_version:String(global.APP_SCHEMA_VERSION||2),last_synced_checksum:"",last_synced_at:"",candidate_id:candidate&&candidate.candidateId||""};
+      const saved=this.writeBinding(binding);
+      if(!saved.ok)return saved;
+      this.setExporterContext(binding.candidate_id,binding.family_id);
+      try{console.log("[CloudSave] family_binding_resolved",{stage:"binding",has_family:true});}catch(e){}
+      return ns.ok(binding);
+    }
+    async prepareFirstBackup(){
+      const signed=await this.ensureSignedIn();if(!signed.ok)return this.failStage("ensure_signed_in",signed);
+      const candidates=this.scanLocalCandidates();if(!candidates.ok)return this.failStage("export_local",candidates);
+      const list=candidates.data||[];
+      if(!list.length){this.setStatus(STATUS.FAILED,{initialCheckDone:true,lastError:{code:"no_local_data",message:"沒有可備份的遊戲進度"},localCandidates:[]});return this.failStage("export_local",ns.err("no_local_data","沒有可備份的遊戲進度",false));}
+      let remote=await this.cloud.getCloudSaveMetadata();
+      if(!remote.ok)return this.failStage("metadata",remote);
+      const cloudMeta=remote.data||null;
+      if(cloudMeta){
+        this.setStatus(STATUS.CLOUD_AVAILABLE,{initialCheckDone:true,metadata:cloudMeta,localCandidates:this.state.localCandidates,confirmationRequired:false});
+        return ns.err("cloud_save_conflict","偵測到不同的遊戲進度",false,{stage:"metadata",metadata:cloudMeta});
+      }
+      if(list.length>1){
+        this.setStatus(STATUS.NEEDS_INITIAL_BACKUP,{initialCheckDone:true,metadata:null,confirmationRequired:true,confirmationMode:"choose_candidate",localCandidates:this.state.localCandidates});
+        return ns.err("multiple_local_candidates","找到多份遊戲進度，請由家長選擇",false,{candidate_count:list.length,candidates:this.state.localCandidates});
+      }
+      this.setStatus(STATUS.NEEDS_INITIAL_BACKUP,{initialCheckDone:true,metadata:null,confirmationRequired:true,confirmationMode:"confirm_first_backup",selectedCandidateId:list[0].candidateId,selectedCandidateSummary:list[0].summary,localCandidates:this.state.localCandidates});
+      try{console.log("[CloudSave] first_backup_confirmation_opened",{candidate_count:1,recognized_section_count:list[0].recognizedSectionCount||0});}catch(e){}
+      return ns.err("first_backup_confirmation_required","請先確認要保存的遊戲進度",false,{candidate:this.state.localCandidates[0]});
+    }
+    selectLocalCandidate(candidateId){
+      const candidate=this.getSelectedCandidate(candidateId);
+      if(!candidate.ok)return candidate;
+      this.setStatus(STATUS.NEEDS_INITIAL_BACKUP,{confirmationRequired:true,confirmationMode:"confirm_first_backup",selectedCandidateId:candidate.data.candidateId,selectedCandidateSummary:candidate.data.summary,selectedCandidateFingerprint:candidate.data.fingerprint});
+      try{console.log("[CloudSave] local_candidate_selected",{candidate_count:1,recognized_section_count:candidate.data.recognizedSectionCount||0});}catch(e){}
+      return ns.ok({candidateId:candidate.data.candidateId,summary:candidate.data.summary});
+    }
+    async confirmFirstBackup(candidateId){
+      const candidate=this.getSelectedCandidate(candidateId||this.state.selectedCandidateId);
+      if(!candidate.ok)return this.failStage("export_local",candidate);
+      try{console.log("[CloudSave] first_backup_confirmed",{candidate_count:1,recognized_section_count:candidate.data.recognizedSectionCount||0});}catch(e){}
+      const bound=await this.resolveFamilyBinding(candidate.data);
+      if(!bound.ok)return this.failStage("family_binding",bound);
+      this.setExporterContext(candidate.data.candidateId,bound.data.family_id);
+      this.state.confirmationRequired=false;
+      this.state.selectedCandidateId=candidate.data.candidateId;
+      this.state.selectedCandidateFingerprint=candidate.data.fingerprint;
+      this.saveState();
+      return this.backupNow("manual_confirmed_first_backup",{confirmed:true,candidate});
+    }
+    verifyActiveBinding(){
+      const binding=this.readBinding();
+      if(!binding||!binding.active_local_save_fingerprint)return ns.err("first_backup_confirmation_required","請先確認要保存的遊戲進度",false);
+      const candidates=this.scanLocalCandidates();
+      if(!candidates.ok)return candidates;
+      const match=(candidates.data||[]).find(c=>c.fingerprint===binding.active_local_save_fingerprint);
+      if(!match){
+        this.setStatus(STATUS.WAITING_CHOICE,{confirmationRequired:true,confirmationMode:"binding_changed",dirty:false});
+        try{console.log("[CloudSave] active_binding_changed",{stage:"binding",candidate_count:(candidates.data||[]).length});}catch(e){}
+        return ns.err("active_save_binding_changed","偵測到這台裝置的遊戲進度已變更",false);
+      }
+      this.setExporterContext(match.candidateId,binding.family_id);
+      return ns.ok({binding,candidate:match});
     }
     async runSingleFlight(label,fn){
       if(this.singleFlight)return ns.err("operation_in_progress","正在處理上一個同步動作",true);
@@ -130,24 +224,32 @@
         this.track("cloud_sync_initial_check_started");
         const signed=await this.ensureSignedIn();if(!signed.ok)return signed;
         this.setStatus(STATUS.CHECKING,{lastError:null});
-        const local=this.exportLocal();if(!local.ok){this.setStatus(STATUS.FAILED,{lastError:local.error});return local;}
-        const localMeaningful=this.exporter.isMeaningfulPlayerSave(local.data);
+        const candidates=this.scanLocalCandidates();
+        if(!candidates.ok){this.setStatus(STATUS.FAILED,{lastError:candidates.error});return candidates;}
+        const localMeaningful=(candidates.data||[]).length>0;
         const meta=await this.cloud.getCloudSaveMetadata();
         if(!meta.ok){this.setStatus(STATUS.FAILED,{lastError:meta.error});this.track("cloud_sync_initial_check_completed",{result:"failed",error_code:meta.error&&meta.error.code});return meta;}
         cloudDebug("metadata_ok",{operation:"initial_check",status:meta.data?"found":"empty"});
         const cloudMeta=meta.data||null;
         if(!cloudMeta&&localMeaningful){
-          this.setStatus(STATUS.NEEDS_INITIAL_BACKUP,{initialCheckDone:true,metadata:null,baselineChecksum:""});
-          const res=await this.manualBackup({source:"initial_cloud_backup"});
-          if(res.ok)this.track("cloud_sync_initial_check_completed",{result:"initial_backup_created"});
-          return res;
+          const prepared=await this.prepareFirstBackup();
+          this.track("cloud_sync_initial_check_completed",{result:"confirmation_required"});
+          return prepared;
         }
         if(cloudMeta&&!localMeaningful){
-          this.setStatus(STATUS.CLOUD_AVAILABLE,{initialCheckDone:true,metadata:cloudMeta,dirty:false,baselineChecksum:cloudMeta.checksum||""});
+          this.setStatus(STATUS.CLOUD_AVAILABLE,{initialCheckDone:true,metadata:cloudMeta,dirty:false,baselineChecksum:cloudMeta.checksum||"",confirmationRequired:false});
           this.track("cloud_sync_initial_check_completed",{result:"cloud_available"});
           return ns.ok({mode:"cloud_available",metadata:cloudMeta});
         }
         if(cloudMeta&&localMeaningful){
+          const binding=this.readBinding();
+          if(!binding||!binding.active_local_save_fingerprint){
+            this.setStatus(STATUS.CLOUD_AVAILABLE,{initialCheckDone:true,metadata:cloudMeta,dirty:false,baselineChecksum:cloudMeta.checksum||"",confirmationRequired:true,confirmationMode:"cloud_exists"});
+            return ns.err("cloud_save_conflict","偵測到不同的遊戲進度",false,{metadata:cloudMeta});
+          }
+          const active=this.verifyActiveBinding();
+          if(!active.ok)return active;
+          const local=this.exportLocal();if(!local.ok)return local;
           const same=(cloudMeta.checksum&&cloudMeta.checksum===local.data.checksum);
           if(same){
             this.setStatus(STATUS.SYNCED,{initialCheckDone:true,metadata:cloudMeta,dirty:false,baselineChecksum:cloudMeta.checksum,lastSyncedAt:cloudMeta.updated_at||ns.nowIso()});
@@ -159,15 +261,17 @@
           this.track("cloud_save_conflict_detected",{source:"initial_check",conflict_type:"local_and_cloud_differ"});
           return ns.err("cloud_save_conflict","偵測到兩份不同的遊戲進度",false,{metadata:cloudMeta});
         }
-        this.setStatus(STATUS.NEEDS_INITIAL_BACKUP,{initialCheckDone:true,dirty:false});
+        this.setStatus(STATUS.FAILED,{initialCheckDone:true,dirty:false,confirmationRequired:false,lastError:{code:"no_local_data",message:"沒有可備份的遊戲進度"}});
         this.track("cloud_sync_initial_check_completed",{result:"empty"});
-        return ns.ok({mode:"empty"});
+        return ns.err("no_local_data","沒有可備份的遊戲進度",false);
       });
     }
     markSaveDirty(reason){
       if(!this.isSignedIn())return ns.ok({status:"local_only"});
       this.state.dirty=true;this.state.lastDirtyAt=ns.nowIso();
       if(this.state.conflict||this.state.status===STATUS.CONFLICT||this.state.status===STATUS.WAITING_CHOICE){this.saveState();return ns.ok({status:"paused_conflict"});}
+      const active=this.verifyActiveBinding();
+      if(!active.ok){this.saveState();return ns.ok({status:"paused_active_binding_required"});}
       if(!this.state.initialCheckDone){this.saveState();return ns.ok({status:"paused_initial_check_required"});}
       this.setStatus(STATUS.DIRTY,{dirty:true,dirtyReason:reason||"change"});
       this.scheduleAutoSave();
@@ -199,6 +303,7 @@
     }
     async manualBackup(opts={}){
       const source=opts.source||"manual_backup";
+      try{console.log("[CloudSave] manager_manualBackup_entered",{source,initial_check_done:!!this.state.initialCheckDone,status:this.state.status,single_flight:this.singleFlight||""});}catch(e){}
       this.track("cloud_manual_save_started");
       try{
         if(this.singleFlight&&this.singleFlight!=="initialCheck"){
@@ -238,9 +343,11 @@
         return this.failStage("manual_backup",err);
       }
     }
-    async backupNow(source){
+    async backupNow(source,opts={}){
       const execute=async()=>{
         const signed=await this.ensureSignedIn();if(!signed.ok)return this.failStage("ensure_signed_in",signed);
+        const active=opts.confirmed&&opts.candidate?ns.ok({candidate:opts.candidate.data||opts.candidate,binding:this.readBinding()}):this.verifyActiveBinding();
+        if(!active.ok)return this.failStage(active.error&&active.error.code==="active_save_binding_changed"?"active_binding":"initial_check",active);
         let online=false;
         try{online=this.platform.isOnline();}catch(e){return this.failStage("online_check",ns.err("online_check_failed",String(e&&e.message||e),true));}
         if(!online){this.setStatus(STATUS.WAITING_NETWORK,{dirty:true});return this.failStage("online_check",ns.err("offline","等待連線",true));}

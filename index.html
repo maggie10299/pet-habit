@@ -114,8 +114,8 @@ input,textarea{font-family:'Nunito',sans-serif;outline:none;border:none;backgrou
 <script src="maggie-analytics.js"></script>
 <script>
 const PRODUCT="pet_habit";
-const VERSION="v1.1-cloud-save-preflight-trace-20260719";
-window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-19-cloud-save-preflight-trace"});
+const VERSION="v1.1-cloud-save-family-binding-final-20260721";
+window.MaggieAnalytics&&window.MaggieAnalytics.init({product:PRODUCT,version:VERSION,build:"pet-habit-7-21-cloud-save-family-binding-final"});
 </script>
 <script>
 // Staging-only public Supabase config. Do not copy this block to outputs/ or release/.
@@ -159,7 +159,7 @@ if("serviceWorker" in navigator){
 
 <script type="text/babel">
 const {useState,useEffect,useRef,useCallback,useMemo}=React;
-const APP_VERSION="v1.1-cloud-save-preflight-trace-20260719";
+const APP_VERSION="v1.1-cloud-save-family-binding-final-20260721";
 const APP_SCHEMA_VERSION=2;
 const SAVE_PROTECTION_VERSION=1;
 const SAVE_SNAPSHOT_PREFIX="petHabitSafeSnapshot_";
@@ -2415,7 +2415,7 @@ function EventApproveControl({eventId,mission,setOfficialEventProgress}){
     </button>
   </div>;
 }
-function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,owned,setOwned,backpack,setBackpack,officialEventProgress,setOfficialEventProgress,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,isTablet,toast2,onClose,initialTab,googleBinding,authUiState,googleLoadState,googleError,startSupabaseGoogleLogin,googleLogout,cloudSaveState,runCloudInitialCheck,runManualCloudBackup,runCloudRestore,resolveCloudConflict}){
+function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWishes,bonusTasks,setBonusTasks,tasks,setTasks,owned,setOwned,backpack,setBackpack,officialEventProgress,setOfficialEventProgress,musicOn,setMusicOn,storageKey,playerId,approvalMode,setApprovalMode,isTablet,toast2,onClose,initialTab,googleBinding,authUiState,googleLoadState,googleError,startSupabaseGoogleLogin,googleLogout,cloudSaveState,runCloudInitialCheck,runManualCloudBackup,runCloudRestore,resolveCloudConflict,prepareCloudBackup,selectCloudBackupCandidate,confirmCloudBackupCandidate}){
   const [authed,setAuthed]=useState(false);
   const [ptab,setPtab]=useState(initialTab||"tasks");
   const [nTask,setNTask]=useState(""),nPts=useRef(20);
@@ -2454,13 +2454,23 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
     conflict:"偵測到不同的遊戲進度",
     waiting_choice:"偵測到不同的遊戲進度"
   }[cloudState.status]||"雲端備份準備中";
-  const cloudMainStatus=cloudState.status==="synced"
+  const cloudMainStatus=cloudState.confirmationRequired
+    ?{kind:"needs",icon:"☁️",title:"雲端同步尚未啟用",body:cloudState.confirmationMode==="choose_candidate"?"請先選擇要保存的遊戲進度":"請先確認要保存的遊戲進度"}
+    :cloudState.status==="synced"
     ?{kind:"ok",icon:"✅",title:"已同步",body:cloudState.lastSyncedAt?"最後同步："+new Date(cloudState.lastSyncedAt).toLocaleString("zh-TW"):"遊戲進度已安全保存"}
     :["checking","saving","restoring","dirty","needs_initial_backup"].includes(cloudState.status)
       ?{kind:"busy",icon:"🟡",title:cloudState.status==="dirty"?"尚未同步":"正在同步",body:cloudState.status==="dirty"?"遊戲進度稍後會自動保存":"遊戲進度正在安全保存"}
       :{kind:"needs",icon:"⚠️",title:"需要處理",body:cloudStatusLabel};
   const cloudStatusColor=cloudMainStatus.kind==="ok"?"#2A7A3B":cloudMainStatus.kind==="busy"?C.orange:"#C23B3B";
   const cloudButtonDisabled=cloudState.status==="saving"||cloudState.status==="restoring"||cloudState.status==="checking";
+  const cloudCandidateSummary=(summary)=>summary?[
+    "小主人："+(summary.playerName||"小主人"),
+    "寵物："+(summary.petName||"小寵物")+"／"+(summary.petType||"pet"),
+    "蘋果："+(summary.apples||0),
+    "習慣："+(summary.taskCount||0),
+    "衣服："+(summary.clothingCount||0),
+    "最後遊玩："+(summary.lastPlayedAt?new Date(summary.lastPlayedAt).toLocaleString("zh-TW"):"尚未記錄")
+  ]:[];
 
   const exportBackup=()=>{
     try{
@@ -2957,7 +2967,39 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
               {cloudMainStatus.body}<br/>
               {cloudState.lastError&&DEVELOPER_MODE?"錯誤："+(cloudState.lastError.code||cloudState.lastError.message||"unknown"):"不會因同步失敗清除本機資料。"}
             </div>
-            {cloudState.status==="cloud_available"||cloudState.status==="waiting_choice"||cloudState.status==="conflict"
+            {cloudState.confirmationRequired
+              ?<div>
+                <div style={{...bub("#FFF9E8",14),padding:"10px 11px",fontSize:10,fontWeight:900,color:C.brown,lineHeight:1.65,marginBottom:8,border:"1px solid rgba(245,166,35,.22)"}}>
+                  {cloudState.confirmationMode==="choose_candidate"
+                    ?<>找到多份遊戲進度。<br/>請選擇要保存哪一份。</>
+                    :cloudState.confirmationMode==="binding_changed"
+                      ?<>偵測到這台裝置的遊戲進度已變更。<br/>為保護雲端資料，請重新確認。</>
+                      :<>準備備份這份遊戲進度。<br/>確認後，會安全保存到目前登入的 Google 帳號。</>}
+                </div>
+                {(cloudState.localCandidates||[]).length>0
+                  ?(cloudState.localCandidates||[]).map(c=><div key={c.candidateId} style={{...bub(C.card,14),padding:"10px 11px",marginBottom:8,border:"1px solid rgba(116,75,35,.10)"}}>
+                    <div style={{fontSize:12,fontWeight:900,color:C.brown,marginBottom:5}}>遊戲進度</div>
+                    {cloudCandidateSummary(c.summary).map(line=><div key={line} style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.55}}>{line}</div>)}
+                    {c.suspectedTest&&<div style={{fontSize:10,fontWeight:900,color:C.orange,marginTop:5}}>這份資料可能來自舊版或測試期間，請家長確認。</div>}
+                    <button className="btn" onClick={()=>selectCloudBackupCandidate&&selectCloudBackupCandidate(c.candidateId)}
+                      disabled={cloudButtonDisabled}
+                      style={{...bub(C.light,999),width:"100%",padding:"8px 6px",fontSize:10,fontWeight:900,color:C.brown,border:"none",marginTop:8}}>使用這份進度</button>
+                  </div>)
+                  :<div style={{fontSize:10,fontWeight:900,color:C.soft,marginBottom:8}}>這台裝置的遊戲資料需要確認，暫時不會上傳。</div>}
+                {cloudState.selectedCandidateSummary&&<div style={{...bub("#F7FAFF",14),padding:"10px 11px",fontSize:10,fontWeight:900,color:C.brown,lineHeight:1.6,marginBottom:8,border:"1px solid rgba(139,197,232,.28)"}}>
+                  <div style={{marginBottom:4}}>準備備份這份遊戲進度：</div>
+                  {cloudCandidateSummary(cloudState.selectedCandidateSummary).map(line=><div key={line}>{line}</div>)}
+                </div>}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                  <button className="btn" onClick={prepareCloudBackup}
+                    disabled={cloudButtonDisabled}
+                    style={{...bub("#F7FAFF",999),padding:"9px 6px",fontSize:10,fontWeight:900,color:C.soft,border:"1px solid rgba(139,197,232,.28)"}}>重新掃描</button>
+                  <button className="btn" onClick={()=>confirmCloudBackupCandidate&&confirmCloudBackupCandidate(cloudState.selectedCandidateId||((cloudState.localCandidates||[])[0]&&cloudState.localCandidates[0].candidateId))}
+                    disabled={cloudButtonDisabled||(!cloudState.selectedCandidateId&&(cloudState.localCandidates||[]).length!==1)}
+                    style={{...bub(C.orange,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:"#fff",border:"none",opacity:(!cloudState.selectedCandidateId&&(cloudState.localCandidates||[]).length!==1)?0.55:1}}>確認並開始備份</button>
+                </div>
+              </div>
+              :cloudState.status==="cloud_available"||cloudState.status==="waiting_choice"||cloudState.status==="conflict"
               ?<div>
                 <div style={{...bub("#FFF5F5",14),padding:"9px 10px",fontSize:10,fontWeight:900,color:C.brown,lineHeight:1.55,marginBottom:8,border:"1px solid rgba(194,59,59,.16)"}}>
                   偵測到不同的遊戲進度。<br/>請選擇要保留哪一份：
@@ -3668,6 +3710,13 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
     });
   };
   const runManualCloudBackup=()=>{
+    console.log("[CloudSave] retry_clicked");
+    console.log("[CloudSave] ui_manual_backup_handler",{
+      platform_ready:!!(window.PetHabitPlatform&&window.PetHabitPlatform.manualCloudBackup),
+      cloud_status:cloudSaveState&&cloudSaveState.status,
+      signed_in:cloudSaveState&&cloudSaveState.signedIn,
+      busy:cloudSaveState&&cloudSaveState.busy
+    });
     if(!(window.PetHabitPlatform&&window.PetHabitPlatform.manualCloudBackup)){toast2("雲端備份尚未準備好",C.peach);return;}
     window.PetHabitPlatform.manualCloudBackup().then(res=>{
       refreshCloudSaveState();refreshSyncDebug();
@@ -3687,6 +3736,36 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
       refreshCloudSaveState();refreshSyncDebug();
       console.log("[CloudSave] manual_backup_failed",{stage:"ui_promise",code:"manual_backup_promise_rejected",message:String(err&&err.message||err)});
       toast2("同步失敗，本機資料仍安全保留",C.peach);
+    });
+  };
+  const prepareCloudBackup=()=>{
+    if(!(window.PetHabitPlatform&&window.PetHabitPlatform.prepareCloudBackup)){toast2("雲端備份尚未準備好",C.peach);return;}
+    window.PetHabitPlatform.prepareCloudBackup().then(res=>{
+      refreshCloudSaveState();refreshSyncDebug();
+      const code=res&&res.error&&res.error.code;
+      toast2(res&&res.ok?"已完成遊戲進度檢查":"請先確認要保存的遊戲進度",res&&res.ok?C.green:C.yellow);
+      if(code==="no_local_data")toast2("目前沒有可備份的遊戲進度",C.peach);
+    }).catch(err=>{
+      refreshCloudSaveState();refreshSyncDebug();
+      console.log("[CloudSave] manual_backup_failed",{stage:"prepare_ui_promise",code:"prepare_cloud_backup_rejected",message:String(err&&err.message||err)});
+      toast2("雲端備份檢查失敗，本機資料仍保留",C.peach);
+    });
+  };
+  const selectCloudBackupCandidate=(candidateId)=>{
+    if(!(window.PetHabitPlatform&&window.PetHabitPlatform.selectCloudBackupCandidate)){toast2("雲端備份尚未準備好",C.peach);return;}
+    const res=window.PetHabitPlatform.selectCloudBackupCandidate(candidateId);
+    refreshCloudSaveState();refreshSyncDebug();
+    toast2(res&&res.ok?"已選擇這份遊戲進度":"選擇失敗，請再試一次",res&&res.ok?C.green:C.peach);
+  };
+  const confirmCloudBackupCandidate=(candidateId)=>{
+    if(!(window.PetHabitPlatform&&window.PetHabitPlatform.confirmCloudBackupCandidate)){toast2("雲端備份尚未準備好",C.peach);return;}
+    window.PetHabitPlatform.confirmCloudBackupCandidate(candidateId).then(res=>{
+      refreshCloudSaveState();refreshSyncDebug();
+      toast2(res&&res.ok?"已完成雲端備份 ☁️":"備份失敗，本機資料仍安全保留",res&&res.ok?C.green:C.peach);
+    }).catch(err=>{
+      refreshCloudSaveState();refreshSyncDebug();
+      console.log("[CloudSave] manual_backup_failed",{stage:"confirm_ui_promise",code:"confirm_cloud_backup_rejected",message:String(err&&err.message||err)});
+      toast2("備份失敗，本機資料仍安全保留",C.peach);
     });
   };
   const runCloudRestore=()=>{
@@ -4745,6 +4824,7 @@ Maggie 阿姨才有勇氣，
         startSupabaseGoogleLogin={startSupabaseGoogleLogin} googleLogout={googleLogout}
         cloudSaveState={cloudSaveState} runCloudInitialCheck={runCloudInitialCheck} runManualCloudBackup={runManualCloudBackup}
         runCloudRestore={runCloudRestore} resolveCloudConflict={resolveCloudConflict}
+        prepareCloudBackup={prepareCloudBackup} selectCloudBackupCandidate={selectCloudBackupCandidate} confirmCloudBackupCandidate={confirmCloudBackupCandidate}
         onClose={()=>{setParentInitialTab("tasks");setModal(null);}}/>}
 
       {/* SHOP MODAL */}

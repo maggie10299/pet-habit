@@ -105,7 +105,20 @@
   };
   ns.manualCloudBackup=function(){
     const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    try{console.log("[CloudSave] platform_manualCloudBackup_called",{ready:!!mgr,has_manual:!!(mgr&&mgr.manualBackup),boot_ready:!!state.ready});}catch(e){}
     return mgr&&mgr.manualBackup?mgr.manualBackup({source:"manual_backup"}):Promise.resolve(ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true));
+  };
+  ns.prepareCloudBackup=function(){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    return mgr&&mgr.prepareFirstBackup?mgr.prepareFirstBackup():Promise.resolve(ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true));
+  };
+  ns.selectCloudBackupCandidate=function(candidateId){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    return mgr&&mgr.selectLocalCandidate?mgr.selectLocalCandidate(candidateId):ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true);
+  };
+  ns.confirmCloudBackupCandidate=function(candidateId){
+    const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    return mgr&&mgr.confirmFirstBackup?mgr.confirmFirstBackup(candidateId):Promise.resolve(ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true));
   };
   ns.restoreCloudSave=function(){
     const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;

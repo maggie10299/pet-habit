@@ -37,6 +37,41 @@
     if(Array.isArray(value))return "["+value.map(stableStringify).join(",")+"]";
     return "{"+Object.keys(value).sort().map(k=>JSON.stringify(k)+":"+stableStringify(value[k])).join(",")+"}";
   }
+  function countOwned(value){
+    if(Array.isArray(value))return value.length;
+    if(value&&typeof value==="object")return Object.keys(value).filter(k=>value[k]!==false&&value[k]!=null).length;
+    return 0;
+  }
+  function playerDisplayName(player,save){
+    return (player&&player.name)||(save&&save.profile&&save.profile.name)||(save&&save.childName)||(save&&save.name)||"小主人";
+  }
+  function petSummary(save){
+    const profile=save&&save.profile||{};
+    const type=profile.petType||save&&save.pet||save&&save.selectedPet||"pet";
+    const name=profile.petName||save&&save.petName||"小寵物";
+    return {type,name};
+  }
+  function taskCount(save){return Array.isArray(save&&save.tasks)?save.tasks.length:0;}
+  function appleCount(save){return Number(save&&save.apples||save&&save.apple||0)||0;}
+  function clothingCount(save){
+    const owned=save&&save.owned||{};
+    const wardrobe=save&&save.wardrobe||{};
+    return countOwned(owned.clothes||owned.outfits||wardrobe.owned||owned);
+  }
+  function lastPlayedAt(save,rawFallback){
+    return (save&&save.lastPlayedAt)||(save&&save.updatedAt)||(save&&save.lastLogin)||rawFallback||"";
+  }
+  function hasPet(save){
+    return !!(save&&(save.profile&&save.profile.petType||save.pet||save.selectedPet));
+  }
+  function isMeaningfulSaveObject(save){
+    if(!save||typeof save!=="object")return false;
+    const hasTasks=taskCount(save)>0;
+    const hasProgress=Number(save.points||save.stars||0)>0||appleCount(save)>0||Object.keys(save.checked||{}).length>0;
+    const hasCollection=countOwned(save.owned)>0||countOwned(save.equipped)>0||countOwned(save.backpack)>0;
+    const hasDiary=(Array.isArray(save.diary)&&save.diary.length>0)||(Array.isArray(save.wishes)&&save.wishes.length>0);
+    return hasPet(save)&&(hasTasks||hasProgress||hasCollection||hasDiary);
+  }
   class PlayerSaveExporter{
     constructor({storage,platformAdapter}={}){
       this.storage=storage||global.localStorage;
@@ -52,6 +87,178 @@
     }
     readFamily(){return safeParse(this.readRaw(FAMILY_KEY),null);}
     readPlayerSave(player){return safeParse(this.readRaw(player&&player.storageKey||"habitKingdom"),{});}
+    getPlayerRawLastPlayed(player){
+      const id=player&&player.id;
+      return this.readRaw(id?"lastLogin_hk_"+id:"lastLogin_hk")||this.readRaw("lastLogin_hk")||"";
+    }
+    buildCandidate({candidateId,sourceType,family,players,storageKeys,suspectedTest=false,notes=[]}){
+      const summaries=players.map(p=>{
+        const pet=petSummary(p.save);
+        return {
+          playerName:playerDisplayName(p.player,p.save),
+          petName:pet.name,
+          petType:pet.type,
+          apples:appleCount(p.save),
+          taskCount:taskCount(p.save),
+          clothingCount:clothingCount(p.save),
+          lastPlayedAt:lastPlayedAt(p.save,this.getPlayerRawLastPlayed(p.player))
+        };
+      });
+      const safeSummary=summaries[0]||{playerName:"小主人",petName:"小寵物",petType:"pet",apples:0,taskCount:0,clothingCount:0,lastPlayedAt:""};
+      const sectionCount=[
+        players.length>0,
+        storageKeys.length>0,
+        summaries.some(s=>s.taskCount>0),
+        summaries.some(s=>s.apples>0),
+        summaries.some(s=>s.clothingCount>0)
+      ].filter(Boolean).length;
+      const fingerprint=this.calculatePlayerSaveChecksum({
+        sourceType,
+        familyId:family&&family.id||"",
+        activePlayerId:family&&family.activePlayerId||players[0]&&players[0].player&&players[0].player.id||"",
+        storageKeys,
+        summaries,
+        rawChecksums:players.map(p=>this.calculatePlayerSaveChecksum(p.save||{}))
+      });
+      return {candidateId,sourceType,family,players,storageKeys,summary:safeSummary,playerSummaries:summaries,fingerprint,suspectedTest:!!suspectedTest,recognizedSectionCount:sectionCount,notes};
+    }
+    discoverLocalSaveCandidates(){
+      const candidates=[];
+      const usedKeys=new Set();
+      const family=this.readFamily();
+      if(family&&Array.isArray(family.players)){
+        const players=[];
+        const storageKeys=[FAMILY_KEY];
+        const notes=[];
+        family.players.forEach(p=>{
+          const key=p&&p.storageKey;
+          const raw=key&&this.readRaw(key);
+          const save=safeParse(raw,null);
+          if(raw&&isMeaningfulSaveObject(save)){
+            players.push({player:p,save,storageKey:key});
+            storageKeys.push(key);
+            usedKeys.add(key);
+          }else if(key){
+            notes.push("missing_or_incomplete_player_save");
+          }
+        });
+        if(players.length){
+          const cleanFamily={...family,players:players.map(p=>p.player),activePlayerId:family.activePlayerId||players[0].player.id};
+          candidates.push(this.buildCandidate({
+            candidateId:"family_current",
+            sourceType:"family_v1",
+            family:cleanFamily,
+            players,
+            storageKeys:Array.from(new Set(storageKeys)),
+            suspectedTest:notes.length>0,
+            notes
+          }));
+        }
+      }
+      const legacyRaw=this.readRaw("habitKingdom");
+      const legacy=safeParse(legacyRaw,null);
+      if(legacyRaw&&isMeaningfulSaveObject(legacy)&&!usedKeys.has("habitKingdom")){
+        const p={id:"legacy",name:legacy.profile&&legacy.profile.name||legacy.childName||"小主人",storageKey:"habitKingdom",localSaveId:"legacy"};
+        candidates.push(this.buildCandidate({
+          candidateId:"legacy_habitKingdom",
+          sourceType:"legacy_single",
+          family:{id:"local_legacy_family",activePlayerId:"legacy",players:[p]},
+          players:[{player:p,save:legacy,storageKey:"habitKingdom"}],
+          storageKeys:["habitKingdom"],
+          suspectedTest:!legacy.profile
+        }));
+        usedKeys.add("habitKingdom");
+      }
+      this.listStorageKeys().forEach(k=>{
+        if(usedKeys.has(k)||isExcludedKey(k))return;
+        if(!/^habitKingdom_player_/.test(k))return;
+        const save=safeParse(this.readRaw(k),null);
+        if(!isMeaningfulSaveObject(save))return;
+        const id=k.replace(/^habitKingdom_player_/,"")||("candidate_"+candidates.length);
+        const p={id,name:save.profile&&save.profile.name||save.childName||"小主人",storageKey:k,localSaveId:id};
+        candidates.push(this.buildCandidate({
+          candidateId:"orphan_"+id,
+          sourceType:"orphan_player",
+          family:{id:"local_orphan_family_"+id,activePlayerId:id,players:[p]},
+          players:[{player:p,save,storageKey:k}],
+          storageKeys:[k],
+          suspectedTest:true,
+          notes:["orphan_player_save"]
+        }));
+      });
+      try{console.log("[CloudSave] local_candidates_scanned",{candidate_count:candidates.length,recognized_section_count:candidates.reduce((n,c)=>n+(c.recognizedSectionCount||0),0)});}catch(e){}
+      return ns.ok(candidates);
+    }
+    getCandidateById(candidateId){
+      const list=this.discoverLocalSaveCandidates();
+      if(!list.ok)return list;
+      const candidates=list.data||[];
+      if(!candidateId&&candidates.length===1)return ns.ok(candidates[0]);
+      const found=candidates.find(c=>c.candidateId===candidateId);
+      return found?ns.ok(found):ns.err("local_candidate_not_found","找不到指定的遊戲進度",false,{candidate_count:candidates.length});
+    }
+    exportCandidateSave(candidate,familyId){
+      if(!candidate||!candidate.players||!candidate.players.length)return ns.err("no_local_data","沒有可備份的遊戲進度",false);
+      const localStorageData={};
+      const cleanFamily={...(candidate.family||{}),id:(candidate.family&&candidate.family.id)||familyId||"local_family",family_id:familyId||"",activePlayerId:(candidate.family&&candidate.family.activePlayerId)||candidate.players[0].player.id,players:candidate.players.map(p=>p.player)};
+      localStorageData[FAMILY_KEY]=JSON.stringify(cleanFamily);
+      candidate.players.forEach(p=>{
+        if(p.storageKey)localStorageData[p.storageKey]=JSON.stringify(p.save||{});
+      });
+      candidate.storageKeys.forEach(k=>{
+        if(k===FAMILY_KEY||Object.prototype.hasOwnProperty.call(localStorageData,k))return;
+        const raw=this.readRaw(k);
+        if(raw!=null)localStorageData[k]=raw;
+      });
+      const players=candidate.players.map(p=>({
+        id:p.player.id,
+        name:p.player.name||"",
+        storageKey:p.storageKey||p.player.storageKey||"",
+        localSaveId:p.player.localSaveId||"",
+        themeId:p.player.themeId||"",
+        save:p.save||{}
+      }));
+      const primary=players[0]&&players[0].save||{};
+      const save={
+        format:"pet_habit_cloud_save_v1",
+        schemaVersion:String(global.APP_SCHEMA_VERSION||2),
+        gameVersion:String(global.APP_VERSION||global.VERSION||"unknown"),
+        exportedAt:ns.nowIso(),
+        deviceId:this.platform.getDeviceId(),
+        family:cleanFamily,
+        activePlayerId:cleanFamily.activePlayerId||"",
+        players,
+        player:players[0]||null,
+        pets:players.map(p=>({playerId:p.id,pet:petSummary(p.save)})),
+        habits:players.map(p=>({playerId:p.id,tasks:Array.isArray(p.save.tasks)?p.save.tasks:[]})),
+        economy:players.map(p=>({playerId:p.id,stars:Number(p.save.stars||p.save.points||0)||0,apples:appleCount(p.save)})),
+        wardrobe:players.map(p=>({playerId:p.id,owned:p.save.owned||{},equipped:p.save.equipped||{}})),
+        pet_accessories:primary.petAccessories||primary.pet_accessories||{},
+        rooms:primary.rooms||primary.room||{},
+        furniture_positions:primary.furniturePositions||primary.roomDecorPositions||{},
+        backpack:primary.backpack||{},
+        achievements:primary.achievements||[],
+        diary:primary.diary||[],
+        wishes:primary.wishes||[],
+        challenges:primary.challenges||primary.bonusTasks||[],
+        parent_settings:{approvalMode:primary.approvalMode||"",pinConfigured:!!(primary.profile&&primary.profile.pin)},
+        tutorials:primary.tutorials||{},
+        seasonal_events:primary.officialEventProgress||primary.seasonal_events||{},
+        reward_ledger:safeParse(this.readRaw("petHabitRewardLedger_"+cleanFamily.activePlayerId),[])||[],
+        adventure_foundation:primary.adventureFoundation||{},
+        scene_state:primary.sceneState||{},
+        metadata:{
+          local_last_modified_at:candidate.summary&&candidate.summary.lastPlayedAt||ns.nowIso(),
+          source_device_id:this.platform.getDeviceId(),
+          active_local_save_fingerprint:candidate.fingerprint,
+          localCandidateId:candidate.candidateId,
+          family_id:familyId||""
+        },
+        localStorage:localStorageData
+      };
+      save.checksum=this.calculatePlayerSaveChecksum(save);
+      return ns.ok(save);
+    }
     collectIncludedKeys(family){
       const allow=new Set([FAMILY_KEY,"habitKingdom","lastLogin_hk","lastStreak_hk","musicOn_hk","weather_hk"]);
       (family&&Array.isArray(family.players)?family.players:[]).forEach(p=>{
@@ -78,6 +285,16 @@
       return Array.from(allow).filter(k=>this.readRaw(k)!==null&&!isExcludedKey(k)).sort();
     }
     exportPlayerSave(){
+      const selectedCandidateId=this.selectedCandidateId||"";
+      const candidates=this.discoverLocalSaveCandidates();
+      if(!candidates.ok)return candidates;
+      if(!candidates.data.length)return ns.err("no_local_data","沒有可備份的遊戲進度",false);
+      if(candidates.data.length>1&&!selectedCandidateId)return ns.err("multiple_local_candidates","找到多份遊戲進度，請由家長選擇",false,{candidate_count:candidates.data.length,candidates:candidates.data.map(c=>({candidateId:c.candidateId,summary:c.summary,suspectedTest:c.suspectedTest,recognizedSectionCount:c.recognizedSectionCount}))});
+      const chosen=selectedCandidateId?candidates.data.find(c=>c.candidateId===selectedCandidateId):candidates.data[0];
+      if(!chosen)return ns.err("local_candidate_not_found","找不到指定的遊戲進度",false,{candidate_count:candidates.data.length});
+      return this.exportCandidateSave(chosen,this.familyId||"");
+    }
+    exportPlayerSaveLegacy(){
       const family=this.readFamily();
       const keys=this.collectIncludedKeys(family);
       const localStorageData={};
