@@ -245,7 +245,36 @@
     getRedirectTo(){
       return "https://maggie10299.github.io/pet-habit/";
     }
+    cleanupStaleSupabaseAuthStorage(){
+      const currentPrefix=this.repository&&this.repository.getAuthStoragePrefix?this.repository.getAuthStoragePrefix():"";
+      if(!currentPrefix)return {removed:0,currentPrefix:""};
+      const stores=[global.localStorage,global.sessionStorage].filter(Boolean);
+      let removed=0;
+      stores.forEach(store=>{
+        try{
+          const keys=[];
+          const len=Number(store.length||0);
+          if(typeof store.key==="function"){
+            for(let i=0;i<len;i++){
+              const k=store.key(i);
+              if(k)keys.push(k);
+            }
+          }else if(store.map&&typeof store.map.keys==="function"){
+            store.map.forEach((_,k)=>keys.push(k));
+          }
+          keys.forEach(key=>{
+            key=String(key||"");
+            if(/^sb-[a-z0-9]+-auth-token/.test(key)&&key.indexOf(currentPrefix)!==0){
+              try{store.removeItem(key);removed++;}catch(e){}
+            }
+          });
+        }catch(e){}
+      });
+      return {removed,currentPrefix};
+    }
     async signInWithGoogle(){
+      if(this.repository.refreshClient)this.repository.refreshClient();
+      this.cleanupStaleSupabaseAuthStorage();
       if(this.repository.refreshClient)this.repository.refreshClient();
       if(!this.repository.client||!this.repository.client.auth){
         this.status=AUTH_STATUS.LOCAL_ONLY;

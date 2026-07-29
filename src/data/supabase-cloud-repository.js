@@ -3,7 +3,8 @@
   class SupabaseCloudRepository extends (ns.RepositoryContract||class{}){
     constructor(config={}){
       super();
-      this.url=config.url||(ns.Environment&&ns.Environment.supabaseUrl)||"";
+      this.useRuntimeConfig=!(config.url||config.publishableKey||config.client);
+      this.url=this.normalizeProjectUrl(config.url||(ns.Environment&&ns.Environment.supabaseUrl)||"");
       this.publishableKey=config.publishableKey||(ns.Environment&&ns.Environment.supabasePublishableKey)||"";
       this.writeEnabled=config.writeEnabled===true;
       this.configValid=!!(this.url&&this.publishableKey&&!/\/rest\/v1\/?$/i.test(this.url));
@@ -16,7 +17,35 @@
         }
       };
       this.client=config.client||this.createClient();
+      this.clientUrl=this.client?this.url:"";
+      this.clientKey=this.client?this.publishableKey:"";
       this.ready=!!(this.configValid&&this.client);
+    }
+    normalizeProjectUrl(url){
+      url=String(url||"").trim();
+      if(!url)return "";
+      return url.replace(/\/+$/,"");
+    }
+    getRuntimeUrl(){
+      if(!this.useRuntimeConfig)return this.url;
+      return this.normalizeProjectUrl((ns.Environment&&ns.Environment.supabaseUrl)||global.SUPABASE_URL||this.url||"");
+    }
+    getRuntimeKey(){
+      if(!this.useRuntimeConfig)return this.publishableKey;
+      return (ns.Environment&&ns.Environment.supabasePublishableKey)||global.SUPABASE_PUBLISHABLE_KEY||global.SUPABASE_ANON_KEY||this.publishableKey||"";
+    }
+    projectRefFromUrl(url){
+      try{
+        const host=new URL(this.normalizeProjectUrl(url)).hostname||"";
+        return host.endsWith(".supabase.co")?host.split(".")[0]:"";
+      }catch(e){return "";}
+    }
+    getCurrentProjectRef(){
+      return this.projectRefFromUrl(this.getRuntimeUrl()||this.url);
+    }
+    getAuthStoragePrefix(){
+      const ref=this.getCurrentProjectRef();
+      return ref?`sb-${ref}-auth-token`:"";
     }
     createClient(){
       if(!this.configValid)return null;
@@ -25,7 +54,17 @@
       return null;
     }
     refreshClient(){
-      if(!this.client)this.client=this.createClient();
+      const runtimeUrl=this.getRuntimeUrl();
+      const runtimeKey=this.getRuntimeKey();
+      if(runtimeUrl&&runtimeUrl!==this.url)this.url=runtimeUrl;
+      if(runtimeKey&&runtimeKey!==this.publishableKey)this.publishableKey=runtimeKey;
+      this.configValid=!!(this.url&&this.publishableKey&&!/\/rest\/v1\/?$/i.test(this.url));
+      const mismatch=this.client&&(this.clientUrl!==this.url||this.clientKey!==this.publishableKey);
+      if(!this.client||mismatch){
+        this.client=this.createClient();
+        this.clientUrl=this.client?this.url:"";
+        this.clientKey=this.client?this.publishableKey:"";
+      }
       this.ready=!!(this.configValid&&this.client);
       return this.ready;
     }
