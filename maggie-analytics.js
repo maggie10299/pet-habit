@@ -2,11 +2,15 @@
   "use strict";
 
   var DEFAULT_ENDPOINT = "https://script.google.com/macros/s/AKfycbwFuPv3IoIuv0ZcxRsQNVLO3K2J6WKkqqkK3CUox318AxB9bVrBoZl2L8NmWRQMsS4/exec";
-  var SCHEMA_VERSION = "maggie_analytics_v2.1";
-  var VALID_SOURCES = ["facebook","instagram","threads","official","line","qr","direct","unknown"];
+  var SCHEMA_VERSION = "maggie_analytics_v2.2";
+  var VALID_SOURCES = ["facebook","instagram","threads","website","pwa","direct","unknown"];
   var SOURCE_KEY = "maggie_first_source";
   var FIRST_VISIT_KEY = "maggie_first_visit";
   var ANALYTICS_INSTALL_KEY = "analytics.installId";
+  var SESSION_ID_KEY = "analytics.sessionId";
+  var SESSION_STARTED_KEY = "analytics.sessionStartedAt";
+  var SESSION_LAST_SEEN_KEY = "analytics.sessionLastSeenAt";
+  var SESSION_TIMEOUT_MS = 30 * 60 * 1000;
   var FORBIDDEN_KEYS = /^(familyId|family_id|childId|child_id|playerId|player_id|auth\.uid|authUid|authUserId|auth_user_id|googleSub|google_sub|sub|email|mail|childName|child_name|playerName|player_name|nickname|displayName|display_name|deviceLinkId|device_link_id|deviceId|device_id)$/i;
 
   var config = {
@@ -32,18 +36,27 @@
   function safeLocalSet(key,value){
     try{global.localStorage.setItem(key,value);}catch(e){}
   }
+  function safeSessionGet(key){
+    try{return global.sessionStorage && global.sessionStorage.getItem(key);}catch(e){return null;}
+  }
+  function safeSessionSet(key,value){
+    try{global.sessionStorage && global.sessionStorage.setItem(key,value);}catch(e){}
+  }
 
   function resolveSource(){
     var q = "";
     try{q = new URLSearchParams(global.location.search).get("source") || "";}catch(e){}
     q = String(q || "").toLowerCase();
+    if(q === "official")q = "website";
+    if(q === "qr" || q === "qrcode" || q === "line")q = "unknown";
     if(VALID_SOURCES.indexOf(q) >= 0)return q;
     return "direct";
   }
 
   function getSource(){
-    if(global.MaggieTrafficSource && global.MaggieTrafficSource.getFirstSource){
-      return global.MaggieTrafficSource.getFirstSource();
+    if(global.MaggieTrafficSource && global.MaggieTrafficSource.getSessionSource){
+      var sessionSource = global.MaggieTrafficSource.getSessionSource();
+      return VALID_SOURCES.indexOf(sessionSource) >= 0 ? sessionSource : "unknown";
     }
     var source = safeLocalGet(SOURCE_KEY);
     if(!source){
@@ -116,17 +129,64 @@
     return id;
   }
 
+  function makeId(prefix){
+    var id = "";
+    if(global.crypto && typeof global.crypto.randomUUID === "function"){
+      id = global.crypto.randomUUID();
+    }else{
+      try{
+        var arr = new Uint32Array(4);
+        global.crypto && global.crypto.getRandomValues && global.crypto.getRandomValues(arr);
+        id = Array.prototype.map.call(arr,function(n){return n.toString(36);}).join("");
+      }catch(e){
+        id = Date.now().toString(36) + Math.random().toString(36).substring(2,14);
+      }
+    }
+    return prefix + id;
+  }
+
+  function getSessionId(){
+    var now = Date.now();
+    var id = safeSessionGet(SESSION_ID_KEY) || safeLocalGet(SESSION_ID_KEY);
+    var last = Number(safeSessionGet(SESSION_LAST_SEEN_KEY) || safeLocalGet(SESSION_LAST_SEEN_KEY) || 0);
+    if(!id || !last || (now - last) > SESSION_TIMEOUT_MS){
+      id = makeId("as_");
+      var started = new Date(now).toISOString();
+      safeSessionSet(SESSION_ID_KEY,id);
+      safeSessionSet(SESSION_STARTED_KEY,started);
+      safeLocalSet(SESSION_ID_KEY,id);
+      safeLocalSet(SESSION_STARTED_KEY,started);
+    }
+    var seen = String(now);
+    safeSessionSet(SESSION_LAST_SEEN_KEY,seen);
+    safeLocalSet(SESSION_LAST_SEEN_KEY,seen);
+    return id;
+  }
+
   function idPreview(id){
     id = String(id || "");
     return id ? id.slice(0,4) + "…" : "";
   }
 
   function platform(){
-    return (global.navigator && global.navigator.platform) || "";
+    var ua = String(global.navigator && global.navigator.userAgent || "");
+    var p = String(global.navigator && global.navigator.platform || "");
+    if(/iPad/i.test(ua) || /iPad/i.test(p) || (p === "MacIntel" && global.navigator && global.navigator.maxTouchPoints > 1))return "iPad";
+    if(/iPhone|iPod/i.test(ua) || /iPhone|iPod/i.test(p))return "iPhone";
+    if(/Android/i.test(ua))return "Android";
+    if(/Mac/i.test(p) || /Mac OS X/i.test(ua))return "Mac";
+    if(/Win/i.test(p) || /Windows/i.test(ua))return "Windows";
+    return "Other";
   }
 
   function browser(){
-    return (global.navigator && global.navigator.userAgent) || "";
+    var ua = String(global.navigator && global.navigator.userAgent || "");
+    if(/Line\//i.test(ua))return "LINE";
+    if(/FBAN|FBAV|FB_IAB|FBIOS|FB4A/i.test(ua))return "Facebook";
+    if(/Instagram/i.test(ua))return "Instagram";
+    if(/CriOS|Chrome|Chromium/i.test(ua) && !/Edg/i.test(ua))return "Chrome";
+    if(/Safari/i.test(ua) && !/Chrome|CriOS|Chromium|Android/i.test(ua))return "Safari";
+    return "Other";
   }
 
   function init(options){
@@ -141,6 +201,7 @@
     getSource();
     getFirstVisit();
     getAnalyticsInstallId();
+    getSessionId();
     return api;
   }
 
@@ -149,12 +210,14 @@
     params = sanitizeAnalyticsPayload(params || {});
     var traffic = trafficContext();
     var installId = getAnalyticsInstallId();
+    var sessionId = getSessionId();
     var payload = {
       product: config.product,
       timestamp: new Date().toISOString(),
       event: event,
       analyticsInstallId: installId,
       DeviceId: installId,
+      SessionId: sessionId,
       version: config.version,
       firstVisit: getFirstVisit(),
       platform: params.platform || platform(),
@@ -162,7 +225,7 @@
       payload: params,
       pet: params.pet || "",
       task: params.task || "",
-      source: getSource(),
+      source: (traffic.Source && VALID_SOURCES.indexOf(traffic.Source)>=0) ? traffic.Source : getSource(),
       build: params.build || config.build || "",
       FirstSource: traffic.FirstSource,
       CurrentLaunch: traffic.CurrentLaunch,
@@ -212,6 +275,7 @@
     return {
       analyticsInstallIdPresent: !!installId,
       analyticsInstallIdPreview: idPreview(installId),
+      sessionIdPresent: !!safeSessionGet(SESSION_ID_KEY) || !!safeLocalGet(SESSION_ID_KEY),
       requestDeviceIdPresent: !!debugState.lastRequestDeviceIdPresent,
       endpointUrl: debugState.endpointUrl || config.endpoint,
       lastAnalyticsStatus: debugState.lastAnalyticsStatus,
@@ -228,6 +292,7 @@
     getSource:getSource,
     getDeviceId:getAnalyticsInstallId,
     getAnalyticsInstallId:getAnalyticsInstallId,
+    getSessionId:getSessionId,
     getFirstVisit:getFirstVisit,
     getDebugState:getDebugState
   };

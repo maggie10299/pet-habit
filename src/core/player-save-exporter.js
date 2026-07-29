@@ -104,7 +104,20 @@
           lastPlayedAt:lastPlayedAt(p.save,this.getPlayerRawLastPlayed(p.player))
         };
       });
-      const safeSummary=summaries[0]||{playerName:"小主人",petName:"小寵物",petType:"pet",apples:0,taskCount:0,clothingCount:0,lastPlayedAt:""};
+      const latestPlayedAt=summaries.map(s=>s.lastPlayedAt).filter(Boolean).sort().pop()||"";
+      const familyName=(family&&family.name)||summaries.map(s=>s.playerName).filter(Boolean).join("、")||"我的家庭";
+      const safeSummary={
+        familyName,
+        playerName:summaries.length===1?(summaries[0].playerName||"小主人"):familyName,
+        petName:summaries.length===1?(summaries[0].petName||"小寵物"):(summaries.map(s=>s.petName).filter(Boolean).join("、")||"小寵物"),
+        petType:summaries.length===1?(summaries[0].petType||"pet"):"family",
+        playerCount:summaries.length,
+        petCount:summaries.filter(s=>s.petName||s.petType).length,
+        apples:summaries.reduce((n,s)=>n+(Number(s.apples)||0),0),
+        taskCount:summaries.reduce((n,s)=>n+(Number(s.taskCount)||0),0),
+        clothingCount:summaries.reduce((n,s)=>n+(Number(s.clothingCount)||0),0),
+        lastPlayedAt:latestPlayedAt
+      };
       const sectionCount=[
         players.length>0,
         storageKeys.length>0,
