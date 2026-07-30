@@ -2464,11 +2464,15 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
       :{kind:"needs",icon:"⚠️",title:"需要處理",body:cloudStatusLabel};
   const cloudStatusColor=cloudMainStatus.kind==="ok"?"#2A7A3B":cloudMainStatus.kind==="busy"?C.orange:"#C23B3B";
   const cloudButtonDisabled=cloudState.status==="saving"||cloudState.status==="restoring"||cloudState.status==="checking";
+  const cloudLocalCandidates=cloudState.localCandidates||[];
+  const selectedCloudCandidate=cloudLocalCandidates.find(c=>c.candidateId===cloudState.selectedCandidateId)||((cloudLocalCandidates.length===1&&!cloudState.selectedCandidateId)?cloudLocalCandidates[0]:null);
+  const canConfirmCloudCandidate=!!selectedCloudCandidate&&!cloudButtonDisabled;
   const cloudCandidateSummary=(summary)=>summary?[
     "家庭："+(summary.familyName||summary.playerName||"我的家庭"),
     "小主人："+(summary.playerCount||1)+" 位",
     "寵物："+(summary.petCount||1)+" 隻",
     "習慣："+(summary.taskCount||0)+" 個",
+    "衣服："+(summary.clothingCount||0)+" 件",
     "最後遊玩："+(summary.lastPlayedAt?new Date(summary.lastPlayedAt).toLocaleString("zh-TW"):"尚未記錄")
   ]:[];
   const cloudCandidateDetail=(c)=>c&&Array.isArray(c.playerSummaries)?c.playerSummaries.map(p=>[
@@ -2988,18 +2992,23 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                         :<>準備備份這個家庭的遊戲進度。<br/>確認後，會安全保存到目前登入的 Google 帳號。</>}
                   </div>
                 </div>
-                {(cloudState.localCandidates||[]).length>0
-                  ?(cloudState.localCandidates||[]).map(c=>{
-                    const selected=cloudState.selectedCandidateId===c.candidateId||((cloudState.localCandidates||[]).length===1&&!cloudState.selectedCandidateId);
+                {cloudLocalCandidates.length>0
+                  ?cloudLocalCandidates.map(c=>{
+                    const selected=selectedCloudCandidate&&selectedCloudCandidate.candidateId===c.candidateId;
                     const expanded=cloudExpandedCandidateId===c.candidateId;
-                    return <div key={c.candidateId} onClick={()=>{if((cloudState.localCandidates||[]).length>1&&selectCloudBackupCandidate)selectCloudBackupCandidate(c.candidateId);}}
-                    style={{...bub(C.card,14),padding:"10px 11px",marginBottom:8,border:selected?"2px solid "+C.orange:"1px solid rgba(116,75,35,.10)",boxShadow:selected?"0 8px 20px rgba(245,166,35,.12)":"none",cursor:(cloudState.localCandidates||[]).length>1?"pointer":"default"}}>
+                    return <div key={c.candidateId} role="button" tabIndex={0} onClick={()=>{selectCloudBackupCandidate&&selectCloudBackupCandidate(c.candidateId);}} onKeyDown={(e)=>{if((e.key==="Enter"||e.key===" ")&&selectCloudBackupCandidate){e.preventDefault();selectCloudBackupCandidate(c.candidateId);}}}
+                    style={{...bub(selected?"#FFF8E6":C.card,14),padding:"10px 11px",marginBottom:8,border:selected?"2px solid "+C.orange:"1px solid rgba(116,75,35,.10)",boxShadow:selected?"0 8px 20px rgba(245,166,35,.14)":"none",cursor:"pointer"}}>
                     <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:5}}>
-                      <div style={{fontSize:12,fontWeight:900,color:C.brown}}>{(cloudState.localCandidates||[]).length===1?"家庭遊戲進度":"遊戲進度"}</div>
+                      <div style={{fontSize:12,fontWeight:900,color:C.brown}}>{cloudLocalCandidates.length===1?"家庭遊戲進度":"遊戲進度"}</div>
                       {selected&&<div style={{fontSize:10,fontWeight:900,color:C.orange}}>✓ 已選取</div>}
                     </div>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",margin:"0 0 5px"}}>
+                      {c.isLatestCandidate&&<span style={{...bub("#EAF8EE",999),padding:"3px 7px",fontSize:9,fontWeight:900,color:"#2A7A3B"}}>目前最新進度</span>}
+                      {c.suspectedTest&&<span style={{...bub("#FFF1D8",999),padding:"3px 7px",fontSize:9,fontWeight:900,color:C.orange}}>可能是舊版測試資料</span>}
+                    </div>
                     {cloudCandidateSummary(c.summary).map(line=><div key={line} style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.55}}>{line}</div>)}
-                    {c.suspectedTest&&<div style={{fontSize:10,fontWeight:900,color:C.orange,marginTop:5}}>這份資料可能來自舊版或測試期間，請家長確認。</div>}
+                    <div style={{fontSize:10,fontWeight:900,color:c.isLatestCandidate?"#2A7A3B":C.soft,marginTop:5}}>{c.isLatestCandidate?"狀態：目前裝置最新資料":"狀態：不是目前裝置最新資料"}</div>
+                    {c.suspectedTest&&<div style={{fontSize:10,fontWeight:900,color:C.orange,marginTop:4}}>請家長確認是否為要備份的進度，不會自動刪除或合併。</div>}
                     <button className="btn" onClick={(e)=>{e.stopPropagation();setCloudExpandedCandidateId(expanded?"":c.candidateId);}}
                       style={{...bub("#F7FAFF",999),width:"100%",padding:"7px 6px",fontSize:10,fontWeight:900,color:C.soft,border:"1px solid rgba(139,197,232,.28)",marginTop:8}}>{expanded?"收合內容":"查看內容"}</button>
                     {expanded&&<div style={{...bub("#FFFCF5",12),padding:"8px 9px",marginTop:8,border:"1px solid rgba(116,75,35,.08)"}}>
@@ -3014,9 +3023,9 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                   {cloudCandidateSummary(cloudState.selectedCandidateSummary).map(line=><div key={line}>{line}</div>)}
                 </div>}
                 <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,marginBottom:8}}>
-                  <button className="btn" onClick={()=>confirmCloudBackupCandidate&&confirmCloudBackupCandidate(cloudState.selectedCandidateId||((cloudState.localCandidates||[])[0]&&cloudState.localCandidates[0].candidateId))}
-                    disabled={cloudButtonDisabled||(!cloudState.selectedCandidateId&&(cloudState.localCandidates||[]).length!==1)}
-                    style={{...bub(C.orange,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:"#fff",border:"none",opacity:(!cloudState.selectedCandidateId&&(cloudState.localCandidates||[]).length!==1)?0.55:1}}>確認並開始備份</button>
+                  <button className="btn" onClick={()=>selectedCloudCandidate&&confirmCloudBackupCandidate&&confirmCloudBackupCandidate(selectedCloudCandidate.candidateId)}
+                    disabled={!canConfirmCloudCandidate}
+                    style={{...bub(C.orange,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:"#fff",border:"none",opacity:canConfirmCloudCandidate?1:0.55}}>確認並開始備份</button>
                 </div>
               </div>
               :cloudState.status==="cloud_available"||cloudState.status==="waiting_choice"||cloudState.status==="conflict"
@@ -3774,7 +3783,13 @@ function App({storageKey,playerId,playerName,themeId,onSwitch,onProfileChange}){
   const selectCloudBackupCandidate=(candidateId)=>{
     if(!(window.PetHabitPlatform&&window.PetHabitPlatform.selectCloudBackupCandidate)){toast2("雲端備份尚未準備好",C.peach);return;}
     const res=window.PetHabitPlatform.selectCloudBackupCandidate(candidateId);
-    refreshCloudSaveState();refreshSyncDebug();
+    const next=window.PetHabitPlatform.getCloudSaveStatus?window.PetHabitPlatform.getCloudSaveStatus():null;
+    if(res&&res.ok){
+      setCloudSaveState(s=>({...s,...(next||{}),confirmationRequired:true,confirmationMode:"confirm_first_backup",selectedCandidateId:res.data&&res.data.candidateId||candidateId,selectedCandidateSummary:res.data&&res.data.summary||s.selectedCandidateSummary}));
+    }else{
+      refreshCloudSaveState();
+    }
+    refreshSyncDebug();
     toast2(res&&res.ok?"已選擇這份遊戲進度":"選擇失敗，請再試一次",res&&res.ok?C.green:C.peach);
   };
   const confirmCloudBackupCandidate=(candidateId)=>{

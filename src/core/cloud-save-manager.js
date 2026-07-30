@@ -44,6 +44,10 @@
     });
     try{console.log("[CloudSave] "+event,safe);}catch(e){}
   }
+  function candidateTime(candidate){
+    const t=Date.parse(candidate&&candidate.summary&&candidate.summary.lastPlayedAt||"");
+    return Number.isFinite(t)?t:0;
+  }
   class CloudSaveManager{
     constructor({cloudRepository,authManager,exporter,platformAdapter,analyticsAdapter,debounceMs=9000}={}){
       this.cloud=cloudRepository||new ns.SupabaseCloudRepository({writeEnabled:true});
@@ -105,7 +109,11 @@
       const res=this.exporter.discoverLocalSaveCandidates?this.exporter.discoverLocalSaveCandidates():ns.err("candidate_scan_unavailable","本機存檔掃描器尚未準備好",false);
       if(!res.ok)return res;
       const candidates=res.data||[];
-      this.state.localCandidates=candidates.map(c=>({candidateId:c.candidateId,summary:c.summary,playerSummaries:c.playerSummaries,suspectedTest:c.suspectedTest,recognizedSectionCount:c.recognizedSectionCount,notes:c.notes||[],fingerprint:c.fingerprint}));
+      const latestId=candidates.reduce((best,c)=>{
+        if(!best)return c;
+        return candidateTime(c)>candidateTime(best)?c:best;
+      },null);
+      this.state.localCandidates=candidates.map(c=>({candidateId:c.candidateId,summary:{...(c.summary||{}),suspectedTest:!!c.suspectedTest,isLatestCandidate:!!(latestId&&latestId.candidateId===c.candidateId),isCurrentDeviceLatest:!!(latestId&&latestId.candidateId===c.candidateId)},playerSummaries:c.playerSummaries,suspectedTest:c.suspectedTest,recognizedSectionCount:c.recognizedSectionCount,notes:c.notes||[],suspectedReasons:c.suspectedReasons||[],isLatestCandidate:!!(latestId&&latestId.candidateId===c.candidateId),isCurrentDeviceLatest:!!(latestId&&latestId.candidateId===c.candidateId),fingerprint:c.fingerprint}));
       this.saveState();
       return ns.ok(candidates);
     }

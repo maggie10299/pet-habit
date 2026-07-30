@@ -61,6 +61,19 @@
   function lastPlayedAt(save,rawFallback){
     return (save&&save.lastPlayedAt)||(save&&save.updatedAt)||(save&&save.lastLogin)||rawFallback||"";
   }
+  function parseTime(value){
+    const t=Date.parse(value||"");
+    return Number.isFinite(t)?t:0;
+  }
+  function daysSince(value){
+    const t=parseTime(value);
+    if(!t)return null;
+    return Math.floor((Date.now()-t)/86400000);
+  }
+  function isDefaultFamilyName(name){
+    const n=String(name||"").trim();
+    return !n||["我的家庭","小主人","寶貝家庭","Maggie Family"].includes(n);
+  }
   function hasPet(save){
     return !!(save&&(save.profile&&save.profile.petType||save.pet||save.selectedPet));
   }
@@ -118,6 +131,14 @@
         clothingCount:summaries.reduce((n,s)=>n+(Number(s.clothingCount)||0),0),
         lastPlayedAt:latestPlayedAt
       };
+      const suspectedReasons=[...(notes||[])];
+      if(sourceType&&sourceType!=="family_v1")suspectedReasons.push("legacy_or_unbound_storage");
+      if((storageKeys||[]).some(k=>k==="habitKingdom"))suspectedReasons.push("legacy_storage_namespace");
+      if(sourceType==="orphan_player")suspectedReasons.push("missing_family_binding");
+      if(sourceType!=="family_v1"&&isDefaultFamilyName(familyName))suspectedReasons.push("default_family_name");
+      const oldDays=daysSince(latestPlayedAt);
+      if(oldDays!=null&&oldDays>=30)suspectedReasons.push("old_last_played_"+oldDays+"_days");
+      const uniqueSuspectedReasons=Array.from(new Set(suspectedReasons.filter(Boolean)));
       const sectionCount=[
         players.length>0,
         storageKeys.length>0,
@@ -133,7 +154,7 @@
         summaries,
         rawChecksums:players.map(p=>this.calculatePlayerSaveChecksum(p.save||{}))
       });
-      return {candidateId,sourceType,family,players,storageKeys,summary:safeSummary,playerSummaries:summaries,fingerprint,suspectedTest:!!suspectedTest,recognizedSectionCount:sectionCount,notes};
+      return {candidateId,sourceType,family,players,storageKeys,summary:safeSummary,playerSummaries:summaries,fingerprint,suspectedTest:!!suspectedTest||uniqueSuspectedReasons.length>0,recognizedSectionCount:sectionCount,notes,suspectedReasons:uniqueSuspectedReasons};
     }
     discoverLocalSaveCandidates(){
       const candidates=[];
@@ -178,7 +199,8 @@
           family:{id:"local_legacy_family",activePlayerId:"legacy",players:[p]},
           players:[{player:p,save:legacy,storageKey:"habitKingdom"}],
           storageKeys:["habitKingdom"],
-          suspectedTest:!legacy.profile
+          suspectedTest:true,
+          notes:legacy.profile?["legacy_storage_namespace"]:["legacy_storage_namespace","missing_profile"]
         }));
         usedKeys.add("habitKingdom");
       }
