@@ -1,4 +1,4 @@
-const CACHE_NAME = "pet-habit-7-29-cloud-login-dashboard-blocker-fix-20260729";
+const CACHE_NAME = "pet-habit-7-30-pwa-google-relogin-fix-20260730";
 const HTML_NETWORK_TIMEOUT_MS = 1200;
 
 const CORE_ASSETS = [

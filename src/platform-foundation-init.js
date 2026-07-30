@@ -1,8 +1,10 @@
 (function(global){
   const ns=global.PetHabitPlatform=global.PetHabitPlatform||{};
-  const state={ready:false,result:null,error:null};
+  const state={ready:false,result:null,error:null,bootPromise:null};
   ns.PlatformFoundationState=state;
   ns.bootstrapPlatformFoundation=async function(options={}){
+    if(state.bootPromise)return state.bootPromise;
+    state.bootPromise=(async()=>{
     try{
       const flags={...(ns.FeatureFlags||{}),...(options.featureFlags||{})};
       const boot=new ns.AppBoot({featureFlags:flags});
@@ -12,7 +14,11 @@
     }catch(e){
       state.ready=false;state.error={code:"boot_failed",message:String(e&&e.message||e)};
       return ns.err("boot_failed",state.error.message,true);
+    }finally{
+      state.bootPromise=null;
     }
+    })();
+    return state.bootPromise;
   };
   ns.getSyncDebugState=function(){
     const result=state.result&&state.result.data;
@@ -69,9 +75,25 @@
     const auth=state.result&&state.result.data&&state.result.data.authManager;
     return auth&&auth.restoreSession?auth.restoreSession():Promise.resolve(ns.err("auth_not_ready","Auth manager not ready",true));
   };
-  ns.signInWithSupabaseGoogle=function(){
+  ns.ensurePlatformFoundationReady=async function(){
+    const current=state.result&&state.result.data;
+    const auth=current&&current.authManager;
+    if(auth&&auth.signInWithGoogle)return ns.ok({status:"ready"});
+    if(state.bootPromise){
+      const waited=await state.bootPromise;
+      return waited&&waited.ok?ns.ok({status:"ready_after_wait"}):waited;
+    }
+    if(ns.bootstrapPlatformFoundation&&ns.AppBoot){
+      const boot=await ns.bootstrapPlatformFoundation({featureFlags:ns.FeatureFlags||{}});
+      return boot&&boot.ok?ns.ok({status:"rebuilt"}):boot;
+    }
+    return ns.err("platform_not_ready","Platform foundation is not ready",true);
+  };
+  ns.signInWithSupabaseGoogle=async function(){
+    const ensured=await ns.ensurePlatformFoundationReady();
+    if(!ensured||!ensured.ok)return ensured||ns.err("auth_not_ready","Auth manager not ready",true);
     const auth=state.result&&state.result.data&&state.result.data.authManager;
-    return auth&&auth.signInWithGoogle?auth.signInWithGoogle():Promise.resolve(ns.err("auth_not_ready","Auth manager not ready",true));
+    return auth&&auth.signInWithGoogle?auth.signInWithGoogle():ns.err("auth_not_ready","Auth manager not ready",true);
   };
   ns.getSupabaseAuthBindingPayload=function(){
     const auth=state.result&&state.result.data&&state.result.data.authManager;
@@ -82,9 +104,11 @@
     if(auth&&auth.subscribe)return auth.subscribe(callback);
     return function(){};
   };
-  ns.signOutSupabase=function(){
+  ns.signOutSupabase=async function(){
+    const ensured=await ns.ensurePlatformFoundationReady();
+    if(!ensured||!ensured.ok)return ensured||ns.err("auth_not_ready","Auth manager not ready",true);
     const auth=state.result&&state.result.data&&state.result.data.authManager;
-    return auth&&auth.signOut?auth.signOut():Promise.resolve(ns.err("auth_not_ready","Auth manager not ready",true));
+    return auth&&auth.signOut?auth.signOut():ns.err("auth_not_ready","Auth manager not ready",true);
   };
   ns.getCloudSaveStatus=function(){
     const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;

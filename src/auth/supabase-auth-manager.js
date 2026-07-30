@@ -245,6 +245,16 @@
     getRedirectTo(){
       return "https://maggie10299.github.io/pet-habit/";
     }
+    async waitForAuthClient(timeoutMs=2500){
+      const started=Date.now();
+      while(Date.now()-started<timeoutMs){
+        if(this.repository&&this.repository.refreshClient)this.repository.refreshClient();
+        if(this.repository&&this.repository.client&&this.repository.client.auth)return true;
+        await new Promise(resolve=>setTimeout(resolve,80));
+      }
+      if(this.repository&&this.repository.refreshClient)this.repository.refreshClient();
+      return !!(this.repository&&this.repository.client&&this.repository.client.auth);
+    }
     cleanupStaleSupabaseAuthStorage(){
       const currentPrefix=this.repository&&this.repository.getAuthStoragePrefix?this.repository.getAuthStoragePrefix():"";
       if(!currentPrefix)return {removed:0,currentPrefix:""};
@@ -276,6 +286,9 @@
       if(this.repository.refreshClient)this.repository.refreshClient();
       this.cleanupStaleSupabaseAuthStorage();
       if(this.repository.refreshClient)this.repository.refreshClient();
+      if(!this.repository.client||!this.repository.client.auth){
+        await this.waitForAuthClient();
+      }
       if(!this.repository.client||!this.repository.client.auth){
         this.status=AUTH_STATUS.LOCAL_ONLY;
         return ns.err("auth_unavailable","Google 登入尚未準備完成，請重新整理後再試一次。遊戲資料仍安全保存在這台裝置。",true);
