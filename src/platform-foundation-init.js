@@ -138,10 +138,12 @@
   };
   ns.selectCloudBackupCandidate=function(candidateId){
     const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    try{console.log("[CloudSave][CandidateSelection] platform_select_called",{candidateId,ready:!!mgr,has_select:!!(mgr&&mgr.selectLocalCandidate),boot_ready:!!state.ready});}catch(e){}
     return mgr&&mgr.selectLocalCandidate?mgr.selectLocalCandidate(candidateId):ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true);
   };
   ns.confirmCloudBackupCandidate=function(candidateId){
     const mgr=state.result&&state.result.data&&state.result.data.cloudSaveManager;
+    try{console.log("[CloudSave][CandidateSelection] platform_confirm_called",{candidateId,ready:!!mgr,has_confirm:!!(mgr&&mgr.confirmFirstBackup),boot_ready:!!state.ready});}catch(e){}
     return mgr&&mgr.confirmFirstBackup?mgr.confirmFirstBackup(candidateId):Promise.resolve(ns.err("cloud_save_not_ready","Cloud Save 尚未準備好",true));
   };
   ns.restoreCloudSave=function(){

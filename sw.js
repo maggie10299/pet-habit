@@ -1,4 +1,4 @@
-const CACHE_NAME = "pet-habit-7-30-pwa-google-relogin-fix-20260730";
+const CACHE_NAME = "pet-habit-7-31-cloud-candidate-selection-runtime-fix-20260731";
 const HTML_NETWORK_TIMEOUT_MS = 1200;
 
 const CORE_ASSETS = [

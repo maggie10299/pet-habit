@@ -2432,6 +2432,8 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
   const [giftCode,setGiftCode]=useState("");
   const [giftCodeMsg,setGiftCodeMsg]=useState("");
   const [cloudExpandedCandidateId,setCloudExpandedCandidateId]=useState("");
+  const [cloudSelectedCandidateId,setCloudSelectedCandidateId]=useState("");
+  const cloudCandidateListRef=useRef(null);
   const backupInputRef=useRef(null);
   const wishRedeemLocks=useRef({});
   const day=new Date().getDay();
@@ -2465,8 +2467,92 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
   const cloudStatusColor=cloudMainStatus.kind==="ok"?"#2A7A3B":cloudMainStatus.kind==="busy"?C.orange:"#C23B3B";
   const cloudButtonDisabled=cloudState.status==="saving"||cloudState.status==="restoring"||cloudState.status==="checking";
   const cloudLocalCandidates=cloudState.localCandidates||[];
-  const selectedCloudCandidate=cloudLocalCandidates.find(c=>c.candidateId===cloudState.selectedCandidateId)||((cloudLocalCandidates.length===1&&!cloudState.selectedCandidateId)?cloudLocalCandidates[0]:null);
+  const cloudCandidateIdSignature=cloudLocalCandidates.map(c=>c.candidateId).join("|");
+  const effectiveCloudSelectedCandidateId=cloudSelectedCandidateId||cloudState.selectedCandidateId||"";
+  const selectedCloudCandidate=cloudLocalCandidates.find(c=>c.candidateId===effectiveCloudSelectedCandidateId)||((cloudLocalCandidates.length===1&&!effectiveCloudSelectedCandidateId)?cloudLocalCandidates[0]:null);
   const canConfirmCloudCandidate=!!selectedCloudCandidate&&!cloudButtonDisabled;
+  const logCandidateSelection=(event,details={})=>{
+    try{
+      console.log("[CloudSave][CandidateSelection] "+event,details);
+    }catch(e){}
+  };
+  useEffect(()=>{
+    const ids=new Set(cloudLocalCandidates.map(c=>c.candidateId));
+    if(cloudState.selectedCandidateId&&ids.has(cloudState.selectedCandidateId)&&cloudState.selectedCandidateId!==cloudSelectedCandidateId){
+      setCloudSelectedCandidateId(cloudState.selectedCandidateId);
+      return;
+    }
+    if(cloudSelectedCandidateId&&cloudLocalCandidates.length&&!ids.has(cloudSelectedCandidateId)){
+      setCloudSelectedCandidateId("");
+    }
+  },[cloudState.selectedCandidateId,cloudCandidateIdSignature]);
+  useEffect(()=>{
+    const selectedId=selectedCloudCandidate&&selectedCloudCandidate.candidateId||"";
+    logCandidateSelection("render_complete",{
+      selectedCandidateId:selectedId,
+      selectedCardCount:selectedId?1:0,
+      confirmDisabled:!canConfirmCloudCandidate
+    });
+    logCandidateSelection("confirm_state_updated",{
+      selectedCandidateId:selectedId,
+      disabled:!canConfirmCloudCandidate
+    });
+  },[selectedCloudCandidate&&selectedCloudCandidate.candidateId,canConfirmCloudCandidate,cloudCandidateIdSignature]);
+  const applyCloudCandidateSelection=(candidateId,evtInfo={})=>{
+    const candidateIndex=cloudLocalCandidates.findIndex(c=>c.candidateId===candidateId);
+    logCandidateSelection("card_clicked",{
+      candidateId,
+      candidateIndex,
+      eventTarget:evtInfo.eventTarget||"",
+      currentTarget:evtInfo.currentTarget||""
+    });
+    const candidate=cloudLocalCandidates[candidateIndex];
+    logCandidateSelection("candidate_found",{
+      candidateId,
+      familyName:candidate&&candidate.summary&&candidate.summary.familyName||"",
+      isValid:!!candidate
+    });
+    if(!candidate){
+      logCandidateSelection("confirm_failed",{candidateId,code:"candidate_not_found"});
+      toast2&&toast2("找不到這份遊戲進度，請重新掃描一次",C.peach);
+      return;
+    }
+    logCandidateSelection("selection_before",{selectedCandidateId:cloudSelectedCandidateId||cloudState.selectedCandidateId||""});
+    setCloudSelectedCandidateId(candidateId);
+    logCandidateSelection("selection_after",{selectedCandidateId:candidateId});
+    if(selectCloudBackupCandidate)selectCloudBackupCandidate(candidateId);
+  };
+  const confirmSelectedCloudCandidate=()=>{
+    const candidateId=selectedCloudCandidate&&selectedCloudCandidate.candidateId||cloudSelectedCandidateId||cloudState.selectedCandidateId||"";
+    const candidate=cloudLocalCandidates.find(c=>c.candidateId===candidateId);
+    if(!candidate||!confirmCloudBackupCandidate){
+      logCandidateSelection("confirm_failed",{
+        candidateId,
+        code:!candidate?"candidate_not_found":"confirm_handler_missing"
+      });
+      toast2&&toast2("還沒有選到可備份的遊戲進度，請重新點選一次",C.peach);
+      return;
+    }
+    logCandidateSelection("confirm_clicked",{candidateId,familyName:candidate.summary&&candidate.summary.familyName||""});
+    confirmCloudBackupCandidate(candidateId);
+  };
+  useEffect(()=>{
+    const el=cloudCandidateListRef.current;
+    if(!el)return;
+    const handler=(event)=>{
+      const actionEl=event.target&&event.target.closest&&event.target.closest("[data-action]");
+      if(actionEl&&actionEl.getAttribute("data-action")==="toggle-details")return;
+      if(event.cloudCandidateHandled)return;
+      const card=event.target&&event.target.closest&&event.target.closest("[data-candidate-id]");
+      if(!card||!el.contains(card))return;
+      applyCloudCandidateSelection(card.getAttribute("data-candidate-id"),{
+        eventTarget:event.target&&event.target.tagName||"",
+        currentTarget:card.tagName||""
+      });
+    };
+    el.addEventListener("click",handler);
+    return()=>el.removeEventListener("click",handler);
+  },[cloudCandidateIdSignature,cloudSelectedCandidateId,cloudState.selectedCandidateId,selectCloudBackupCandidate]);
   const cloudCandidateSummary=(summary)=>summary?[
     "家庭："+(summary.familyName||summary.playerName||"我的家庭"),
     "小主人："+(summary.playerCount||1)+" 位",
@@ -2993,10 +3079,11 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                   </div>
                 </div>
                 {cloudLocalCandidates.length>0
-                  ?cloudLocalCandidates.map(c=>{
+                  ?<div ref={cloudCandidateListRef} data-candidate-list="cloud-save-first-backup">
+                  {cloudLocalCandidates.map(c=>{
                     const selected=selectedCloudCandidate&&selectedCloudCandidate.candidateId===c.candidateId;
                     const expanded=cloudExpandedCandidateId===c.candidateId;
-                    return <div key={c.candidateId} role="button" tabIndex={0} onClick={()=>{selectCloudBackupCandidate&&selectCloudBackupCandidate(c.candidateId);}} onKeyDown={(e)=>{if((e.key==="Enter"||e.key===" ")&&selectCloudBackupCandidate){e.preventDefault();selectCloudBackupCandidate(c.candidateId);}}}
+                    return <div key={c.candidateId} data-candidate-id={c.candidateId} role="button" tabIndex={0} aria-pressed={selected?"true":"false"} onClick={(e)=>{if(e.target&&e.target.closest&&e.target.closest("[data-action='toggle-details']"))return;if(e.nativeEvent)e.nativeEvent.cloudCandidateHandled=true;applyCloudCandidateSelection(c.candidateId,{eventTarget:e.target&&e.target.tagName||"REACT",currentTarget:"CARD_REACT"});}} onKeyDown={(e)=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();applyCloudCandidateSelection(c.candidateId,{eventTarget:"KEYBOARD",currentTarget:"CARD"});}}}
                     style={{...bub(selected?"#FFF8E6":C.card,14),padding:"10px 11px",marginBottom:8,border:selected?"2px solid "+C.orange:"1px solid rgba(116,75,35,.10)",boxShadow:selected?"0 8px 20px rgba(245,166,35,.14)":"none",cursor:"pointer"}}>
                     <div style={{display:"flex",justifyContent:"space-between",gap:8,alignItems:"center",marginBottom:5}}>
                       <div style={{fontSize:12,fontWeight:900,color:C.brown}}>{cloudLocalCandidates.length===1?"家庭遊戲進度":"遊戲進度"}</div>
@@ -3009,21 +3096,22 @@ function ParentPanel({profile,checked,setChecked,points,setPoints,wishes,setWish
                     {cloudCandidateSummary(c.summary).map(line=><div key={line} style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.55}}>{line}</div>)}
                     <div style={{fontSize:10,fontWeight:900,color:c.isLatestCandidate?"#2A7A3B":C.soft,marginTop:5}}>{c.isLatestCandidate?"狀態：目前裝置最新資料":"狀態：不是目前裝置最新資料"}</div>
                     {c.suspectedTest&&<div style={{fontSize:10,fontWeight:900,color:C.orange,marginTop:4}}>請家長確認是否為要備份的進度，不會自動刪除或合併。</div>}
-                    <button className="btn" onClick={(e)=>{e.stopPropagation();setCloudExpandedCandidateId(expanded?"":c.candidateId);}}
+                    <button className="btn" data-action="toggle-details" onClick={(e)=>{e.stopPropagation();setCloudExpandedCandidateId(expanded?"":c.candidateId);}}
                       style={{...bub("#F7FAFF",999),width:"100%",padding:"7px 6px",fontSize:10,fontWeight:900,color:C.soft,border:"1px solid rgba(139,197,232,.28)",marginTop:8}}>{expanded?"收合內容":"查看內容"}</button>
                     {expanded&&<div style={{...bub("#FFFCF5",12),padding:"8px 9px",marginTop:8,border:"1px solid rgba(116,75,35,.08)"}}>
                       {cloudCandidateDetail(c).map((lines,idx)=><div key={idx} style={{padding:idx? "8px 0 0":"0",borderTop:idx?"1px dashed rgba(116,75,35,.12)":"none"}}>
                         {lines.map(line=><div key={line} style={{fontSize:10,fontWeight:800,color:C.soft,lineHeight:1.55}}>{line}</div>)}
                       </div>)}
                     </div>}
-                  </div>})
+                  </div>})}
+                  </div>
                   :<div style={{fontSize:10,fontWeight:900,color:C.soft,marginBottom:8}}>這台裝置的遊戲資料需要確認，暫時不會上傳。</div>}
                 {cloudState.selectedCandidateSummary&&<div style={{...bub("#F7FAFF",14),padding:"10px 11px",fontSize:10,fontWeight:900,color:C.brown,lineHeight:1.6,marginBottom:8,border:"1px solid rgba(139,197,232,.28)"}}>
                   <div style={{marginBottom:4}}>準備備份這份遊戲進度：</div>
                   {cloudCandidateSummary(cloudState.selectedCandidateSummary).map(line=><div key={line}>{line}</div>)}
                 </div>}
                 <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,marginBottom:8}}>
-                  <button className="btn" onClick={()=>selectedCloudCandidate&&confirmCloudBackupCandidate&&confirmCloudBackupCandidate(selectedCloudCandidate.candidateId)}
+                  <button className="btn" onClick={confirmSelectedCloudCandidate}
                     disabled={!canConfirmCloudCandidate}
                     style={{...bub(C.orange,999),padding:"9px 6px",fontSize:10,fontWeight:900,color:"#fff",border:"none",opacity:canConfirmCloudCandidate?1:0.55}}>確認並開始備份</button>
                 </div>
