@@ -239,11 +239,26 @@
       localStorageData[FAMILY_KEY]=JSON.stringify(cleanFamily);
       candidate.players.forEach(p=>{
         if(p.storageKey)localStorageData[p.storageKey]=JSON.stringify(p.save||{});
+        // Room sidecars belong to the selected child, never to the first/active
+        // child summary. Keep the existing keys verbatim for restore/import.
+        const suffix=p.storageKey==="habitKingdom"?"":"_"+p.player.id;
+        ["roomDecorPos_hk","roomOwnerPos_hk"].forEach(base=>{
+          const key=base+suffix,raw=this.readRaw(key);
+          if(raw!=null)localStorageData[key]=raw;
+        });
       });
       candidate.storageKeys.forEach(k=>{
         if(k===FAMILY_KEY||Object.prototype.hasOwnProperty.call(localStorageData,k))return;
         const raw=this.readRaw(k);
         if(raw!=null)localStorageData[k]=raw;
+      });
+      cleanFamily.players.forEach(player=>{
+        const id=player&&player.id;
+        if(!id)return;
+        ["founderGift_v1_claimed_"+id,"petHabitRedeemedCodes_"+id].forEach(k=>{
+          const raw=this.readRaw(k);
+          if(raw!=null)localStorageData[k]=raw;
+        });
       });
       const players=candidate.players.map(p=>({
         id:p.player.id,
@@ -254,6 +269,9 @@
         save:p.save||{}
       }));
       const primary=players[0]&&players[0].save||{};
+      const activePlayerId=cleanFamily.activePlayerId||players[0]&&players[0].id||"";
+      const activeRoomDecor=safeParse(this.readRaw("roomDecorPos_hk_"+activePlayerId),{})||{};
+      const activeRewardLedger=safeParse(this.readRaw("petHabitRewardLedger_"+activePlayerId),[])||[];
       const save={
         format:"pet_habit_cloud_save_v1",
         schemaVersion:String(global.APP_SCHEMA_VERSION||2),
@@ -261,7 +279,7 @@
         exportedAt:ns.nowIso(),
         deviceId:this.platform.getDeviceId(),
         family:cleanFamily,
-        activePlayerId:cleanFamily.activePlayerId||"",
+        activePlayerId:activePlayerId,
         players,
         player:players[0]||null,
         pets:players.map(p=>({playerId:p.id,pet:petSummary(p.save)})),
@@ -270,16 +288,21 @@
         wardrobe:players.map(p=>({playerId:p.id,owned:p.save.owned||{},equipped:p.save.equipped||{}})),
         pet_accessories:primary.petAccessories||primary.pet_accessories||{},
         rooms:primary.rooms||primary.room||{},
-        furniture_positions:primary.furniturePositions||primary.roomDecorPositions||{},
+        furniture_positions:primary.furniturePositions||primary.roomDecorPositions||activeRoomDecor,
         backpack:primary.backpack||{},
         achievements:primary.achievements||[],
         diary:primary.diary||[],
         wishes:primary.wishes||[],
+        wish_memories:primary.wishMemories||[],
+        personal_wish:(Array.isArray(primary.wishes)?primary.wishes:[]).find(w=>w&&w.type==="personal_wish"&&w.status!=="completed")||null,
+        family_promises:cleanFamily.familyPromises||primary.familyPromises||[],
+        family_promise_requests:primary.familyPromiseRequests||[],
+        star_ledger:primary.starLedger||activeRewardLedger,
         challenges:primary.challenges||primary.bonusTasks||[],
         parent_settings:{approvalMode:primary.approvalMode||"",pinConfigured:!!(primary.profile&&primary.profile.pin)},
         tutorials:primary.tutorials||{},
         seasonal_events:primary.officialEventProgress||primary.seasonal_events||{},
-        reward_ledger:safeParse(this.readRaw("petHabitRewardLedger_"+cleanFamily.activePlayerId),[])||[],
+        reward_ledger:activeRewardLedger,
         adventure_foundation:primary.adventureFoundation||{},
         scene_state:primary.sceneState||{},
         metadata:{
@@ -303,7 +326,7 @@
           [
             "lastLogin_hk","lastStreak_hk","musicOn_hk","weather_hk","parkPetPan_hk","parkKidPan_hk",
             "outingScene_hk","roomDecorPos_hk","allDoneCelebrate_hk","founderGift_v1_claimed",
-            "petHabitRewardLedger","petHabitAdventureKeys","roomToolTip_desk","roomToolTip_focus",
+            "petHabitRewardLedger","petHabitAdventureKeys","petHabitForestMiniGames","roomToolTip_desk","roomToolTip_focus",
             "roomToolTip_diary","roomToolTip_wish"
           ].forEach(base=>allow.add(base+"_"+id));
           this.listStorageKeys().forEach(k=>{
@@ -315,7 +338,7 @@
       });
       this.listStorageKeys().forEach(k=>{
         if(isExcludedKey(k))return;
-        if(/^petHabit(Gift|RewardLedger|AdventureKeys|AdventureKeyGrant|Hint_)/.test(k))allow.add(k);
+        if(/^petHabit(Gift|RedeemedCodes_|RewardLedger|AdventureKeys|AdventureKeyGrant|ForestMiniGames|Hint_)/.test(k))allow.add(k);
       });
       return Array.from(allow).filter(k=>this.readRaw(k)!==null&&!isExcludedKey(k)).sort();
     }

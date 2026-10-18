@@ -5,7 +5,7 @@
   const env=["local","staging","production"].indexOf(rawEnv)>=0?rawEnv:"local";
   ns.Environment={
     appEnv:env,
-    developerMode:/[?&]dev=1\b/.test((global.location&&global.location.search)||""),
+    developerMode:env!=="production"&&/[?&]dev=1\b/.test((global.location&&global.location.search)||""),
     appVersion:global.APP_VERSION||global.VERSION||"v1.1-platform-foundation-dev",
     buildId:global.APP_BUILD_ID||"local-dev",
     supabaseUrl:global.SUPABASE_URL||"",
@@ -13,6 +13,7 @@
     analyticsEndpoint:global.MAGGIE_ANALYTICS_ENDPOINT||"",
     googleWebClientId:global.GOOGLE_CLIENT_ID||"1062294435800-gq20r09217187ja98c1liqctsqvq5gal.apps.googleusercontent.com",
     redirectAllowlist:[
+      "https://pet.maggielab.tw/",
       "https://maggie10299.github.io/pet-habit/",
       "http://localhost:5173/pet-habit/",
       "http://127.0.0.1:5173/pet-habit/"

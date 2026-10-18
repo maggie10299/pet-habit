@@ -412,7 +412,14 @@
         const signed=await this.ensureSignedIn();if(!signed.ok)return signed;
         const meta=await this.cloud.getCloudSaveMetadata();if(!meta.ok)return meta;
         if(!meta.data)return ns.err("cloud_save_missing","雲端沒有存檔",false);
-        const snap=this.createLocalSnapshot("before_restore");if(!snap.ok)return snap;
+        // A returning player on a fresh origin has nothing local to snapshot.
+        // Keep the existing safety snapshot whenever local data exists, but do
+        // not block the first cloud restore just because the device is empty.
+        const localCandidates=this.scanLocalCandidates();
+        if(!localCandidates.ok)return localCandidates;
+        if((localCandidates.data||[]).length){
+          const snap=this.createLocalSnapshot("before_restore");if(!snap.ok)return snap;
+        }
         this.setStatus(STATUS.RESTORING,{lastError:null});
         const remote=await this.cloud.getCloudSave();if(!remote.ok){this.setStatus(STATUS.FAILED,{lastError:remote.error});cloudDebug("restore_failed",{operation:"restore",code:remote.error&&remote.error.code,message:remote.error&&remote.error.message});this.track("cloud_restore_failed",{error_code:remote.error&&remote.error.code});return remote;}
         const save=remote.data&&remote.data.save_data||remote.data&&remote.data.saveData||remote.data;

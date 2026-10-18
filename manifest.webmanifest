@@ -1,8 +1,8 @@
 {
   "name": "寵物習慣王國",
   "short_name": "習慣王國",
-  "start_url": "/pet-habit/",
-  "scope": "/pet-habit/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#FFFBF0",
   "theme_color": "#F5A623",

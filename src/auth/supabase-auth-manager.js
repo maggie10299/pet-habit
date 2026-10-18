@@ -243,7 +243,14 @@
       }catch(e){return ns.err("auth_listener_stop_failed",String(e&&e.message||e),true);}
     }
     getRedirectTo(){
-      return "https://maggie10299.github.io/pet-habit/";
+      const fallback="https://pet.maggielab.tw/";
+      try{
+        const loc=global.location||{};
+        const origin=String(loc.origin||"");
+        const allowlist=ns.Environment&&Array.isArray(ns.Environment.redirectAllowlist)?ns.Environment.redirectAllowlist:[];
+        const match=allowlist.find(url=>new URL(url).origin===origin);
+        return match||fallback;
+      }catch(e){return fallback;}
     }
     async waitForAuthClient(timeoutMs=2500){
       const started=Date.now();
